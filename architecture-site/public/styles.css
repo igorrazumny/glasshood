@@ -29,12 +29,11 @@ a.button:hover{background:var(--orange);border-color:var(--orange);color:#fff;
 
 .pd-hero{font-size:22px;font-weight:400;line-height:1.35;color:var(--text);max-width:880px;
   margin:20px 0 24px;letter-spacing:-.005em}
-.pd-hero .accent{color:var(--blue)}
+.pd-hero .accent{color:var(--text)}
 
 /* Added architecture visual */
 .hero-diagram{margin:8px 0 28px}
-.hero-diagram img{display:block;width:100%;height:auto;max-width:1000px;margin:0 auto;
-  border:1px solid var(--border);border-radius:16px}
+.hero-diagram img{display:block;width:100%;height:auto;max-width:1000px;margin:0 auto}
 
 /* Overview card grid — 2x2 (1-col mobile) */
 .pd-cards{display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:24px}
