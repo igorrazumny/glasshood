@@ -57,10 +57,6 @@ export default function LoginScreen({ onLogin, onDemo, prefillDemo, setPrefillDe
         <div className="bg-card dark:bg-purple-800 border border-border dark:border-purple-700 rounded-lg p-8 w-96 text-center">
           <div className="flex flex-col items-center mb-6">
             <img src="/glasshood-logo-full.png" alt="GlassHood" className="h-20 mb-1" />
-            <a href="https://9robots.ai" target="_blank" rel="noopener noreferrer"
-              className="text-xs mt-1 hover:opacity-80 transition-opacity" style={{ color: CV_BLUE }}>
-              by 9Robots
-            </a>
           </div>
           <button
             onClick={handleEnterDemo}
@@ -87,10 +83,6 @@ export default function LoginScreen({ onLogin, onDemo, prefillDemo, setPrefillDe
       <form onSubmit={handleLogin} className="bg-card dark:bg-purple-800 border border-border dark:border-purple-700 rounded-lg p-8 w-96">
         <div className="flex flex-col items-center mb-6">
           <img src="/glasshood-logo-full.png" alt="GlassHood" className="h-20 mb-1" />
-          <a href="https://9robots.ai" target="_blank" rel="noopener noreferrer"
-            className="text-xs mt-1 hover:opacity-80 transition-opacity" style={{ color: CV_BLUE }}>
-            by 9Robots
-          </a>
         </div>
         <input
           type="email"
