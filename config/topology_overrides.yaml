@@ -1,0 +1,31 @@
+# File: config/topology_overrides.yaml
+# Purpose: Infrastructure nodes GCP APIs can't discover (hardware that isn't in Compute API)
+# SCOPE: Hardware infrastructure ONLY — no software components, no LLM models, no APIs
+
+# No active profile — planned infrastructure removed (H200s not purchased)
+active_profile: none
+
+nodes:
+  # --- GPU hardware (reserved instance — real, might be up or down) ---
+  - id: gpu_h100_spot
+    label: "H100 CC Reserved (8x)"
+    type: gpu
+    icon: cpu
+    status: auto
+    project: platform
+    env: prod
+    metrics:
+      model: "NVIDIA H100 80GB CC"
+      count: 8
+      instance_type: a3-highgpu-1g
+      zone: us-central1-a
+      spot: false
+      health_url: ""  # Set when deployed: http://<vllm-ip>:8000/health
+
+edges: []
+
+# No planned infrastructure — removed until hardware is purchased
+profiles:
+  none:
+    nodes: []
+    edges: []

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href="/glasshood-logo.png" />
+    <title>GlassHood — 9Robots</title>
+
+    <!-- REQ-010: Lato preconnect (matches ColdVault's index.html pattern) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <!-- REQ-009: FOUC-prevention. Runs before React mounts. Reads the
+         glasshood-theme-preference key from localStorage; if 'auto' or
+         missing, falls back to OS prefers-color-scheme. Sets the
+         `.dark` class on <html> so the first paint matches the user's
+         preference instead of flashing the wrong theme for ~50ms while
+         React hydrates. niobe's exact pattern (her doc §7). -->
+    <script>
+      (function () {
+        // Try localStorage; if it throws (private mode / quota), still consult
+        // OS prefers-color-scheme before defaulting to light. 9r round-3 fix.
+        var pref = 'auto';
+        try {
+          pref = localStorage.getItem('glasshood-theme-preference') || 'auto';
+        } catch (e) { /* keep 'auto' */ }
+        var dark = false;
+        try {
+          dark = pref === 'dark' || (pref === 'auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        } catch (e) { dark = false; }
+        // 9r round-8 fix: explicitly remove the opposite class so we never
+        // end up with both .dark and .light on <html> after some other
+        // script (or a future refactor) preseeds the wrong one.
+        var doc = document.documentElement;
+        doc.classList.remove(dark ? 'light' : 'dark');
+        doc.classList.add(dark ? 'dark' : 'light');
+      })();
+    </script>
+
+    <style>body { margin: 0; }</style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

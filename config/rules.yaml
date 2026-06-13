@@ -1,0 +1,151 @@
+# =============================================================================
+# LAYER 1 RULES — Deterministic monitoring (no AI)
+# =============================================================================
+# Evaluated on every topology poll (~15s). GMP-classifiable under Annex 22.
+# Changes to this file should be documented (who, when, why).
+# =============================================================================
+
+rules:
+  # --- Resource usage (VM nodes) ---
+  - id: ram_high
+    description: "High RAM usage"
+    severity: warning
+    scope: node
+    node_types: [vm]
+    condition:
+      metric: ram_percent
+      operator: ">"
+      threshold: 85
+
+  - id: ram_critical
+    description: "Critical RAM usage"
+    severity: critical
+    scope: node
+    node_types: [vm]
+    condition:
+      metric: ram_percent
+      operator: ">"
+      threshold: 95
+
+  - id: cpu_high
+    description: "High CPU usage"
+    severity: warning
+    scope: node
+    node_types: [vm]
+    condition:
+      metric: cpu_percent
+      operator: ">"
+      threshold: 80
+
+  - id: disk_full
+    description: "Disk nearing capacity"
+    severity: critical
+    scope: node
+    node_types: [vm]
+    condition:
+      metric: disk_percent
+      operator: ">"
+      threshold: 90
+
+  # --- Load balancer ---
+  - id: lb_latency_high
+    description: "High load balancer latency"
+    severity: warning
+    scope: global
+    condition:
+      source: monitoring
+      metric: lb_latency_ms
+      operator: ">"
+      threshold: 1000
+
+  - id: lb_latency_critical
+    description: "Critical load balancer latency"
+    severity: critical
+    scope: global
+    condition:
+      source: monitoring
+      metric: lb_latency_ms
+      operator: ">"
+      threshold: 5000
+
+  # --- Error rates ---
+  - id: error_spike
+    description: "Error rate spike"
+    severity: warning
+    scope: global
+    condition:
+      source: logging
+      metric: error_count_15m
+      operator: ">"
+      threshold: 5
+
+  - id: error_storm
+    description: "Error storm"
+    severity: critical
+    scope: global
+    condition:
+      source: logging
+      metric: error_count_15m
+      operator: ">"
+      threshold: 20
+
+  # --- Node status ---
+  - id: node_error
+    description: "Node in error state"
+    severity: critical
+    scope: node
+    condition:
+      metric: status
+      operator: "=="
+      value: "error"
+
+  - id: node_stale
+    description: "Node data stale"
+    severity: warning
+    scope: node
+    condition:
+      metric: status
+      operator: "=="
+      value: "stale"
+
+  # --- CVE security (Phase 2) ---
+  - id: cve_critical_gxp
+    description: "Critical CVE on GxP-critical system"
+    severity: critical
+    scope: global
+    condition:
+      source: security
+      metric: critical_gxp_count
+      operator: ">"
+      threshold: 0
+
+  - id: cve_high_count
+    description: "Multiple high-severity CVEs"
+    severity: warning
+    scope: global
+    condition:
+      source: security
+      metric: high_count
+      operator: ">"
+      threshold: 3
+
+  # --- Anomaly detection (Phase 3) ---
+  - id: anomaly_detected
+    description: "Statistical anomaly in infrastructure metrics"
+    severity: warning
+    scope: global
+    condition:
+      source: anomaly
+      metric: anomaly_count
+      operator: ">"
+      threshold: 0
+
+  - id: anomaly_high_confidence
+    description: "High-confidence anomaly detected"
+    severity: critical
+    scope: global
+    condition:
+      source: anomaly
+      metric: high_confidence_count
+      operator: ">"
+      threshold: 0

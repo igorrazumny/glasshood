@@ -1,0 +1,26 @@
+# Secrets / credentials — NEVER commit
+*.key
+*.pem
+*-key.json
+.env
+.env.*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Node
+node_modules/
+dist/
+
+# OS
+.DS_Store
+
+# WIF cred-config (real identifiers) — local only; see .example
+gcp-cred-config.json
+
+# Real topology manifests (real infra identifiers) — local only; see platform.yaml.example
+config/manifests/platform.yaml
+config/manifests/_staging/

@@ -1,0 +1,23 @@
+{
+  "hosting": {
+    "site": "architecture-glasshood",
+    "public": "public",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "cleanUrls": true,
+    "trailingSlash": false,
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+        ]
+      },
+      {
+        "source": "**/*.@(css|js|svg)",
+        "headers": [
+          { "key": "Cache-Control", "value": "public, max-age=3600" }
+        ]
+      }
+    ]
+  }
+}

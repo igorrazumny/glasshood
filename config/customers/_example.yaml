@@ -1,0 +1,52 @@
+# Example customer configuration for GlassHood SaaS
+# Copy this file and rename to {customer_id}.yaml
+# customer_id must be lowercase alphanumeric + hyphens only
+
+customer_id: acme-pharma
+display_name: "ACME Pharmaceuticals"
+tier: professional  # standard | professional | enterprise
+region: europe-west1
+contact_email: "it-ops@acme-pharma.example.com"
+
+# Systems to monitor (ingress agent will filter to these)
+monitored_systems:
+  - source_id: sap-erp-01
+    source_type: sap
+    description: "SAP ERP Central Component"
+  - source_id: middleware-01
+    source_type: middleware
+    description: "IBM MQ Integration Broker"
+  - source_id: mes-01
+    source_type: mes
+    description: "Siemens SIMATIC IT MES"
+
+# Data whitelist — what the ingress agent is allowed to send
+# Customer IT controls this. Empty lists = no filtering.
+data_whitelist:
+  allowed_sources:
+    - "sap-*"
+    - "middleware-*"
+    - "mes-*"
+  blocked_patterns:
+    - "password=\\S+"
+    - "SSN:\\d{3}-\\d{2}-\\d{4}"
+  drop_on_block: false
+
+# Alert thresholds (override defaults from config/rules.yaml)
+alert_overrides:
+  latency_warning_ms: 500
+  latency_critical_ms: 2000
+  error_rate_warning_pct: 1.0
+  error_rate_critical_pct: 5.0
+
+# Storage
+bigquery_dataset: glasshood_acme_pharma
+gcs_archive_bucket: glasshood-archive-acme-pharma
+retention_days: 365  # regulatory minimum
+
+# Feature flags
+features:
+  ai_analysis: true
+  compliance_reports: true
+  servicenow_integration: false
+  cve_scanning: true

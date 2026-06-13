@@ -1,0 +1,27 @@
+# File: config/anomaly_thresholds.yaml
+# Purpose: Anomaly detection configuration — sigma thresholds and static fallbacks
+# Statistical anomaly = value deviating > N standard deviations from rolling baseline
+
+anomaly_detection:
+  enabled: true
+  sigma_threshold: 3.0       # default standard deviations for anomaly
+  min_data_points: 5          # minimum before adaptive baseline activates
+  window_size: 60             # rolling window data points (~1h at 60s polling)
+
+  # Per-metric overrides
+  metrics:
+    error_count_15m:
+      sigma: 3.0
+      fallback_threshold: 15  # static fallback during baseline warmup
+
+    lb_latency_ms:
+      sigma: 2.5              # LB latency is more sensitive
+      fallback_threshold: 2000
+
+    lb_request_count_1h:
+      sigma: 3.0
+      fallback_threshold: 10000
+
+    vm_cpu_percent:
+      sigma: 2.5
+      fallback_threshold: 90

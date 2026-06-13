@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- noindex until the deployment status is confirmed green. -->
+  <meta name="robots" content="noindex, nofollow">
+  <title>GlassHood on Azure — Architecture</title>
+  <meta name="description" content="How GlassHood runs on Microsoft Azure and monitors a system on Google Cloud, cross-cloud, with no stored credentials.">
+  <link rel="icon" href="img/glasshood-logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lato:wght@100;300;400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="container">
+  <div class="pd-page">
+
+    <!-- Header -->
+    <div class="pd-header">
+      <img src="img/glasshood-logo.png" alt="GlassHood" class="pd-logo">
+    </div>
+
+    <!-- Hero sentence -->
+    <p class="pd-hero">
+      GlassHood is AI-infrastructure monitoring &mdash;
+      <span class="accent">it runs on Microsoft Azure and watches a live system on Google Cloud, cross-cloud, with no stored credentials.</span>
+    </p>
+
+    <!-- Added architecture visual -->
+    <div class="hero-diagram">
+      <img src="img/cross-cloud-architecture.png"
+           alt="Azure Container Apps (Switzerland North) runs GlassHood as one container; its managed identity is federated through Workload Identity Federation into a short-lived token, used by a read-only Google Cloud account (logging and monitoring viewer) to read live logs and metrics. No stored keys; read-only, cross-cloud.">
+    </div>
+
+    <!-- Overview card grid -->
+    <div class="pd-cards">
+      <a href="#topology" class="pd-card" data-target="topology">
+        <span class="pd-card-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+        </span>
+        <div class="pd-card-body">
+          <h4 class="pd-card-title">Cross-cloud topology</h4>
+          <p class="pd-card-summary">One container on Azure reading a live system on Google Cloud.</p>
+        </div>
+        <span class="pd-card-overlay" aria-hidden="true"><span class="pd-card-overlay-text">Click to read the section &rarr;</span></span>
+      </a>
+
+      <a href="#identity" class="pd-card" data-target="identity">
+        <span class="pd-card-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
+        </span>
+        <div class="pd-card-body">
+          <h4 class="pd-card-title">Federated identity</h4>
+          <p class="pd-card-summary">Short-lived federated tokens, no stored keys, read-only by construction.</p>
+        </div>
+        <span class="pd-card-overlay" aria-hidden="true"><span class="pd-card-overlay-text">Click to read the section &rarr;</span></span>
+      </a>
+
+      <a href="#pipeline" class="pd-card" data-target="pipeline">
+        <span class="pd-card-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><path d="M11 18H8a2 2 0 0 1-2-2V9"/></svg>
+        </span>
+        <div class="pd-card-body">
+          <h4 class="pd-card-title">The pipeline</h4>
+          <p class="pd-card-summary">What&rsquo;s live today, and what&rsquo;s on the roadmap.</p>
+        </div>
+        <span class="pd-card-overlay" aria-hidden="true"><span class="pd-card-overlay-text">Click to read the section &rarr;</span></span>
+      </a>
+
+      <a href="#public" class="pd-card" data-target="public">
+        <span class="pd-card-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+        </span>
+        <div class="pd-card-body">
+          <h4 class="pd-card-title">Public by design</h4>
+          <p class="pd-card-summary">Real architecture, generic labels &mdash; zero sensitive internals.</p>
+        </div>
+        <span class="pd-card-overlay" aria-hidden="true"><span class="pd-card-overlay-text">Click to read the section &rarr;</span></span>
+      </a>
+    </div>
+
+    <!-- CTA -->
+    <div class="pd-cta-wrap">
+      <a class="button" href="https://glasshood.ai" target="_blank" rel="noopener noreferrer">Launch demo</a>
+    </div>
+
+    <!-- Detail sections (revealed on card click) -->
+    <div class="pd-hidden-until-reveal">
+
+      <section class="pd-section" id="topology">
+        <h2>Cross-cloud topology</h2>
+        <p>
+          GlassHood is a single container &mdash; a FastAPI backend that serves a React UI,
+          behind JWT authentication. It was ported from Google Cloud Run to <strong>Azure
+          Container Apps</strong> and runs in <strong>Switzerland North</strong>.
+        </p>
+        <p>
+          The system it monitors &mdash; ColdVault &mdash; runs on Google Cloud and stays there.
+          GlassHood reaches across the cloud boundary to read ColdVault&rsquo;s live logs and
+          monitoring metrics. Nothing moves to Azure; GlassHood observes, read-only, from the
+          other side.
+        </p>
+        <div class="pd-callouts">
+          <div class="pd-callout"><strong>Host</strong><span>Azure Container Apps &middot; Switzerland North</span></div>
+          <div class="pd-callout"><strong>Workload</strong><span>One container &middot; FastAPI serving a React UI &middot; JWT auth</span></div>
+          <div class="pd-callout"><strong>Observes</strong><span>ColdVault on Google Cloud &mdash; live logs &amp; monitoring metrics</span></div>
+          <div class="pd-callout"><strong>Direction</strong><span>Read-only, one way &mdash; GlassHood reads; it never writes back</span></div>
+        </div>
+      </section>
+
+      <section class="pd-section" id="identity">
+        <h2>Federated identity &mdash; no stored keys</h2>
+        <p>
+          The container authenticates to Google Cloud with <strong>Workload Identity
+          Federation</strong>. Its Azure managed identity is federated into Google Cloud IAM and,
+          on demand, exchanged for a <strong>short-lived</strong> token that impersonates a
+          <strong>read-only service account</strong>. No long-lived keys are stored anywhere &mdash;
+          every credential is minted fresh, used briefly, discarded.
+        </p>
+        <p>
+          That account holds <strong>viewer permissions only</strong> (logging and monitoring), so
+          the blast radius is observation, not control. GlassHood is read-only by construction:
+          even a full compromise of the container cannot modify the monitored system.
+        </p>
+        <div class="pd-callouts">
+          <div class="pd-callout"><strong>Mechanism</strong><span>Workload Identity Federation (Azure identity &rarr; Google Cloud IAM)</span></div>
+          <div class="pd-callout"><strong>Credentials</strong><span>Short-lived, fetched on demand</span></div>
+          <div class="pd-callout"><strong>Stored keys</strong><span>None &mdash; no service-account key files anywhere</span></div>
+          <div class="pd-callout"><strong>Permissions</strong><span>Read-only service account &mdash; logging + monitoring viewer</span></div>
+        </div>
+      </section>
+
+      <section class="pd-section" id="pipeline">
+        <h2>The pipeline &mdash; today and roadmap</h2>
+        <p>
+          What runs today is the cross-cloud observation path: collect, analyse, report. The
+          analytics layer beyond it is designed but not yet built &mdash; shown as roadmap, never
+          as current capability.
+        </p>
+        <p><span class="badge badge-live">Live today</span></p>
+        <ul class="tight">
+          <li>Cross-cloud collection of logs and monitoring metrics from Google Cloud</li>
+          <li>Statistical anomaly detection over the collected signals</li>
+          <li>Compliance reporting &mdash; ALCOA+, EU Annex 11, and 21 CFR Part 11</li>
+          <li>ServiceNow synchronisation for alerts and incidents</li>
+        </ul>
+        <p><span class="badge badge-roadmap">Roadmap &mdash; not yet built</span></p>
+        <ul class="tight">
+          <li>Databricks medallion pipeline (bronze &rarr; silver &rarr; gold star schema)</li>
+          <li>Power BI dashboards for uptime and operational analytics</li>
+          <li>Natural-language query over the monitoring data</li>
+        </ul>
+        <p>
+          A note on the name: this is a Google-Cloud-native monitor <em>hosted on</em> Azure. The
+          &ldquo;Azure&rdquo; is where GlassHood runs and how it federates its identity &mdash; not
+          a claim that it monitors Azure resources today.
+        </p>
+      </section>
+
+      <section class="pd-section" id="public">
+        <h2>Public by design</h2>
+        <p>
+          This portal &mdash; and the open repository behind it &mdash; describe the real
+          architecture using <strong>generic labels only</strong>. No project identifiers,
+          service-account names, endpoints, or other internal details appear anywhere. The security
+          story is the point, so it would be self-defeating to leak internals while telling it.
+        </p>
+        <div class="note">
+          Public architecture, zero sensitive internals &mdash; the same sanitisation applied to the
+          diagrams, the text, and the published code.
+        </div>
+      </section>
+
+    </div>
+
+    <footer>
+      GlassHood on Azure &middot; architecture.glasshood.ai
+    </footer>
+
+  </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

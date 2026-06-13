@@ -1,0 +1,3 @@
+# Deploy config carries the hosting project id — kept local, not published.
+.firebaserc
+.firebase/

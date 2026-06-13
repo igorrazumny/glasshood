@@ -1,0 +1,19 @@
+# GlassHood storage retention policy
+# Hot tier: BigQuery recent partitions (queryable, real-time)
+# Cold tier: GCS immutable archive (365+ days, GxP compliance)
+# GxP: NO partition expiration — never auto-delete production data
+
+hot_days: 7
+archive_after_days: 7
+
+# GCS cold archive prefix
+archive_prefix: "glasshood-archive"
+
+# CMEK placeholder (requires KMS setup at deployment)
+# cmek_key_name: "projects/{project}/locations/{location}/keyRings/{ring}/cryptoKeys/{key}"
+
+# Future: per-customer overrides
+# customers:
+#   roche:
+#     hot_days: 14
+#     archive_after_days: 14

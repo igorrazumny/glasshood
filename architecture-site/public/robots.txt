@@ -1,0 +1,3 @@
+# noindex gate: portal stays out of search indexes until the deployment is confirmed green.
+User-agent: *
+Disallow: /

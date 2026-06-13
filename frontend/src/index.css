@@ -1,0 +1,216 @@
+/* REQ-010: Lato from Google Fonts — primary face for body + UI text so
+   GlassHood reads as the same brand family as coldvault.ai. Weights match
+   ColdVault's usage (400 body, 500 medium, 700 bold). */
+@import url('https://fonts.googleapis.com/css2?family=Lato:wght@400;500;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+}
+
+/* REQ-009: theme variables — light (default) and dark blocks. The SVG canvas
+   (TopologyMap + TopologyNode) reads palette via `var(--…)` instead of
+   hardcoded hex literals, so the same components re-render correctly in
+   both themes without prop-drilling theme awareness. niobe's reference doc
+   §5 inventory table informed each pair. */
+:root {
+  /* Canvas backdrop + chrome */
+  --canvas-bg: #f8fafc;
+  --canvas-grid: #e2e8f0;
+
+  /* Node card surfaces */
+  --node-fill: #ffffff;
+  --node-fill-selected: #f1f5f9;
+  --node-stroke-quiet: #cbd5e1;
+  --node-text: #1f2937;
+  --node-text-secondary: #64748b;
+  --node-text-disconnected: #94a3b8;
+
+  /* Brand-solid (REQ-008 application-leaf cards) — light theme uses
+     royal blue (CV_ACCENT) to match what TopologyNode shipped pre-Phase 4.
+     Dark theme flips to ColdVault's medium blue per REQ-010. */
+  --brand-primary-fill: #2563eb;          /* royal blue (CV_ACCENT) */
+  --brand-primary-fill-selected: #3b82f6; /* blue-500 — lighter on selection */
+  --brand-primary-stroke: #1e40af;        /* blue-800 — slightly darker outline */
+  --brand-primary-text: #ffffff;          /* white on royal blue */
+  --brand-primary-subtext: #dbeafe;       /* blue-100 — quieter on royal blue */
+
+  /* Type tints (REQ-008 — providers green, LB teal, MIG blue, etc.) */
+  --tint-provider: #f0fdf4;
+  --tint-lb: #f0fdfa;
+  --tint-ingress: #f0fdfa;
+  --tint-cdn: #f0fdfa;
+  --tint-mig: #eff6ff;
+  --tint-container: #eff6ff;
+  --tint-vm: #eff6ff;
+  --tint-cloud-run: #eff6ff;
+  --tint-compute: #eff6ff;
+  --tint-storage: #f8fafc;
+  --tint-secret: #f8fafc;
+  --tint-registry: #f8fafc;
+  --tint-cache: #f8fafc;
+  --tint-database: #f8fafc;
+
+  /* Group / edge chrome */
+  --group-fill-default: rgba(226, 232, 240, 0.55);
+  --group-fill-encrypted: rgba(37, 99, 235, 0.05);
+  --group-fill-partner: rgba(101, 163, 13, 0.07);
+  --group-fill-planned: rgba(148, 163, 184, 0.08);
+  --group-fill-project: rgba(139, 92, 246, 0.06);
+  --edge-arrow: #64748b;
+  --edge-deploy: #94a3b8;
+
+  /* REQ-012: glow filter floodColors — matches STATUS_COLORS degraded/error
+     tones (amber-600 / red-600). Declared as vars so dark mode can swap to
+     brighter hues if the dim hex doesn't read against the purple-950 canvas. */
+  --glow-degraded: #ca8a04;
+  --glow-error: #dc2626;
+
+  /* Canvas accents (TopologyMap-level) */
+  --canvas-accent-primary: #2563eb;      /* CV_ACCENT royal blue */
+  --canvas-accent-partner: #65a30d;      /* Solace green */
+  --canvas-accent-planned: #94a3b8;      /* slate-400 */
+  --canvas-accent-solution: #8b5cf6;     /* violet-500 */
+  --canvas-accent-company: #ca8a04;      /* amber-600 */
+  --canvas-text-strong: #475569;         /* slate-600 — readable on cream */
+  --canvas-text-soft: #64748b;           /* slate-500 — quieter labels */
+  --canvas-boundary-label: #94a3b8;      /* slate-400 — L1/L2/L3 structural
+                                            wrappers; deliberately quiet so
+                                            they don't compete with status. */
+
+  /* Status (semantic — kept readable in both themes) */
+  --status-healthy: #16a34a;
+  --status-degraded: #ca8a04;
+  --status-error: #dc2626;
+  --status-inactive: #94a3b8;
+}
+
+.dark {
+  /* Dark backdrop — flat purple-950, not the ColdVault gradient (niobe's
+     ops-dashboard recommendation: gradient is mostly hidden behind dense
+     content anyway). */
+  --canvas-bg: #020810;
+  --canvas-grid: #0d1f30;
+
+  /* Dark node cards — purple-800 elevated panel surface, with purple-600
+     lift on selection. Text uses purple-100 (AAA contrast on purple-800).
+     Quiet stroke uses purple-500 (#1E4970) — round-2 9r fix: purple-700
+     (#0d1f30) was near-invisible against purple-800 fill (near-zero
+     contrast), made nodes blur together. */
+  --node-fill: #081621;
+  --node-fill-selected: #13293e;
+  --node-stroke-quiet: #1E4970;
+  --node-text: #AEEDF5;
+  --node-text-secondary: #8DE4F8;
+  --node-text-disconnected: #2a6496;
+
+  /* Brand-solid cards in dark mode — flip to ColdVault medium blue (#5BD3F4)
+     so the brand-solid cards visually echo the rest of the family on dark
+     backdrops. Dark text on cyan keeps AAA contrast. */
+  --brand-primary-fill: #5BD3F4;          /* ColdVault medium blue */
+  --brand-primary-fill-selected: #AEEDF5; /* purple-100 — lifted on selection */
+  --brand-primary-stroke: #AEEDF5;        /* light blue outline pops on dark */
+  --brand-primary-text: #020810;          /* dark text reads on cyan */
+  --brand-primary-subtext: #0d3654;       /* accent-700 — quieter on cyan */
+
+  /* Type tints in dark — translucent washes over purple-800 instead of
+     light fills. Faint but distinguishable per type. */
+  --tint-provider: rgba(34, 197, 94, 0.08);
+  --tint-lb: rgba(20, 184, 166, 0.08);
+  --tint-ingress: rgba(20, 184, 166, 0.08);
+  --tint-cdn: rgba(20, 184, 166, 0.08);
+  --tint-mig: rgba(91, 211, 244, 0.06);
+  --tint-container: rgba(91, 211, 244, 0.06);
+  --tint-vm: rgba(91, 211, 244, 0.06);
+  --tint-cloud-run: rgba(91, 211, 244, 0.06);
+  --tint-compute: rgba(91, 211, 244, 0.06);
+  --tint-storage: rgba(148, 163, 184, 0.06);
+  --tint-secret: rgba(148, 163, 184, 0.06);
+  --tint-registry: rgba(148, 163, 184, 0.06);
+  --tint-cache: rgba(148, 163, 184, 0.06);
+  --tint-database: rgba(148, 163, 184, 0.06);
+
+  /* Group / edge — alpha layers per niobe's signature pattern. */
+  --group-fill-default: rgba(255, 255, 255, 0.04);
+  --group-fill-encrypted: rgba(91, 211, 244, 0.06);   /* ColdVault cyan wash */
+  --group-fill-partner: rgba(34, 197, 94, 0.07);
+  --group-fill-planned: rgba(255, 255, 255, 0.04);
+  --group-fill-project: rgba(174, 237, 245, 0.05);    /* light blue wash */
+  --edge-arrow: #8DE4F8;
+  --edge-deploy: #2a6496;
+
+  /* REQ-012: glow filter floodColors — brighter hues so the drop-shadow reads
+     against the purple-950 canvas. amber-400 / red-400 instead of -600. */
+  --glow-degraded: #fbbf24;
+  --glow-error: #f87171;
+
+  /* Canvas accents in dark — brighter so they read on purple-950. */
+  --canvas-accent-primary: #5BD3F4;      /* ColdVault medium blue */
+  --canvas-accent-partner: #86efac;      /* green-300 brighter on dark */
+  --canvas-accent-planned: #475569;      /* slate-600 quieter on dark */
+  --canvas-accent-solution: #c4b5fd;     /* violet-300 brighter on dark */
+  --canvas-accent-company: #fbbf24;      /* amber-400 brighter on dark */
+  --canvas-text-strong: #AEEDF5;         /* purple-100 light blue */
+  --canvas-text-soft: #8DE4F8;           /* purple-200 */
+  --canvas-boundary-label: #cbd5e1;      /* slate-300 — quieter on dark; the
+                                            "boundary labels are structural"
+                                            principle holds in both themes. */
+
+  /* Status colors stay the same hexes — both themes readable. */
+}
+
+/* REQ-009: theme-aware body — light cream default, dark purple-950 in dark.
+   Color flips to ColdVault's purple-100 light-blue for readable subtle text
+   on the dark backdrop. */
+body {
+  font-family: 'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: #f8fafc;
+  color: #1f2937;
+}
+
+.dark body {
+  background-color: #020810;
+  color: #AEEDF5;
+}
+
+/* REQ-009: cross-fade on theme flip — 200ms is short enough to feel
+   responsive, long enough to not snap. SCOPED to <body> and a small set
+   of named theme-aware surfaces so the transition does NOT inherit to
+   every element. Originally `.dark, :root { transition: … }` which
+   cascaded to every descendant and made hover states / dynamic text /
+   "ago" counters all lag 200ms (caught by 9r round-1 review). */
+body,
+.theme-transition {
+  transition: background-color 200ms ease, color 200ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body,
+  .theme-transition {
+    transition: none;
+  }
+}
+
+/* Animated dot on edges */
+@keyframes flow {
+  0% { offset-distance: 0%; }
+  100% { offset-distance: 100%; }
+}
+
+/* REQ-009: scrollbars — slate in light, ColdVault purple-700 in dark. */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+.dark ::-webkit-scrollbar-thumb { background: #0d1f30; }       /* purple-700 */
+.dark ::-webkit-scrollbar-thumb:hover { background: #13293e; } /* purple-600 */
+
+/* REQ-005: status glow softened for light bg. RGBA matches STATUS_COLORS.
+   In dark mode the same glows still read well against purple-950. */
+.glow-green { filter: drop-shadow(0 0 5px rgba(22, 163, 74, 0.4)); }
+.glow-yellow { filter: drop-shadow(0 0 5px rgba(202, 138, 4, 0.4)); }
+.glow-red { filter: drop-shadow(0 0 5px rgba(220, 38, 38, 0.4)); }
+.glow-gray { filter: drop-shadow(0 0 4px rgba(148, 163, 184, 0.25)); }

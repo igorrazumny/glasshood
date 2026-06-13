@@ -1,0 +1,33 @@
+// GlassHood Ingest Service — gRPC definition
+// Agent pushes events to backend via this service.
+// Current implementation uses JSON-over-gRPC (no proto compilation needed).
+// Future: generate stubs with `python -m grpc_tools.protoc`.
+
+syntax = "proto3";
+
+package glasshood.ingest;
+
+service IngestService {
+  // Push a batch of events from the ingress agent to the backend.
+  rpc IngestEvents(IngestRequest) returns (IngestResponse);
+}
+
+message IngestRequest {
+  string agent_id = 1;
+  repeated Event events = 2;
+}
+
+message Event {
+  string source_id = 1;
+  string source_type = 2;
+  string message = 3;
+  string severity = 4;
+  string timestamp = 5;
+  string customer_id = 6;
+  map<string, string> tags = 7;
+}
+
+message IngestResponse {
+  int32 accepted = 1;
+  string error = 2;
+}

@@ -1,0 +1,13 @@
+# File: config/compliance.yaml
+# Purpose: Compliance report configuration
+
+compliance:
+  organization: "9RobotsAI GmbH"
+  system_name: "GlassHood"
+  system_version: "v2026-03-08.1"
+  report_types:
+    - annex_11
+    - alcoa_plus
+    - 21cfr_part11
+    - full
+  default_period_hours: 24

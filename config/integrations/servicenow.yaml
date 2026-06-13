@@ -1,0 +1,43 @@
+# File: config/integrations/servicenow.yaml
+# Purpose: ServiceNow connection and sync configuration
+
+servicenow:
+  enabled: false
+  instance_url: ""   # e.g. https://mycompany.service-now.com
+  poll_interval_seconds: 300
+  time_window_seconds: 1800      # 30-min correlation window (wider than 5-min operational)
+  change_lookback_seconds: 3600  # look back 1h for change tickets
+
+  # GlassHood severity -> ServiceNow urgency/impact
+  severity_map:
+    critical: {urgency: 1, impact: 1}
+    warning:  {urgency: 2, impact: 2}
+    info:     {urgency: 3, impact: 3}
+
+  # GlassHood node_id -> SNOW cmdb_ci value (customer populates)
+  node_to_cmdb: {}
+
+  # SNOW incident states considered "resolved"
+  resolved_states: ["6", "7"]
+
+  # Fields to fetch from SNOW tables
+  incident_fields:
+    - sys_id
+    - number
+    - short_description
+    - state
+    - urgency
+    - opened_at
+    - resolved_at
+    - cmdb_ci
+    - assigned_to
+
+  change_fields:
+    - sys_id
+    - number
+    - short_description
+    - state
+    - start_date
+    - end_date
+    - cmdb_ci
+    - category

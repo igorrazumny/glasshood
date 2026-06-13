@@ -1,0 +1,274 @@
+# File: config/manifests/platform.yaml
+# Purpose: ColdVault Platform — operational topology for GlassHood monitoring
+# Architecture: LB → MIG → [VM → Docker → Platform API] → Providers + GPU
+# Uses nested nodes (children_template) for VM → Container → App layering
+
+schema_version: 2
+company: 9RobotsAI
+solution: "ColdVault Platform"
+product: platform
+project_id: example-platform-project
+region: us-central1
+
+environments:
+  - environment: prod
+    display_name: "Platform Prod"
+    order: 0
+
+    groups:
+      # Row 0: Data path (left to right)
+      # LB (with Cloud Armor inside) → VMs (inside MIG group) → Providers
+      - name: lb
+        label: ""
+        style: default
+        order: 0
+        row: 0
+        col: 0
+        nodes:
+          - pl-lb
+
+      - name: confidential-vms
+        label: "Confidential VM (MIG)"
+        style: encrypted
+        order: 1
+        row: 0
+        col: 1
+        columns: 2
+        dynamic: true
+        parent: pl-mig
+        nodes: []
+
+      # REQ-218: providers are independent third parties — no enclosing group renders.
+      # The empty-label group below is a pure LAYOUT ANCHOR: it stacks the 4 provider
+      # nodes vertically (columns: 1) at row 0 col 2, with no visible rectangle, no
+      # aggregated color, no click target, no group-level signal. Each Platform API
+      # instance has explicit edges to each provider individually (see
+      # children_template.connects_to). Putting all 4 in one row-0 anchor keeps the
+      # canvas compact — without it, rows 2 and 3 only contain providers and stretch
+      # the layout vertically, dragging DashScope to the canvas bottom and creating
+      # long crossing edges from the MIG VMs.
+      - name: providers
+        label: ""
+        style: default
+        order: 2
+        row: 0
+        col: 2
+        columns: 1
+        nodes:
+          - pl-vertex
+          - pl-openai
+          - pl-redpill
+          - pl-dashscope
+
+      # Row 1: Support services
+      - name: deps
+        label: "Dependencies"
+        style: default
+        order: 3
+        row: 1
+        col: 0
+        columns: 1
+        nodes:
+          - pl-secrets
+          - pl-registry
+
+      - name: gpu
+        label: ""
+        style: encrypted
+        order: 4
+        row: 1
+        col: 1
+        nodes:
+          - pl-gpu-1
+
+    nodes:
+      # === Load Balancer — Cloud Armor runs inside as a policy ===
+      - id: pl-lb
+        label: "Load Balancer"
+        type: load_balancer
+        cost_yearly_usd: 340
+        # monitoring.logs is hydrated by the manifest compiler from LOG_DEFAULTS
+        # (load_balancer → resource.type="gce_instance"). REQ-212.
+        monitoring:
+          probe:
+            type: http
+            url: "https://api.example.com/api/health"
+            timeout_s: 10
+        children:
+          - id: pl-armor
+            label: "Cloud Armor (WAF)"
+            type: cdn
+            # cdn type isn't in LOG_DEFAULTS; child inherits parent LB's hydrated
+            # logs via TopologyMap.jsx fallback (REQ-212). Status also inherits.
+            monitoring: {}
+
+      # === Compute MIG (col 1) — AMD SEV-SNP Confidential VM ===
+      # Discovered VMs get nested children: Docker → Platform API
+      - id: pl-mig
+        label: "Confidential VM (MIG)"
+        type: mig
+        cost_yearly_usd: 2400
+        monitoring:
+          probe:
+            type: gcp_vm_status
+            project: example-platform-project
+            zone: us-central1-a
+            resource_name: example-mig
+            resource_type: instanceGroupManagers
+          logs:
+            - project: example-platform-project
+              filter: 'resource.type="gce_instance" AND jsonPayload.instance.name=~"example-mig-.*"'
+          metrics:
+            - name: cpu_percent
+              metric_type: "compute.googleapis.com/instance/cpu/utilization"
+              project: example-platform-project
+              filter: 'resource.labels.instance_name = starts_with("example-mig-")'
+              aggregation: mean
+              unit: percent
+              multiplier: 100
+              thresholds:
+                healthy: "< 70"
+                degraded: "< 90"
+                error: ">= 90"
+          discover:
+            type: gcp_mig
+            project: example-platform-project
+            zone: us-central1-a
+            instance_group: example-mig
+
+        children_template:
+          # Layer 1: Docker container running on each VM
+          # Logs ship via gcplogs Docker driver to logName projects/.../gcplogs-docker-driver,
+          # under jsonPayload.container.name="/platform". Verified live 2026-04-18.
+          - id_suffix: "-docker"
+            label: "Docker Container"
+            type: container
+            monitoring:
+              logs:
+                - project: example-platform-project
+                  filter: 'resource.type="gce_instance" AND jsonPayload.instance.name="{vm_name}" AND jsonPayload.container.name="/platform"'
+
+            # Layer 2: Platform API (FastAPI) inside the container
+            children:
+              - id_suffix: "-api"
+                label: "ColdVault Platform"
+                type: application
+                receives_from:
+                  - pl-lb
+                connects_to:
+                  # REQ-218: explicit edges to each independent provider — no @providers group ref.
+                  - pl-vertex
+                  - pl-openai
+                  - pl-redpill
+                  - pl-dashscope
+                  - pl-gpu-1
+                  - pl-secrets
+                  - pl-registry
+                monitoring:
+                  probe:
+                    type: http
+                    url: "https://api.example.com/api/health"
+                    timeout_s: 10
+                  logs:
+                    - project: example-platform-project
+                      # Match the "severity": JSON key (quotes + colon) to isolate structured app logs
+                      # from uvicorn access logs (which lack that key). REQ-207.
+                      # NOTE: filter MUST be single-quoted YAML scalar so backslashes stay literal.
+                      # Switching to double quotes would re-interpret \" as " and break the regex.
+                      filter: 'resource.type="gce_instance" AND jsonPayload.instance.name="{vm_name}" AND jsonPayload.message=~"\"severity\":"'
+
+      # === LLM Providers (col 2, four independent standalone nodes per REQ-218) ===
+      # Vertex AI hosts Gemini, Claude, and (post Apr 21 architect migration) Grok.
+      # The pl-xai node was removed because the canonical xai/grok-* model IDs
+      # now route via Vertex AI Model Garden — there is no separate xAI direct API.
+      #
+      # REQ-219: each provider is probed every minute via a tiny test inference
+      # against ONE canonical model. Status is independent of application traffic —
+      # a provider stays healthy or red based on what the probe observes, not on
+      # whether GlassHood happens to have called it. Per-model coverage is REQ-220
+      # (backlog) — for now one model per provider is enough to know the provider
+      # is reachable end-to-end through the Platform.
+      - id: pl-vertex
+        label: "Vertex AI (Gemini, Claude, Grok)"
+        type: provider
+        monitoring:
+          probe:
+            type: platform_inference
+            # anthropic-haiku is hosted on Vertex and is the most reliable cheap canonical;
+            # using it confirms Vertex routing for the Anthropic family. Gemini and Grok
+            # share the same Vertex routing, so a single probe is sufficient at the
+            # provider level (per-model coverage tracked as REQ-220).
+            model: anthropic-haiku
+            timeout_s: 30
+
+      - id: pl-openai
+        label: "OpenAI (GPT)"
+        type: provider
+        monitoring:
+          probe:
+            type: platform_inference
+            model: openai-gpt-mini
+            timeout_s: 30
+
+      - id: pl-redpill
+        label: "RedPill TEE (GLM, Kimi)"
+        type: provider
+        monitoring:
+          probe:
+            type: platform_inference
+            model: redpill/moonshotai/kimi-k2.5
+            timeout_s: 30
+
+      - id: pl-dashscope
+        label: "DashScope (Qwen)"
+        type: provider
+        monitoring:
+          probe:
+            type: platform_inference
+            model: dashscope/qwen3.5-flash
+            timeout_s: 30
+
+      # === GPU Inference (on-demand H100) ===
+      - id: pl-gpu-1
+        label: "GPU Inference H100"
+        type: gpu
+        expected_offline: true
+        cost_yearly_usd: 10000
+        monitoring:
+          probe:
+            type: gcp_vm_status
+            project: example-platform-project
+            zone: us-central1-a
+            resource_name: gpu-inference-1
+            resource_type: instances
+          logs:
+            - project: example-platform-project
+              filter: 'resource.type="gce_instance" AND labels.instance_name="gpu-inference-1"'
+
+      # === Dependencies ===
+      - id: pl-secrets
+        label: "Secret Manager"
+        type: secret
+        cost_yearly_usd: 10
+        monitoring:
+          probe:
+            type: gcp_secret
+            project: example-platform-project
+            secret_name: PLATFORM_ENV
+          logs:
+            - project: example-platform-project
+              filter: 'resource.type="audited_resource" AND protoPayload.serviceName="secretmanager.googleapis.com" AND protoPayload.resourceName:"secrets/PLATFORM_ENV"'
+
+      - id: pl-registry
+        label: "Artifact Registry"
+        type: registry
+        cost_yearly_usd: 50
+        monitoring:
+          logs:
+            - project: example-platform-project
+              filter: 'resource.type="audited_resource" AND protoPayload.serviceName="artifactregistry.googleapis.com" AND protoPayload.resourceName:"platform-repo"'
+
+    # All connections declared on nodes via connects_to / receives_from (REQ-702):
+    # - LB → ColdVault Platform: receives_from on -api template child
+    # - ColdVault Platform → providers/GPU/deps: connects_to on -api template child
+    edges: []

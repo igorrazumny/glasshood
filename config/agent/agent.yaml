@@ -1,0 +1,47 @@
+# GlassHood Ingress Agent Configuration
+# Copy this file and adjust for your environment
+
+agent_id: "agent-site-01"
+backend_url: "https://glasshood.example.com"
+api_key: ""  # API key created via /api/auth/api-keys (operator+ role)
+buffer_dir: "/tmp/glasshood-agent"
+transport_mode: https  # "grpc" (primary, with HTTPS fallback) or "https" (HTTPS only)
+push_interval: 10  # seconds between pushes to backend
+batch_size: 100     # max events per push
+heartbeat_interval: 60  # seconds between heartbeats
+
+# Code integrity — SHA-256 digest of agent code (empty = skip check)
+# Generate with: python -c "from agent.integrity import generate_manifest; print(generate_manifest('agent')['digest'])"
+integrity_digest: ""
+
+# Data whitelist — controls what data leaves the customer network
+# Empty lists = no filtering (allow all). Pharma IT configures this.
+whitelist:
+  # Only send events from these sources (fnmatch patterns)
+  allowed_sources:
+    - "sap-*"
+    - "middleware-*"
+    - "mes-*"
+  # Only keep these fields in events (empty = keep all)
+  allowed_fields: []
+  # Regex patterns — matched text is redacted before sending
+  blocked_patterns:
+    - "password=\\S+"
+    - "Bearer\\s+[A-Za-z0-9._-]+"
+  # true = drop entire event on match, false = redact matched text
+  drop_on_block: false
+
+collectors:
+  - type: file_tail
+    paths:
+      - /var/log/middleware/transactions.log
+      - /var/log/mes/interface.log
+    poll_interval: 2.0
+
+  # - type: syslog
+  #   bind_host: "0.0.0.0"
+  #   bind_port: 1514
+
+  # - type: webhook
+  #   bind_host: "0.0.0.0"
+  #   bind_port: 8514

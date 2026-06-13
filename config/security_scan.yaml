@@ -1,0 +1,37 @@
+# File: config/security_scan.yaml
+# Purpose: CVE scanner configuration — declare monitored components with CPE identifiers
+# NVD API 2.0: https://nvd.nist.gov/developers/vulnerabilities
+
+scan:
+  enabled: true
+  interval_hours: 6        # how often to re-scan (hours)
+  nvd_api_key: ""          # optional — increases rate limit from 5 to 50 req/30s
+
+# Declare infrastructure components to scan for CVEs.
+# Each component maps to NVD via CPE (Common Platform Enumeration).
+# CPE format: cpe:2.3:part:vendor:product:version:*:*:*:*:*:*:*
+# Find CPE strings at: https://nvd.nist.gov/products/cpe/search
+components:
+  - id: nginx-lb
+    name: "Nginx 1.25"
+    cpe: "cpe:2.3:a:f5:nginx:1.25:*:*:*:*:*:*:*"
+    node_ids: ["nginx-lb"]
+    gxp_critical: false
+
+  - id: python-runtime
+    name: "Python 3.13"
+    cpe: "cpe:2.3:a:python:python:3.13:*:*:*:*:*:*:*"
+    node_ids: ["glasshood-vm"]
+    gxp_critical: true
+
+  - id: cloud-run-service
+    name: "Google Cloud Run"
+    cpe: "cpe:2.3:a:google:cloud_run:*:*:*:*:*:*:*:*"
+    node_ids: ["coldvault-service"]
+    gxp_critical: true
+
+  - id: fastapi
+    name: "FastAPI 0.115"
+    cpe: "cpe:2.3:a:tiangolo:fastapi:0.115:*:*:*:*:*:*:*"
+    node_ids: ["glasshood-vm"]
+    gxp_critical: true

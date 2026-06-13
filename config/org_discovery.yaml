@@ -1,0 +1,26 @@
+# File: config/org_discovery.yaml
+# Purpose: Multi-project discovery configuration for GlassHood
+# GCP org-level scanning + project classification + billing
+
+org_discovery:
+  enabled: false  # Set true + ORG_DISCOVERY_ENABLED env var to activate
+  org_id: "000000000000"  # 9robots.ai GCP org
+  scan_interval_hours: 24  # Daily org-level scan
+
+  # Project ID patterns to include/exclude from scanning
+  include_patterns:
+    - "nr-*"
+    - "braintransplant-*"
+    - "ninerobots-*"
+  exclude_patterns:
+    - "*-sandbox"
+    - "*-test"
+    - "sys-*"
+
+# Billing configuration (requires BigQuery billing export)
+billing:
+  enabled: false
+  billing_project: ""  # GCP project containing billing export
+  billing_dataset: "billing_export"
+  billing_table: ""  # e.g. gcp_billing_export_v1_XXXXXX
+  poll_interval_hours: 6

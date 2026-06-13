@@ -1,0 +1,93 @@
+/* GlassHood on Azure — Architecture portal.
+   Reproduces the 9robots GlassHood product-detail page (the .pd-* system) 1:1
+   from 9robots-site/next/app/globals.css, as a standalone static site. */
+:root{
+  --blue:#0c41cd; --navy:#000055; --orange:#e75a1e;
+  --bg:#ffffff; --card:#f7f8fa; --text:#1a1a2e; --sub:#555555;
+  --muted:#f0f1f4; --border:#e0e2e8; --max:1320px;
+}
+*{box-sizing:border-box}
+html{overflow-y:scroll}
+body{margin:0;padding:0;background:var(--bg);color:var(--text);
+  font-family:"Lato",sans-serif;font-size:16px;line-height:1.6;font-weight:400;-webkit-font-smoothing:antialiased}
+a{color:var(--navy);text-decoration:none}
+a:hover{text-decoration:underline}
+p{margin:0 0 1em}
+.container{max-width:var(--max);margin:0 auto;padding:24px}
+
+/* Button (site-wide) */
+a.button{display:inline-block;padding:12px 20px;border-radius:12px;border:1px solid rgba(0,0,0,.12);
+  background:transparent;color:var(--sub);font-weight:500;font-family:inherit;font-size:19px;cursor:pointer;
+  transition:border-color .15s ease,color .15s ease,background .15s ease,box-shadow .15s ease}
+a.button:hover{background:var(--orange);border-color:var(--orange);color:#fff;
+  box-shadow:0 4px 16px rgba(0,0,0,.12);text-decoration:none}
+
+/* Product-detail page system (.pd-*) */
+.pd-page{color:var(--text)}
+.pd-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.pd-logo{height:64px;width:auto;object-fit:contain;display:block}
+
+.pd-hero{font-size:22px;font-weight:400;line-height:1.35;color:var(--text);max-width:880px;
+  margin:20px 0 24px;letter-spacing:-.005em}
+.pd-hero .accent{color:var(--blue)}
+
+/* Added architecture visual */
+.hero-diagram{margin:8px 0 28px}
+.hero-diagram img{display:block;width:100%;height:auto;max-width:1000px;margin:0 auto;
+  border:1px solid var(--border);border-radius:16px}
+
+/* Overview card grid — 2x2 (1-col mobile) */
+.pd-cards{display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:24px}
+@media(min-width:768px){.pd-cards{grid-template-columns:repeat(2,1fr);gap:20px}}
+.pd-card,.pd-card *{text-decoration:none!important}
+.pd-card{position:relative;overflow:hidden;display:flex;gap:18px;padding:24px;background:#fff;
+  border:1px solid var(--border);border-radius:12px;color:inherit;cursor:pointer;
+  transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
+.pd-card:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.06);border-color:var(--orange)}
+.pd-card-icon{flex:0 0 auto;width:52px;height:52px;border-radius:12px;background:rgba(0,0,85,.06);
+  color:var(--blue);display:flex;align-items:center;justify-content:center;transition:transform .18s ease}
+.pd-card:hover .pd-card-icon{transform:scale(1.05)}
+.pd-card-body{flex:1;min-width:0}
+.pd-card-title{font-size:22px;font-weight:700;margin:0 0 10px;color:var(--text);letter-spacing:-.01em}
+.pd-card-summary{font-size:19px;line-height:1.5;color:var(--sub);margin:0}
+.pd-card-summary::after{content:"Click to read the section →";display:block;margin-top:14px;
+  font-size:19px;font-weight:500;color:rgba(0,0,0,.25);transition:opacity .15s ease}
+.pd-card:hover .pd-card-summary::after{opacity:0}
+.pd-card-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  opacity:0;transition:opacity .18s ease;pointer-events:none;border-radius:inherit}
+.pd-card:hover .pd-card-overlay{opacity:1}
+.pd-card-overlay-text{display:inline-flex;align-items:center;gap:8px;background:var(--orange);color:#fff;
+  padding:10px 14px;border-radius:12px;font-size:19px;font-weight:500;box-shadow:0 4px 16px rgba(0,0,0,.12);white-space:nowrap}
+
+.pd-cta-wrap{margin-top:32px;margin-bottom:8px}
+.pd-cta-wrap .button{font-size:19px}
+
+/* Progressive disclosure */
+.pd-hidden-until-reveal{display:none}
+.pd-page.revealed .pd-hidden-until-reveal{display:block}
+
+/* Detail sections */
+.pd-section{padding:36px 0;border-top:1px solid rgba(0,0,0,.06);scroll-margin-top:24px}
+.pd-section:first-of-type{border-top:none;padding-top:16px}
+.pd-section h2{font-size:22px;font-weight:700;color:var(--blue);margin:0 0 18px;letter-spacing:-.01em}
+.pd-section p{font-size:19px;line-height:1.55;color:var(--sub);max-width:800px;margin:0 0 16px}
+
+/* Callouts */
+.pd-callouts{display:flex;flex-direction:column;gap:12px;margin:8px 0 16px}
+.pd-callout{display:flex;gap:20px;align-items:flex-start;padding:18px 24px;background:rgba(0,0,0,.025);
+  border-left:3px solid var(--orange);border-radius:6px;font-size:19px;line-height:1.5;color:var(--text);max-width:1000px}
+.pd-callout>strong:first-child{flex:0 0 160px;color:var(--navy)}
+@media(max-width:600px){.pd-callout{flex-direction:column;gap:6px}.pd-callout>strong:first-child{flex:0 0 auto}}
+
+/* Lists + badges + note */
+ul.tight{margin:0 0 16px;padding-left:22px;max-width:800px}
+ul.tight li{font-size:19px;line-height:1.55;color:var(--sub);margin:7px 0}
+.badge{display:inline-block;font-size:12px;font-weight:700;padding:2px 9px;border-radius:999px;margin-right:6px}
+.badge-live{background:rgba(12,65,205,.1);color:var(--blue)}
+.badge-roadmap{background:rgba(231,90,30,.12);color:var(--orange)}
+.note{font-size:14px;line-height:1.5;color:var(--sub);max-width:840px;margin:8px 0 0;padding:14px 18px;
+  background:var(--muted);border-radius:8px}
+
+footer{margin:46px 0 32px;padding-top:18px;border-top:1px solid var(--border);font-size:14px;color:var(--sub)}
+
+@media(max-width:768px){.pd-cards{grid-template-columns:1fr}.container{padding:16px}.pd-logo{height:52px}}
