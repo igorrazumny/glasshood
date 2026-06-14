@@ -32,10 +32,10 @@
 
 ## REQ-GHA-004: Guest entry = honest read-only view of the LIVE system (not "demo")
 - **Goal:** Reframe the unauthenticated guest entry from "demo" to an honest read-only view of the *real, live* system. It IS live — guests just get read-only access, not full access.
-  - Entry button: **"View live (read-only)"** — remove all "demo" wording.
+  - Entry button: **"Read-only access"** (+ microcopy "Live production data · No login required · Server-side enforced") — no "demo" wording. (Label finalized via 9r multi-model debate 2026-06-14: access-tier framing pairs with sibling "Login (full access)"; both "demo" and "guest" rejected — "guest" is Azure-inaccurate (Entra B2B guest = an *authenticated* external user), "demo" implies fake data.)
   - Persistent in-app badge: **"Read-only · live system"** so guests understand it's the real system in a viewing capacity, not a mockup.
   - **Key requirement (makes the "live" label honest):** the guest entry must show the **live topology, read-only** — today it serves a static fixture, so point it at live data (read-only role / public read-only topology). Read-only must be enforced (no actions, no privileged drill-downs).
   - Route `/guest` or `/view` if low-cost; otherwise keep the path and fix visible text only.
 - **Deferred sub-item (backlog — Igor OK to defer):** genericize the guest-view display labels (component / model / region identifiers) so the read-only view conveys the architecture without specific internal identifiers.
 - **Owners:** neo (app — relabel, badge, live read-only routing, label genericization). cypher (portal — "Launch demo" button text → match, one line).
-- **Status:** app IMPLEMENTED (:wif4, live on glasshood.ai — buttons → "View live (read-only)", persistent "Read-only · live system" badge, all demo wording removed; live read-only already enforced via viewer RBAC). Cypher portal rename PENDING. Display-label genericization still deferred.
+- **Status:** app IMPLEMENTED (:wif6, rev glasshood--0000005, live on glasshood.ai — guest button → "Read-only access" + microcopy "Live production data · No login required · Server-side enforced"; persistent "Read-only · live system" badge; all "demo" wording removed; live read-only enforced via viewer RBAC). Cypher portal rename PENDING (now → "Read-only access", not "View live (read-only)"). Display-label genericization still deferred.

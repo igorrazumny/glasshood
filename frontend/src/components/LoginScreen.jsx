@@ -63,8 +63,11 @@ export default function LoginScreen({ onLogin, onDemo, prefillDemo, setPrefillDe
             className="w-full text-white rounded py-3 font-medium text-lg transition-opacity hover:opacity-90"
             style={{ background: `linear-gradient(135deg, ${GH_ORANGE}, ${CV_BLUE})` }}
           >
-            View live (read-only)
+            Read-only access
           </button>
+          <p className="text-gray-500 dark:text-purple-300 text-xs mt-3 leading-relaxed">
+            Live production data · No login required · Server-side enforced
+          </p>
           <div className="mt-4">
             <button type="button" onClick={handleSwitchToLive}
               className="hover:opacity-80 text-xs" style={{ color: CV_BLUE }}>
@@ -141,7 +144,7 @@ export default function LoginScreen({ onLogin, onDemo, prefillDemo, setPrefillDe
         </button>
         <div className="mt-4 text-center">
           <button type="button" onClick={handleExploreDemo} className="text-gray-400 hover:text-gray-300 text-xs">
-            View live (read-only)
+            Read-only access
           </button>
         </div>
       </form>
