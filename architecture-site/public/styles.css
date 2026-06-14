@@ -30,8 +30,11 @@ a.button:focus-visible{outline:2px solid var(--navy);outline-offset:2px}
 .pd-logo{height:48px;width:auto;object-fit:contain;display:block}
 
 .pd-hero{font-size:22px;font-weight:400;line-height:1.35;color:var(--text);max-width:880px;
-  margin:20px 0 24px;letter-spacing:-.005em}
+  margin:20px 0 12px;letter-spacing:-.005em}
 .pd-hero .accent{color:var(--text)}
+
+/* Quiet scope line under the hero — honesty, no box */
+.scope-line{font-size:16px;line-height:1.5;color:var(--sub);max-width:880px;margin:0 0 26px}
 
 /* Added architecture visual */
 .hero-diagram{margin:8px 0 28px}
@@ -39,7 +42,7 @@ a.button:focus-visible{outline:2px solid var(--navy);outline-offset:2px}
 
 /* Overview card grid — 2x2 (1-col mobile) */
 .pd-cards{display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:24px}
-@media(min-width:860px){.pd-cards{grid-template-columns:repeat(3,1fr);gap:18px}}
+@media(min-width:860px){.pd-cards{grid-template-columns:repeat(2,1fr);gap:18px}}
 .pd-card,.pd-card *{text-decoration:none!important}
 .pd-card{position:relative;overflow:hidden;display:flex;gap:18px;padding:24px;background:#fff;
   border:1px solid var(--border);border-radius:12px;color:inherit;cursor:pointer;
@@ -49,9 +52,9 @@ a.button:focus-visible{outline:2px solid var(--navy);outline-offset:2px}
   color:var(--blue);display:flex;align-items:center;justify-content:center;transition:transform .18s ease}
 .pd-card:hover .pd-card-icon{transform:scale(1.05)}
 .pd-card-body{flex:1;min-width:0}
-.pd-card-title{font-size:22px;font-weight:700;margin:0 0 10px;color:var(--text);letter-spacing:-.01em}
+.pd-card-title{font-size:22px;font-weight:700;margin:0 0 8px;color:var(--text);letter-spacing:-.01em}
 .pd-card-summary{font-size:19px;line-height:1.5;color:var(--sub);margin:0}
-.pd-card-summary::after{content:"Click to read the section →";display:block;margin-top:14px;
+.pd-card-summary::after{content:"Click to read the section →";display:block;margin-top:10px;
   font-size:19px;font-weight:500;color:rgba(0,0,0,.25);transition:opacity .15s ease}
 .pd-card:hover .pd-card-summary::after{opacity:0}
 .pd-card-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;

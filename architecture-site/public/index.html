@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Lato:wght@100;300;400;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=5">
+  <link rel="stylesheet" href="styles.css?v=6">
 </head>
 <body>
 <div class="container">
@@ -22,30 +22,20 @@
       <img src="img/glasshood-icon.png" alt="GlassHood" class="pd-logo">
     </div>
 
-    <!-- Hero — engine-first; the cloud is a detail, not the headline -->
+    <!-- Hero — one clean sentence, engine-first -->
     <p class="pd-hero">
       GlassHood is a cross-cloud, agentless, read-only monitoring engine for regulated systems
-      &mdash; <span class="accent">reproducible deterministic and statistical signals, live topology
-      reconciled against declared design, and compliance evidence derived from what it observes.</span>
+      &mdash; reproducible deterministic and statistical signals, live topology reconciled against
+      declared design, and compliance evidence derived from what it observes.
     </p>
 
-    <!-- Data-flow spine — lets a reader trace the whole system in one line -->
-    <p class="spine">
-      <strong>The flow:</strong> a target system &rarr; agentless read-only collectors &rarr; one topology
-      graph that merges live discovery with the declared design &rarr; a deterministic + statistical tier
-      (rules &middot; z-score anomaly &middot; correlation) that produces every operational signal &rarr; an
-      AI layer that synthesizes a narrative on top &rarr; compliance evidence, a read-only UI, and a
-      machine-readable API.
+    <!-- One quiet scope line (honesty, no box) -->
+    <p class="scope-line">
+      A working single-instance reference implementation &mdash; in-memory, monitoring one live target,
+      deployed live &mdash; built to demonstrate the architecture, not a multi-tenant product.
     </p>
 
-    <!-- Honest scope frame -->
-    <p class="scope-clamp">
-      Scope: a working <strong>single-instance reference implementation</strong> &mdash; in-memory,
-      monitoring one live target, deployed live &mdash; built to demonstrate the architecture end-to-end,
-      not a multi-tenant product.
-    </p>
-
-    <!-- Hero cards — the five key architecture decisions -->
+    <!-- Hero cards — four key architecture decisions, balanced 2x2 -->
     <div class="pd-cards">
       <a href="#collection" class="pd-card" data-target="collection">
         <span class="pd-card-icon">
@@ -53,7 +43,7 @@
         </span>
         <div class="pd-card-body">
           <h4 class="pd-card-title">Agentless, read-only collection</h4>
-          <p class="pd-card-summary">Collectors reach the monitored target with list/get/describe calls only &mdash; no create/update/delete path toward it &mdash; and the federated identity is a short-lived, viewer-only token with no stored keys. Read-only is structural, enforced twice: by the call surface and by an identity that cannot write.</p>
+          <p class="pd-card-summary">Collectors reach the target read-only &mdash; viewer-only token, no stored keys.</p>
         </div>
         <span class="pd-card-overlay" aria-hidden="true"><span class="pd-card-overlay-text">Click to read the section &rarr;</span></span>
       </a>
@@ -64,7 +54,7 @@
         </span>
         <div class="pd-card-body">
           <h4 class="pd-card-title">Deterministic-first signals &mdash; AI explains, never originates</h4>
-          <p class="pd-card-summary">A deterministic + statistical tier &mdash; rules, z-score anomaly, correlation &mdash; produces every operational signal, reproducibly. The AI layer synthesizes a narrative on top and never originates an alert or anomaly: every AI conclusion is backed by a signal a human can verify without the model.</p>
+          <p class="pd-card-summary">Rules, z-score anomaly and correlation produce every signal; the AI only narrates them &mdash; it never originates an alert.</p>
         </div>
         <span class="pd-card-overlay" aria-hidden="true"><span class="pd-card-overlay-text">Click to read the section &rarr;</span></span>
       </a>
@@ -74,19 +64,8 @@
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/><path d="M12 7v4M12 11 5.5 17M12 11l6.5 6"/></svg>
         </span>
         <div class="pd-card-body">
-          <h4 class="pd-card-title">Discovery reconciled with declared design</h4>
-          <p class="pd-card-summary">Live discovery is merged with the declared design (manifest overlays) into one topology graph, rebuilt every cycle &mdash; so the model holds observed reality and declared intent together in one place, and change between cycles is tracked. It is the substrate every analysis layer reads from.</p>
-        </div>
-        <span class="pd-card-overlay" aria-hidden="true"><span class="pd-card-overlay-text">Click to read the section &rarr;</span></span>
-      </a>
-
-      <a href="#state" class="pd-card" data-target="state">
-        <span class="pd-card-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>
-        </span>
-        <div class="pd-card-body">
-          <h4 class="pd-card-title">No-database core; durable retention separate</h4>
-          <p class="pd-card-summary">The core holds topology, alerts, anomalies and analysis in memory &mdash; no database, restart loses history by design &mdash; keeping observation a pure read/compute path. Durable retention, and the enduring ALCOA+ trail, is a deliberately separate, default-off write path.</p>
+          <h4 class="pd-card-title">One in-memory model &mdash; observed reality plus declared intent</h4>
+          <p class="pd-card-summary">Live discovery merged with the declared design into one topology graph, rebuilt every cycle &mdash; held in memory, no database by design.</p>
         </div>
         <span class="pd-card-overlay" aria-hidden="true"><span class="pd-card-overlay-text">Click to read the section &rarr;</span></span>
       </a>
@@ -97,7 +76,7 @@
         </span>
         <div class="pd-card-body">
           <h4 class="pd-card-title">Compliance as a byproduct of observation</h4>
-          <p class="pd-card-summary">Compliance evidence is derived from what the engine actually observed &mdash; not self-attestation &mdash; with per-subsystem ALCOA+ audit trails. Reports are aligned to Annex 11 / ALCOA+ / 21 CFR Part 11 for human review, never a certification; a qualified person adopts every artifact.</p>
+          <p class="pd-card-summary">Evidence is derived from what the engine observed, not self-attestation &mdash; aligned to Annex 11 / ALCOA+ / Part 11, never a certification.</p>
         </div>
         <span class="pd-card-overlay" aria-hidden="true"><span class="pd-card-overlay-text">Click to read the section &rarr;</span></span>
       </a>
@@ -105,11 +84,9 @@
 
     <!-- Quiet live-view link — this is an evaluator page, not a buyer CTA -->
     <p class="live-view-note">
-      This engine is live. The read-only view shows it monitoring one real target &mdash; a production
-      solution on Google Cloud (ColdVault). The cross-cloud part is the host/target separation (the engine
-      runs on one cloud and reads a system on another, with no stored keys); pointing it at a different
-      target&rsquo;s stack means writing new collectors, not just changing config.
-      <br><a href="https://glasshood.ai" target="_blank" rel="noopener noreferrer">View live (read-only) &rarr;</a>
+      This engine is live &mdash; the read-only view shows it monitoring one real target, a production
+      solution on Google Cloud.
+      <a href="https://glasshood.ai" target="_blank" rel="noopener noreferrer">View live (read-only) &rarr;</a>
     </p>
 
     <!-- Detail sections (revealed on card click) -->
@@ -117,6 +94,12 @@
 
       <section class="pd-section" id="collection">
         <h2>Collection &mdash; agentless, read-only, pull-based</h2>
+        <p class="note">
+          The whole flow, in order: a target system &rarr; <strong>agentless read-only collectors</strong> (this
+          section) &rarr; one topology graph (live discovery merged with the declared design) &rarr; a
+          deterministic + statistical tier that produces every signal &rarr; an AI layer that narrates on top
+          &rarr; compliance evidence and a read-only API. The sections below walk it in that order.
+        </p>
         <p>
           GlassHood installs nothing in the system it watches. Background collectors poll on cadences and,
           <strong>toward the monitored target</strong>, every call is <code>list</code> / <code>get</code> /
@@ -130,7 +113,7 @@
         <p class="note">
           The only write path anywhere in the system is the <strong>optional, default-off ServiceNow sync</strong>
           (under Optional), which creates/updates incident tickets in a <em>separate</em> ITSM system &mdash;
-          never the monitored target. It is off unless a deployment explicitly enables it.
+          never the monitored target.
         </p>
         <p>In this use case &mdash; monitoring a solution on Google Cloud &mdash; the collectors read:</p>
         <ul class="tight">
@@ -141,8 +124,10 @@
           <li><strong>The target app&rsquo;s own health/metrics API</strong> &mdash; over HTTPS (30&nbsp;s).</li>
         </ul>
         <p>
-          The specific provider APIs above are an application of the collection model to one target. The
-          architectural decision is the model itself: agentless, pull-based, read-only by construction.
+          The cross-cloud part is the host/target separation &mdash; the engine runs on one cloud and reads a
+          system on another, with no stored keys. Pointing it at a different target&rsquo;s stack means writing
+          new collectors, not just changing config. The architectural decision is the model itself: agentless,
+          pull-based, read-only by construction.
         </p>
       </section>
 
@@ -175,7 +160,7 @@
       </section>
 
       <section class="pd-section" id="topology">
-        <h2>Topology &mdash; discovery reconciled with declared design</h2>
+        <h2>One in-memory model &mdash; topology reconciled with declared design</h2>
         <p>
           The source of truth for topology is neither pure auto-discovery (which misses non-enumerable nodes and
           carries no intended state) nor a pure declarative manifest (which goes stale the moment it is written).
@@ -192,7 +177,7 @@
       <section class="pd-section" id="state">
         <h2>State &mdash; no-database core, retention is a separate write path</h2>
         <p>
-          The monitoring core holds topology, alerts, anomalies and analysis in <strong>in-memory caches with no
+          That model, and the alerts, anomalies and analysis around it, live in <strong>in-memory caches with no
           database</strong>. A restart loses history by design &mdash; that keeps the observation core a pure
           read/compute path with no write surface of its own. The live ALCOA+ audit trails are bounded in-memory
           ring buffers (they drop oldest and reset on restart).
@@ -243,6 +228,12 @@
           <div class="impl-item"><strong>Identity</strong><span>Workload Identity Federation &mdash; short-lived, viewer-only token, no stored keys</span></div>
           <div class="impl-item"><strong>Packaging</strong><span>One multi-stage container (Python 3.11 FastAPI/uvicorn on <code>:8080</code> serving a Vite-built React UI from one process)</span></div>
           <div class="impl-item"><strong>Auth provider</strong><span>Auth0 SSO + local fallback</span></div>
+        </div>
+
+        <div class="hero-diagram">
+          <img src="img/cross-cloud-architecture.png"
+               alt="Azure Container Apps runs GlassHood; its managed identity is federated through Workload Identity Federation into a short-lived token, used by a read-only Google Cloud viewer account to read live logs and metrics. No stored keys; read-only, cross-cloud.">
+          <p class="diagram-caption">Read-only &middot; cross-cloud &mdash; the engine federates a short-lived, viewer-only identity into the monitored cloud; it observes, never modifies.</p>
         </div>
 
         <details class="detail-block">
