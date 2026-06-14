@@ -110,13 +110,13 @@ function ThemeToggle() {
             onClick={() => select(idx)}
             title={`Theme: ${label}`}
             className={
-              'flex items-center justify-center w-6 h-6 rounded transition-colors ' +
+              'flex items-center justify-center w-7 h-7 rounded transition-colors ' +
               (active
                 ? 'bg-accent-500/20 text-accent-600 dark:bg-accent-500/20 dark:text-accent-300'
                 : 'text-gray-500 hover:text-gray-700 dark:text-purple-200 dark:hover:text-purple-100')
             }
           >
-            <Icon size={12} />
+            <Icon size={16} />
           </button>
         )
       })}
@@ -157,20 +157,20 @@ export default function StatusHeader({ topology, lastUpdated, onRefresh, onLogou
   }
 
   return (
-    <div className="flex items-center justify-between px-2 sm:px-4 h-10 bg-card dark:bg-purple-900 border-b border-border dark:border-purple-700 relative z-50 transition-colors duration-200">
-      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-        <img src="/glasshood-logo-full.png" alt="GlassHood" className="h-6 sm:h-7 flex-shrink-0" />
-        {version && <span className="text-[10px] text-gray-500 dark:text-purple-300 hidden sm:inline">v{version}</span>}
-        {isDemo && <span className="text-xs bg-accent-500/20 text-accent-700 dark:bg-accent-500/20 dark:text-accent-300 px-1.5 py-0.5 rounded">Sample data</span>}
-        {readOnly && <span className="text-xs bg-sky-500/20 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300 px-1.5 py-0.5 rounded">Read-only · live system</span>}
-        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_DOT[status]} animate-pulse`} title={STATUS_TEXT[status]} />
-        <span className={`text-sm font-medium truncate hidden sm:inline ${STATUS_COLOR[status]}`}>
+    <div className="flex items-center justify-between px-3 sm:px-5 h-16 bg-card dark:bg-purple-900 border-b border-border dark:border-purple-700 relative z-50 transition-colors duration-200">
+      <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+        <img src="/glasshood-logo-full.png" alt="GlassHood" className="h-12 sm:h-14 flex-shrink-0" />
+        {version && <span className="text-xs text-gray-500 dark:text-purple-300 hidden sm:inline">v{version}</span>}
+        {isDemo && <span className="text-sm bg-accent-500/20 text-accent-700 dark:bg-accent-500/20 dark:text-accent-300 px-2 py-1 rounded">Sample data</span>}
+        {readOnly && <span className="text-sm bg-sky-500/20 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300 px-2 py-1 rounded">Read-only · live system</span>}
+        <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${STATUS_DOT[status]} animate-pulse`} title={STATUS_TEXT[status]} />
+        <span className={`text-base font-medium truncate hidden sm:inline ${STATUS_COLOR[status]}`}>
           {STATUS_TEXT[status]}
         </span>
       </div>
 
-      <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-        <span className={`text-xs sm:text-sm ${agoColor}`}>
+      <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0">
+        <span className={`text-sm sm:text-base ${agoColor}`}>
           {lastUpdated ? `${ago}s` : '...'}
         </span>
         {onVerify && (
@@ -179,7 +179,7 @@ export default function StatusHeader({ topology, lastUpdated, onRefresh, onLogou
             className="text-gray-500 hover:text-blue-600 dark:text-purple-200 dark:hover:text-accent-300 transition-colors"
             title="Verify Manifests"
           >
-            <ShieldCheck size={14} />
+            <ShieldCheck size={18} />
           </button>
         )}
         <button
@@ -187,7 +187,7 @@ export default function StatusHeader({ topology, lastUpdated, onRefresh, onLogou
           className="text-gray-500 hover:text-gray-800 dark:text-purple-200 dark:hover:text-purple-100 transition-colors"
           title="Refresh"
         >
-          <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+          <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
         </button>
         <ThemeToggle />
         {onLogout && (
@@ -196,7 +196,7 @@ export default function StatusHeader({ topology, lastUpdated, onRefresh, onLogou
             className="text-gray-500 hover:text-gray-700 dark:text-purple-300 dark:hover:text-purple-100 transition-colors"
             title="Logout"
           >
-            <LogOut size={14} />
+            <LogOut size={18} />
           </button>
         )}
       </div>
