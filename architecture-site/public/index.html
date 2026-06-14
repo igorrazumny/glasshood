@@ -6,12 +6,12 @@
   <!-- noindex until the deployment status is confirmed green. -->
   <meta name="robots" content="noindex, nofollow">
   <title>GlassHood — Monitoring Engine Architecture</title>
-  <meta name="description" content="GlassHood is a cross-cloud, agentless, read-only monitoring engine for regulated systems: deterministic-first analysis, live topology reconciled against declared design, compliance evidence derived from what it observes.">
+  <meta name="description" content="GlassHood is a cross-cloud, agentless, read-only monitoring engine for regulated systems: reproducible deterministic and statistical signals, live topology reconciled against declared design, compliance evidence derived from what it observes.">
   <link rel="icon" href="img/glasshood-logo.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Lato:wght@100;300;400;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=4">
+  <link rel="stylesheet" href="styles.css?v=5">
 </head>
 <body>
 <div class="container">
@@ -25,8 +25,24 @@
     <!-- Hero — engine-first; the cloud is a detail, not the headline -->
     <p class="pd-hero">
       GlassHood is a cross-cloud, agentless, read-only monitoring engine for regulated systems
-      &mdash; <span class="accent">deterministic-first analysis, live topology reconciled against
-      declared design, and compliance evidence derived from what it observes.</span>
+      &mdash; <span class="accent">reproducible deterministic and statistical signals, live topology
+      reconciled against declared design, and compliance evidence derived from what it observes.</span>
+    </p>
+
+    <!-- Data-flow spine — lets a reader trace the whole system in one line -->
+    <p class="spine">
+      <strong>The flow:</strong> a target system &rarr; agentless read-only collectors &rarr; one topology
+      graph that merges live discovery with the declared design &rarr; a deterministic + statistical tier
+      (rules &middot; z-score anomaly &middot; correlation) that produces every operational signal &rarr; an
+      AI layer that synthesizes a narrative on top &rarr; compliance evidence, a read-only UI, and a
+      machine-readable API.
+    </p>
+
+    <!-- Honest scope frame -->
+    <p class="scope-clamp">
+      Scope: a working <strong>single-instance reference implementation</strong> &mdash; in-memory,
+      monitoring one live target, deployed live &mdash; built to demonstrate the architecture end-to-end,
+      not a multi-tenant product.
     </p>
 
     <!-- Hero cards — the five key architecture decisions -->
@@ -37,7 +53,7 @@
         </span>
         <div class="pd-card-body">
           <h4 class="pd-card-title">Agentless, read-only collection</h4>
-          <p class="pd-card-summary">Collectors poll the monitored system with list/get/describe calls only &mdash; nothing is installed in it, and read-only is structural: the code makes zero create/delete/update calls, so a full compromise can still only observe.</p>
+          <p class="pd-card-summary">Collectors reach the monitored target with list/get/describe calls only &mdash; no create/update/delete path toward it &mdash; and the federated identity is a short-lived, viewer-only token with no stored keys. Read-only is structural, enforced twice: by the call surface and by an identity that cannot write.</p>
         </div>
         <span class="pd-card-overlay" aria-hidden="true"><span class="pd-card-overlay-text">Click to read the section &rarr;</span></span>
       </a>
@@ -47,8 +63,8 @@
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="m7 14 3-3 3 3 5-5"/></svg>
         </span>
         <div class="pd-card-body">
-          <h4 class="pd-card-title">Deterministic-first analysis &mdash; AI last</h4>
-          <p class="pd-card-summary">Four ordered layers run on every build: a deterministic rules engine, then statistical anomaly detection, then an anomaly&harr;alert correlator, and only then AI synthesis. Cheap, reproducible, auditable signals first; AI never decides alone.</p>
+          <h4 class="pd-card-title">Deterministic-first signals &mdash; AI explains, never originates</h4>
+          <p class="pd-card-summary">A deterministic + statistical tier &mdash; rules, z-score anomaly, correlation &mdash; produces every operational signal, reproducibly. The AI layer synthesizes a narrative on top and never originates an alert or anomaly: every AI conclusion is backed by a signal a human can verify without the model.</p>
         </div>
         <span class="pd-card-overlay" aria-hidden="true"><span class="pd-card-overlay-text">Click to read the section &rarr;</span></span>
       </a>
@@ -58,8 +74,8 @@
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/><path d="M12 7v4M12 11 5.5 17M12 11l6.5 6"/></svg>
         </span>
         <div class="pd-card-body">
-          <h4 class="pd-card-title">Discovery merged with declared design</h4>
-          <p class="pd-card-summary">Live discovery is merged with declarative manifest overlays into one topology graph, re-enriched on every build &mdash; so the model holds both observed reality and declared intent, and drift between them falls out.</p>
+          <h4 class="pd-card-title">Discovery reconciled with declared design</h4>
+          <p class="pd-card-summary">Live discovery is merged with the declared design (manifest overlays) into one topology graph, rebuilt every cycle &mdash; so the model holds observed reality and declared intent together in one place, and change between cycles is tracked. It is the substrate every analysis layer reads from.</p>
         </div>
         <span class="pd-card-overlay" aria-hidden="true"><span class="pd-card-overlay-text">Click to read the section &rarr;</span></span>
       </a>
@@ -69,8 +85,8 @@
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>
         </span>
         <div class="pd-card-body">
-          <h4 class="pd-card-title">Stateless core, separate opt-in retention</h4>
-          <p class="pd-card-summary">The core keeps topology, alerts, anomalies and analysis in memory with no database &mdash; a pure read/compute path with no write surface. Durable retention is a deliberately separate, default-off write path.</p>
+          <h4 class="pd-card-title">No-database core; durable retention separate</h4>
+          <p class="pd-card-summary">The core holds topology, alerts, anomalies and analysis in memory &mdash; no database, restart loses history by design &mdash; keeping observation a pure read/compute path. Durable retention, and the enduring ALCOA+ trail, is a deliberately separate, default-off write path.</p>
         </div>
         <span class="pd-card-overlay" aria-hidden="true"><span class="pd-card-overlay-text">Click to read the section &rarr;</span></span>
       </a>
@@ -80,8 +96,8 @@
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m9 15 2 2 4-4"/></svg>
         </span>
         <div class="pd-card-body">
-          <h4 class="pd-card-title">Compliance derived from live evidence</h4>
-          <p class="pd-card-summary">Per-subsystem ALCOA+ audit trails feed on-demand reports derived from live evidence &mdash; mapped to Annex 11 / ALCOA+ / 21 CFR Part 11, aligned to those standards for human review, never a certification.</p>
+          <h4 class="pd-card-title">Compliance as a byproduct of observation</h4>
+          <p class="pd-card-summary">Compliance evidence is derived from what the engine actually observed &mdash; not self-attestation &mdash; with per-subsystem ALCOA+ audit trails. Reports are aligned to Annex 11 / ALCOA+ / 21 CFR Part 11 for human review, never a certification; a qualified person adopts every artifact.</p>
         </div>
         <span class="pd-card-overlay" aria-hidden="true"><span class="pd-card-overlay-text">Click to read the section &rarr;</span></span>
       </a>
@@ -89,9 +105,10 @@
 
     <!-- Quiet live-view link — this is an evaluator page, not a buyer CTA -->
     <p class="live-view-note">
-      This engine is live. The public read-only view shows it monitoring one real system &mdash; a
-      production solution running on Google Cloud (ColdVault). The same engine could monitor a target on
-      any cloud; that is the instance wired up today, not a constraint of the design.
+      This engine is live. The read-only view shows it monitoring one real target &mdash; a production
+      solution on Google Cloud (ColdVault). The cross-cloud part is the host/target separation (the engine
+      runs on one cloud and reads a system on another, with no stored keys); pointing it at a different
+      target&rsquo;s stack means writing new collectors, not just changing config.
       <br><a href="https://glasshood.ai" target="_blank" rel="noopener noreferrer">View live (read-only) &rarr;</a>
     </p>
 
@@ -101,86 +118,106 @@
       <section class="pd-section" id="collection">
         <h2>Collection &mdash; agentless, read-only, pull-based</h2>
         <p>
-          GlassHood installs nothing in the system it watches. Background collectors poll on cadences and
-          read only &mdash; every call is <code>list</code> / <code>get</code> / <code>describe</code>. A search
-          across the collection code finds zero <code>create</code> / <code>delete</code> / <code>update</code> /
-          <code>patch</code> / <code>insert</code> calls, so read-only is a property of the call surface, not a
-          setting that can be toggled off. Even a full compromise of the engine cannot change the monitored system.
+          GlassHood installs nothing in the system it watches. Background collectors poll on cadences and,
+          <strong>toward the monitored target</strong>, every call is <code>list</code> / <code>get</code> /
+          <code>describe</code> &mdash; a search across the collector and discovery code finds zero
+          <code>create</code> / <code>delete</code> / <code>update</code> / <code>patch</code> /
+          <code>insert</code> calls toward the target. Read-only is enforced twice: by that call surface,
+          and by the identity itself &mdash; a <strong>short-lived, viewer-only federated token with no stored
+          keys</strong> (detail under Implementation). Even a full compromise of the engine cannot write to
+          the monitored system.
+        </p>
+        <p class="note">
+          The only write path anywhere in the system is the <strong>optional, default-off ServiceNow sync</strong>
+          (under Optional), which creates/updates incident tickets in a <em>separate</em> ITSM system &mdash;
+          never the monitored target. It is off unless a deployment explicitly enables it.
         </p>
         <p>In this use case &mdash; monitoring a solution on Google Cloud &mdash; the collectors read:</p>
         <ul class="tight">
-          <li><strong>Asset / topology discovery</strong> &mdash; enumerates the monitored system&rsquo;s compute resources to build the topology graph (~5&nbsp;min).</li>
+          <li><strong>Asset / topology discovery</strong> &mdash; enumerates the target&rsquo;s compute resources to build the topology graph (~5&nbsp;min).</li>
           <li><strong>Monitoring metrics</strong> &mdash; load-balancer latency, request count, VM CPU (60&nbsp;s).</li>
           <li><strong>Error logs</strong> &mdash; error-severity entries in a rolling 15-minute window (60&nbsp;s).</li>
           <li><strong>Storage stats</strong> &mdash; object count, size and versioning of a data bucket (~5&nbsp;min).</li>
-          <li><strong>The monitored app&rsquo;s own health/metrics API</strong> &mdash; over HTTPS (30&nbsp;s).</li>
+          <li><strong>The target app&rsquo;s own health/metrics API</strong> &mdash; over HTTPS (30&nbsp;s).</li>
         </ul>
         <p>
-          The specific provider APIs above are an application of the collection model to one target. The architectural
-          decision is the model itself: agentless, pull-based, and read-only by construction.
+          The specific provider APIs above are an application of the collection model to one target. The
+          architectural decision is the model itself: agentless, pull-based, read-only by construction.
         </p>
       </section>
 
       <section class="pd-section" id="analysis">
-        <h2>Analysis &mdash; deterministic-first, AI last</h2>
+        <h2>Analysis &mdash; deterministic signals first, AI on top</h2>
         <p>
-          Four layers run in a deliberate order on every build &mdash; cheap, reproducible, auditable signals first,
-          AI only on top:
+          The signals that matter are produced by a <strong>deterministic + statistical tier</strong>, then an
+          AI layer explains them. The GxP payoff: <strong>every AI conclusion is backed by a deterministic,
+          reproducible signal a human can verify without the model.</strong>
         </p>
+        <p><strong>The deterministic / statistical tier</strong> (reproducible, runs every build):</p>
         <ul class="tight">
-          <li><strong>1. Deterministic rules engine</strong> &mdash; threshold rules with a 5-minute dedup window and a 1-hour alert TTL. Fully reproducible.</li>
-          <li><strong>2. Statistical anomaly detection</strong> &mdash; z-score over a rolling baseline, configurable sigma (default 3.0), warm-up minimum and a constant-baseline fallback.</li>
-          <li><strong>3. Anomaly&harr;alert correlator</strong> &mdash; ties statistical anomalies to operational alerts and emits elevated-severity data-integrity signals.</li>
-          <li><strong>4. AI synthesis</strong> &mdash; only here, and as a <strong>model-agnostic external call</strong> to an inference-as-a-service Platform API (swappable, with a streaming fallback, cached). No model weights live in the engine.</li>
+          <li><strong>Rules engine</strong> &mdash; threshold rules with a 5-minute dedup window and a 1-hour alert TTL.</li>
+          <li><strong>Statistical anomaly detection</strong> &mdash; z-score over a rolling baseline, configurable sigma (default 3.0), warm-up minimum and a constant-baseline fallback.</li>
+          <li><strong>Correlator</strong> &mdash; ties anomalies to operational alerts and raises elevated-severity data-integrity signals.</li>
         </ul>
         <p>
-          The ordering <em>is</em> the architecture. In a regulated context, the decisions that matter are produced by
-          deterministic and statistical layers that can be replayed and explained; AI is additive, never the thing that
-          decides alone.
+          These run together to produce every alert and anomaly. <strong>The AI layer runs strictly on top</strong>
+          of them &mdash; a <strong>model-agnostic external call</strong> to an inference-as-a-service Platform API
+          (swappable, with a streaming fallback, cached; no model weights in the engine). It synthesizes a
+          narrative health summary and a suggested 1&ndash;10 read; that read is an <em>AI synthesis</em>, not a
+          deterministic verdict, and it never originates an alert or anomaly &mdash; the underlying signals it
+          explains are the deterministic ones above, which a human can reproduce without the model.
+        </p>
+        <p class="note">
+          Engine vs instance: the AI prompt is currently tuned to this target (it knows this system&rsquo;s
+          components). Pointing the analysis at a different target means a new prompt profile &mdash; the
+          deterministic tier is target-agnostic; the AI narrative is target-tuned.
         </p>
       </section>
 
       <section class="pd-section" id="topology">
         <h2>Topology &mdash; discovery reconciled with declared design</h2>
         <p>
-          The source of truth for topology is neither pure auto-discovery (which misses non-enumerable nodes and carries
-          no intended state) nor a pure declarative manifest (which goes stale the moment it is written). GlassHood
-          <strong>merges both</strong>: live discovery is overlaid with declarative YAML manifests into a single enriched
-          graph, re-enriched with fresh metrics on every build.
+          The source of truth for topology is neither pure auto-discovery (which misses non-enumerable nodes and
+          carries no intended state) nor a pure declarative manifest (which goes stale the moment it is written).
+          GlassHood <strong>merges both</strong>: live discovery is overlaid with declarative YAML manifests into a
+          single enriched graph, rebuilt with fresh metrics every cycle.
         </p>
         <p>
-          Because the model carries observed reality <em>and</em> declared intent at once, drift between what was designed
-          and what is actually running falls out of the model rather than being a separate feature. Every analysis layer
-          reads from this one graph.
+          Because the model carries observed reality <em>and</em> declared intent in one place, the gap between
+          what was designed and what is actually running is visible in the model rather than requiring a separate
+          system, and change between cycles is tracked. Every analysis layer reads from this one graph.
         </p>
       </section>
 
       <section class="pd-section" id="state">
-        <h2>State &mdash; stateless core, retention is a separate write path</h2>
+        <h2>State &mdash; no-database core, retention is a separate write path</h2>
         <p>
           The monitoring core holds topology, alerts, anomalies and analysis in <strong>in-memory caches with no
-          persistent database</strong>. A restart loses history by design &mdash; that keeps the observation core a pure
-          read/compute path with no write surface of its own.
+          database</strong>. A restart loses history by design &mdash; that keeps the observation core a pure
+          read/compute path with no write surface of its own. The live ALCOA+ audit trails are bounded in-memory
+          ring buffers (they drop oldest and reset on restart).
         </p>
         <p>
-          Durable retention is a deliberately <strong>separate, default-off write path</strong> (a hot/warm analytics
-          store plus cold object storage, with GxP no-auto-delete). Splitting &ldquo;observe&rdquo; (in-memory,
-          read-only) from &ldquo;retain&rdquo; (optional, write) is a boundary decision with real blast-radius and
-          data-retention consequences &mdash; not a question of where data happens to land.
+          Durable retention is a deliberately <strong>separate, default-off write path</strong> (a hot/warm
+          analytics store plus cold object storage, with GxP no-auto-delete) &mdash; and it is also where the
+          <strong>enduring</strong> ALCOA+ evidence lands when a deployment needs it kept. Splitting
+          &ldquo;observe&rdquo; (in-memory, read-only) from &ldquo;retain&rdquo; (optional, write) is a boundary
+          decision with real blast-radius and data-retention consequences.
         </p>
       </section>
 
       <section class="pd-section" id="compliance">
-        <h2>Compliance &mdash; an evidence model, not a checkbox</h2>
+        <h2>Compliance &mdash; a byproduct of observation, not a checkbox</h2>
         <p>
-          Compliance is not a pre-baked attestation. Each subsystem keeps an <strong>ALCOA+ audit trail</strong> (an
-          in-memory ring buffer), and reports are generated <strong>on demand, derived from live evidence</strong> &mdash;
-          rule alerts, CVE findings and anomalies &mdash; mapped to EU GMP Annex 11, ALCOA+ and 21 CFR Part 11.
+          Compliance is not a pre-baked attestation. Reports are generated <strong>on demand, derived from what
+          the engine actually observed</strong> &mdash; rule alerts, CVE findings and anomalies &mdash; with a
+          per-subsystem <strong>ALCOA+ audit trail</strong>. You cannot fake what the engine observed directly;
+          the evidence is the observation.
         </p>
         <p>
-          The architectural stance is that compliance is a <strong>live-evidence projection</strong> over the monitoring
-          data. Reports are <strong>aligned to</strong> those standards and support human review; they are unsigned and
-          are not an independent validation or certification. A qualified person reviews and adopts every artifact.
+          Those reports are <strong>aligned to</strong> EU GMP Annex 11, ALCOA+ and 21 CFR Part 11 and support
+          human review; they are unsigned and are <strong>not</strong> an independent validation or certification.
+          A qualified person reviews and adopts every artifact.
         </p>
       </section>
 
@@ -197,8 +234,8 @@
       <section class="pd-section" id="implementation">
         <h2>Implementation details</h2>
         <p>
-          These are the concrete bindings of the architecture above &mdash; the cloud, region, identity mechanism and
-          packaging. They are swappable implementation choices, not the architecture.
+          These are the concrete bindings of the architecture above &mdash; the cloud, region, identity mechanism
+          and packaging. They are swappable implementation choices, not the architecture.
         </p>
         <div class="impl-grid">
           <div class="impl-item"><strong>Host</strong><span>Azure Container Apps</span></div>
@@ -233,7 +270,7 @@
               Sanitized &mdash; every identifier is a placeholder. This is the trust binding, not a secret: there is no
               key to leak.
             </p>
-            <p>Why read-only holds even under a full compromise of the container:</p>
+            <p>Why read-only toward the target holds even under a full compromise of the container:</p>
             <div class="can-cannot">
               <div class="cc-col cc-can">
                 <h4>Can</h4>
@@ -242,7 +279,7 @@
               <div class="cc-col cc-cannot">
                 <h4>Cannot</h4>
                 <ul>
-                  <li>Write to, delete or modify the monitored system</li>
+                  <li>Write to, delete or modify the monitored target</li>
                   <li>Mint a broader or longer-lived credential</li>
                   <li>Exfiltrate a reusable key &mdash; none exists</li>
                 </ul>
@@ -255,8 +292,8 @@
       <section class="pd-section" id="optional">
         <h2>Optional &mdash; opt-in, off by default</h2>
         <ul class="tight">
-          <li><strong>Retention pipeline</strong> &mdash; a hot/warm analytics store + cold object storage with GxP no-auto-delete (a separate write path, off by default).</li>
-          <li><strong>ServiceNow sync</strong> &mdash; incident/change sync and correlation, enabled per deployment.</li>
+          <li><strong>Retention pipeline</strong> &mdash; a hot/warm analytics store + cold object storage with GxP no-auto-delete (a separate write path, off by default; also the durable ALCOA+ sink).</li>
+          <li><strong>ServiceNow sync</strong> &mdash; incident/change sync and correlation; writes tickets to a separate ITSM system (the only write path in the product), enabled per deployment.</li>
           <li><strong>Org-wide discovery</strong> &mdash; multi-project discovery; the default deployment uses single-project.</li>
         </ul>
       </section>

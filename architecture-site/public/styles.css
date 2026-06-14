@@ -134,6 +134,11 @@ details.detail-block>summary::before{content:"\25B8\00a0";color:var(--orange)}
 details.detail-block[open]>summary::before{content:"\25BE\00a0"}
 details.detail-block>div{padding:0 18px 18px}
 
+/* Data-flow spine — trace the whole system in one line */
+.spine{font-size:18px;line-height:1.6;color:var(--text);max-width:900px;margin:0 0 14px;
+  padding:16px 20px;background:rgba(0,0,85,.04);border-left:3px solid var(--navy);border-radius:6px}
+.spine strong{color:var(--navy)}
+
 /* Quiet live-view note (this is an evaluator page, not a buyer CTA) */
 .live-view-note{font-size:16px;line-height:1.55;color:var(--sub);max-width:880px;margin:20px 0 0}
 
