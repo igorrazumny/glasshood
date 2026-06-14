@@ -28,8 +28,10 @@ a.button:focus-visible{outline:2px solid var(--navy);outline-offset:2px}
 
 /* Product-detail page system (.pd-*) */
 .pd-page{color:var(--text)}
-.pd-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
-.pd-logo{height:64px;width:auto;object-fit:contain;display:block}
+.pd-header{display:block;margin-bottom:24px}
+.pd-logo-link{display:inline-block;text-decoration:none}
+.pd-logo{height:48px;width:auto;object-fit:contain;display:block}
+.pd-page-title{font-size:26px;font-weight:700;color:var(--navy);margin:14px 0 0;letter-spacing:-.01em}
 
 /* Hero + quiet scope line — full width, no narrow cap */
 .pd-hero{font-size:24px;font-weight:400;line-height:1.4;color:var(--text);margin:20px 0 14px;letter-spacing:-.005em}
@@ -118,4 +120,4 @@ details.detail-block>div{padding:0 20px 20px}
 
 footer{margin:48px 0 36px;padding-top:20px;border-top:1px solid var(--border);font-size:17px;line-height:1.55;color:var(--sub)}
 
-@media(max-width:768px){.container{padding:16px}.pd-logo{height:52px}.pd-hero{font-size:22px}}
+@media(max-width:768px){.container{padding:16px}.pd-logo{height:40px}.pd-hero{font-size:22px}.pd-page-title{font-size:22px}}
