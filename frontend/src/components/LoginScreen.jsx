@@ -47,7 +47,7 @@ export default function LoginScreen({ onLogin, onDemo, prefillDemo, setPrefillDe
   const handleExploreDemo = () => {
     setPrefillDemo(true)
     setError('')
-    window.history.replaceState(null, '', '/?demo')
+    window.history.replaceState(null, '', '/demo')
   }
 
   // === DEMO MODE: just "Enter Demo" button, no credentials ===
