@@ -164,3 +164,15 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **State:** the live app, demo login, and de-branded topology exist; the explainer is a separate Firebase static site (architecture.glasshood.ai) PLUS a redundant copy baked at /architecture in the app (:wif13); there is NO public product-framing homepage.
 - **Supersedes:** the interim /architecture-path + separate-Firebase split — this REQ is the consolidation target.
 - **Status:** planned, target-state (not started).
+
+## REQ-GHA-015: architecture.glasshood.ai served by the app (not Firebase), showing the cross-cloud architecture diagram
+- **Goal:** `architecture.glasshood.ai` is served by the GlassHood Azure app itself, not a separate Firebase site. Hitting the subdomain ROOT renders the architecture reference page (the cross-cloud / key-less-WIF diagram) over managed TLS; the page also stays reachable at `/architecture` on every host. The `glasshood.ai` apex is unchanged (the React SPA). Firebase no longer serves the subdomain. Structurally mirrors TestRobin REQ-589 (in-app architecture page + `architecture.*` host-routing + cloud custom-domain bind), reiterated for GlassHood on Azure.
+- **Why:** The architecture explainer lived on a separate Firebase deployment with a redundant copy baked at `/architecture`; the two copies WILL diverge. Bringing the page in-repo and serving the subdomain from the app makes the app the single source. This is the narrow, shippable slice of the REQ-GHA-014 consolidation (the full product homepage is still its own REQ).
+- **Acceptance:**
+  - The architecture page is an app-owned asset in the repo (`architecture/index.html`), served in-app at `/architecture` on every host.
+  - `architecture.glasshood.ai/` (subdomain root) serves the architecture page directly — clean URL, no `/architecture/` suffix or redirect.
+  - A request to the `architecture.*` host whose page file is missing fails LOUD (500), never silently falling through to the SPA (No Silent Defaults).
+  - Any non-`architecture.*` host is an exact pass-through to the existing app (apex SPA unaffected).
+  - The custom domain is bound on the Azure Container App with a managed TLS cert; GoDaddy DNS points `architecture` at the app (CNAME + asuid TXT); the Firebase site no longer serves the subdomain.
+- **Status:** in-progress (code: app-owned page + `src/api/arch_subdomain.py` host router + `src/api/asgi.py` entrypoint + tests landed; Azure domain-bind + GoDaddy DNS cutover + Firebase retire pending).
+- **Related:** REQ-GHA-014 (full homepage consolidation — this is its architecture-subdomain slice); mirrors xrobin REQ-589.

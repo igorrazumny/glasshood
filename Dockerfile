@@ -16,7 +16,7 @@ COPY config/ config/
 # Auto-version: stamp the build time so the version moves on every build
 RUN date -u +%Y.%m.%d.%H%M > VERSION
 COPY --from=frontend /build/dist /app/static
-COPY architecture-site/public /app/architecture
+COPY architecture/ /app/architecture
 
 # Workload Identity Federation (Azure managed identity -> GCP) — no stored keys.
 # az-token.py brokers an Entra MI token; google-auth exchanges it for short-lived
@@ -32,4 +32,4 @@ ENV PORT=8080
 
 EXPOSE 8080
 
-CMD ["python", "-m", "uvicorn", "src.api.server:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["python", "-m", "uvicorn", "src.api.asgi:app", "--host", "0.0.0.0", "--port", "8080"]

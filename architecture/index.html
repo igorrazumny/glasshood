@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GlassHood — Architecture Reference</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,400&display=swap" rel="stylesheet">
+<style>
+  html, body { margin:0; background:#ffffff; }
+  * { box-sizing:border-box; }
+  ::selection { background:rgba(12,65,205,0.16); }
+  .dc-planned { display:none; }
+  a.cta:hover { background:#e75a1e !important; border-color:#e75a1e !important; color:#fff !important; }
+</style>
+</head>
+<body>
+  <div style="max-width:1340px;margin:0 auto 4px;padding:0 0;display:flex;gap:18px;justify-content:flex-end;align-items:center;font-family:'Lato',sans-serif;font-size:12.5px;color:#555;">
+    <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="t-planned"> Show planned / roadmap</label>
+    <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="t-evidence" checked> Show evidence refs</label>
+  </div>
+<div style="font-family:'Lato',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#1a1a2e;background:#ffffff;min-height:100%;padding:56px 32px 64px;-webkit-font-smoothing:antialiased;">
+
+  <div style="max-width:1340px;margin:0 auto;">
+
+    <header style="max-width:1080px;">
+      <p style="display:inline-flex;align-items:center;gap:11px;font-size:11px;font-weight:700;letter-spacing:0.11em;text-transform:uppercase;color:#0c41cd;margin:0 0 20px;">
+        <span style="width:24px;height:2px;background:#0c41cd;opacity:0.55;display:inline-block;"></span>
+        Architecture Reference
+      </p>
+      <h1 style="font-size:34px;font-weight:700;color:#000055;letter-spacing:-0.012em;line-height:1.08;margin:0;">GlassHood</h1>
+      <p style="font-size:19px;line-height:1.6;color:#555555;max-width:720px;margin:16px 0 0;font-weight:400;">Cross-cloud AI infrastructure monitoring — an Azure application reading a live Google Cloud estate through Workload Identity Federation, with <strong style="color:#1a1a2e;font-weight:700;">no stored keys</strong>.</p>
+
+      <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-top:26px;">
+        <span style="display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:700;letter-spacing:0.09em;text-transform:uppercase;color:#0c41cd;background:rgba(12,65,205,0.07);padding:6px 11px;border-radius:4px;">
+          <span style="width:6px;height:6px;border-radius:999px;background:#0c41cd;display:inline-block;"></span>
+          Live demo
+        </span>
+        <span style="font-size:13.5px;color:#555555;font-family:ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace;letter-spacing:-0.01em;">Azure Container Apps · Switzerland North</span>
+        <a href="https://glasshood.ai" target="_blank" rel="noopener" class="cta" style="display:inline-flex;align-items:center;gap:8px;font-size:14px;font-weight:700;color:#0c41cd;border:1px solid #0c41cd;background:transparent;padding:9px 18px;border-radius:6px;text-decoration:none;transition:color 120ms cubic-bezier(0.4,0,0.2,1),border-color 180ms cubic-bezier(0.4,0,0.2,1),background-color 180ms cubic-bezier(0.4,0,0.2,1);margin-left:auto;white-space:nowrap;">Open live demo ↗</a>
+      </div>
+    </header>
+
+    <div style="margin-top:48px;background:#ffffff;border:1px solid #e0e2e8;border-radius:10px;padding:30px 28px 26px;">
+      <svg viewBox="0 0 1160 268" width="100%" style="display:block;height:auto;font-family:'Lato',sans-serif;overflow:visible;" role="img" aria-label="Overview: Browser to Azure application, across the Workload Identity Federation trust bridge, into the GCP read-only estate.">
+        <defs>
+          <marker id="ov-ar" viewBox="0 0 10 10" markerWidth="9" markerHeight="9" refX="8.4" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,5 L0,10 z" fill="#0c41cd"></path></marker>
+        </defs>
+
+        <line x1="223" y1="138" x2="289" y2="138" stroke="#0c41cd" stroke-width="1.7" marker-end="url(#ov-ar)"></line>
+        <text x="256" y="126" text-anchor="middle" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="10.5" letter-spacing="0.04em" fill="#555555">HTTPS</text>
+
+        <line x1="520" y1="138" x2="586" y2="138" stroke="#0c41cd" stroke-width="1.7" marker-end="url(#ov-ar)"></line>
+        <text x="553" y="126" text-anchor="middle" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="10.5" letter-spacing="0.04em" fill="#555555">identity</text>
+
+        <line x1="829" y1="138" x2="895" y2="138" stroke="#0c41cd" stroke-width="1.7" marker-end="url(#ov-ar)"></line>
+        <text x="862" y="126" text-anchor="middle" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="10.5" letter-spacing="0.04em" fill="#555555">read-only</text>
+
+        <g>
+          <rect x="26" y="88" width="196" height="100" rx="11" fill="#ffffff" stroke="#0c41cd" stroke-width="1.4"></rect>
+          <text x="42" y="115" font-size="10.5" font-weight="700" letter-spacing="0.1em" fill="#0c41cd">CLIENT</text>
+          <text x="42" y="147" font-size="19" font-weight="700" fill="#000055">Browser</text>
+          <text x="42" y="170" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="12" fill="#555555">Live demo · viewer</text>
+        </g>
+
+        <g>
+          <rect x="296" y="88" width="224" height="100" rx="11" fill="#ffffff" stroke="#8b93a3" stroke-width="1.3"></rect>
+          <text x="312" y="115" font-size="10.5" font-weight="700" letter-spacing="0.1em" fill="#6b7488">AZURE · CONTAINER APPS</text>
+          <text x="312" y="147" font-size="18" font-weight="700" fill="#000055">React SPA + FastAPI</text>
+          <text x="312" y="170" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="12" fill="#555555">managed ingress · TLS</text>
+        </g>
+
+        <g>
+          <rect x="586" y="74" width="243" height="128" rx="12" fill="rgba(13,125,138,0.06)" stroke="#0d7d8a" stroke-width="1.9"></rect>
+          <text x="604" y="104" font-size="10.5" font-weight="700" letter-spacing="0.1em" fill="#0b5a64">CROSS-CLOUD TRUST</text>
+          <text x="604" y="133" font-size="17" font-weight="700" fill="#000055">Workload Identity</text>
+          <text x="604" y="155" font-size="17" font-weight="700" fill="#000055">Federation</text>
+          <g transform="translate(604,168)">
+            <rect x="0" y="6" width="13" height="9.5" rx="2" fill="rgba(13,125,138,0.18)" stroke="#0b5a64" stroke-width="1.3"></rect>
+            <path d="M2.6,6 V4.3 a3.9,3.9 0 0 1 7.8,0 V6" fill="none" stroke="#0b5a64" stroke-width="1.3"></path>
+          </g>
+          <text x="624" y="181" font-size="12.5" font-weight="700" fill="#0b5a64">no stored keys</text>
+        </g>
+
+        <g>
+          <rect x="902" y="88" width="232" height="100" rx="11" fill="#ffffff" stroke="#8b93a3" stroke-width="1.3"></rect>
+          <text x="918" y="115" font-size="10.5" font-weight="700" letter-spacing="0.1em" fill="#6b7488">GCP · READ-ONLY</text>
+          <text x="918" y="147" font-size="18" font-weight="700" fill="#000055">ColdVault estate</text>
+          <text x="918" y="170" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="12" fill="#555555">live cross-cloud reads</text>
+        </g>
+      </svg>
+    </div>
+
+    <section style="margin-top:64px;">
+      <div style="max-width:880px;">
+        <p style="display:inline-flex;align-items:center;gap:11px;font-size:11px;font-weight:700;letter-spacing:0.11em;text-transform:uppercase;color:#555555;margin:0 0 14px;">
+          <span style="width:24px;height:2px;background:#555555;opacity:0.45;display:inline-block;"></span>
+          Full topology
+        </p>
+        <h2 style="font-size:22px;font-weight:700;color:#000055;letter-spacing:-0.01em;margin:0 0 16px;line-height:1.25;">The complete request path</h2>
+        <p style="font-size:17px;line-height:1.7;color:#555555;margin:0;">A browser loads the React SPA over managed-TLS HTTPS; the SPA calls the FastAPI backend with a Bearer JWT, gated by local Auth&nbsp;+&nbsp;RBAC. The backend's topology-assembly engine merges discovery, overlay, diff and live enrichment — drawing its shape from a runtime Azure Files manifest. Two paths then cross into Google Cloud: the GCP platform APIs are read <strong style="color:#0b5a64;font-weight:700;">keylessly</strong> through the Workload Identity Federation spine, while the ColdVault product API is reached over <strong style="color:#9c3d10;font-weight:700;">HTTPS with an API key</strong> for health, metrics and streaming AI analysis.</p>
+      </div>
+
+      <div style="margin-top:32px;background:#ffffff;border:1px solid #e0e2e8;border-radius:10px;padding:24px 24px 18px;">
+        <div style="overflow-x:auto;overflow-y:hidden;margin:0 -8px;padding:0 8px 4px;">
+        <svg id="detail-svg" viewBox="0 102 1392 412" width="100%" style="display:block;height:auto;min-width:1200px;font-family:'Lato',sans-serif;" role="img" aria-label="Full GlassHood topology: Client, Azure Container Apps, the cross-cloud Workload Identity Federation trust bridge with Managed Identity, broker and STS, and the GCP read-only estate. Two distinct paths reach GCP: keyless WIF to the platform APIs and HTTPS plus API key to ColdVault.">
+          <defs>
+            <marker id="d2-blue" viewBox="0 0 10 10" markerWidth="9" markerHeight="9" refX="8.4" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,5 L0,10 z" fill="#0c41cd"></path></marker>
+            <marker id="d2-grey" viewBox="0 0 10 10" markerWidth="9" markerHeight="9" refX="8.4" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,5 L0,10 z" fill="#9aa0ab"></path></marker>
+          </defs>
+
+          <rect x="24" y="118" width="146" height="382" rx="12" fill="rgba(12,65,205,0.025)" stroke="rgba(12,65,205,0.22)" stroke-width="1.2"></rect>
+          <rect x="188" y="118" width="388" height="382" rx="12" fill="#fbfbfc" stroke="#dcdfe6" stroke-width="1.2"></rect>
+          <rect x="594" y="118" width="470" height="382" rx="12" fill="rgba(13,125,138,0.05)" stroke="rgba(13,125,138,0.34)" stroke-width="1.7"></rect>
+          <rect x="1080" y="118" width="288" height="382" rx="12" fill="#fbfbfc" stroke="#dcdfe6" stroke-width="1.2"></rect>
+
+          <text x="26" y="110" font-size="11" font-weight="700" letter-spacing="0.1em" fill="#0c41cd">CLIENT</text>
+          <text x="190" y="110" font-size="11" font-weight="700" letter-spacing="0.1em" fill="#6b7488">AZURE — CONTAINER APPS · SWITZERLAND NORTH</text>
+          <text x="596" y="110" font-size="11" font-weight="700" letter-spacing="0.1em" fill="#0b5a64">CROSS-CLOUD TRUST — WORKLOAD IDENTITY FEDERATION · NO STORED KEYS</text>
+          <text x="1082" y="110" font-size="11" font-weight="700" letter-spacing="0.1em" fill="#6b7488">GCP — COLDVAULT ESTATE · READ-ONLY</text>
+
+          <g stroke="#0c41cd" fill="none">
+            <path d="M162,298 H180 V176 H202" stroke-width="1.7" marker-end="url(#d2-blue)"></path>
+            <path d="M284,202 V270" stroke-width="1.7" marker-end="url(#d2-blue)"></path>
+            <path d="M300,334 V388 H382" stroke-width="1.7" marker-end="url(#d2-blue)"></path>
+            <path d="M364,303 H382" stroke-width="1.8" marker-end="url(#d2-blue)"></path>
+            <path d="M474,262 V206" stroke-width="1.7" marker-end="url(#d2-blue)"></path>
+            <path d="M564,304 H602" stroke-width="1.9" marker-end="url(#d2-blue)"></path>
+            <path d="M750,303 H758" stroke-width="1.9" marker-end="url(#d2-blue)"></path>
+            <path d="M902,303 H910" stroke-width="1.9" marker-end="url(#d2-blue)"></path>
+            <path d="M1060,303 H1092" stroke-width="1.9" marker-end="url(#d2-blue)"></path>
+          </g>
+
+          <g stroke="#0c41cd" fill="none">
+            <path d="M474,348 V384 H1208 V398" stroke-width="1.6" marker-end="url(#d2-blue)"></path>
+            <path d="M364,316 H374 V424 H1092" stroke-width="1.6" marker-end="url(#d2-blue)"></path>
+          </g>
+
+          <text x="208" y="150" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="10" fill="#0c41cd">HTTPS · glasshood.ai (TLS)</text>
+          <text x="292" y="244" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="10" fill="#0c41cd">REST /api/* · JWT</text>
+          <text x="306" y="360" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="10" fill="#0c41cd">verify_token</text>
+          <text x="756" y="254" text-anchor="middle" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="10" fill="#0c41cd">Entra MI token</text>
+          <text x="484" y="240" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="10" fill="#0c41cd">runtime manifest</text>
+          <text x="600" y="238" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="10" fill="#0c41cd">managed identity</text>
+          <text x="912" y="238" text-anchor="middle" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="10" fill="#0c41cd">STS exchange → impersonate</text>
+          <text x="1078" y="254" text-anchor="middle" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="10" fill="#0c41cd">read-only calls</text>
+          <text x="846" y="378" text-anchor="middle" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="10" fill="#9c3d10">health / metrics · HTTPS + API key</text>
+          <text x="690" y="418" text-anchor="middle" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="10" fill="#0c41cd">AI analysis · /api/chat/stream (SSE)</text>
+
+          <g>
+            <rect x="34" y="272" width="128" height="62" rx="9" fill="#ffffff" stroke="#0c41cd" stroke-width="1.4"></rect>
+            <text x="49" y="298" font-size="13.5" font-weight="700" fill="#000055">Browser</text>
+            <text x="49" y="316" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="10" fill="#555555">viewer + admin</text>
+          </g>
+
+          <g>
+            <rect x="204" y="150" width="160" height="52" rx="9" fill="#ffffff" stroke="#8b93a3" stroke-width="1.3"></rect>
+            <text x="219" y="174" font-size="13.5" font-weight="700" fill="#000055">React 18 SPA</text>
+            <text x="219" y="191" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="10" fill="#555555">topology UI</text>
+          </g>
+          <g>
+            <rect x="204" y="272" width="160" height="62" rx="9" fill="#ffffff" stroke="#8b93a3" stroke-width="1.6"></rect>
+            <text x="219" y="297" font-size="13.5" font-weight="700" fill="#000055">FastAPI backend</text>
+            <text x="219" y="315" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="10" fill="#555555">REST API · server.py</text>
+          </g>
+          <g>
+            <rect x="384" y="150" width="180" height="52" rx="9" fill="#ffffff" stroke="#8b93a3" stroke-width="1.3"></rect>
+            <text x="399" y="174" font-size="13.5" font-weight="700" fill="#000055">Azure Files share</text>
+            <text x="399" y="191" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="10" fill="#555555">runtime topology manifest</text>
+          </g>
+          <g>
+            <rect x="384" y="260" width="180" height="88" rx="9" fill="#ffffff" stroke="#8b93a3" stroke-width="1.6"></rect>
+            <text x="399" y="283" font-size="13.5" font-weight="700" fill="#000055">Topology-assembly</text>
+            <text x="399" y="300" font-size="13.5" font-weight="700" fill="#000055">engine</text>
+            <text x="399" y="320" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="10" fill="#555555">merges discovery · overlay</text>
+            <text x="399" y="334" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="10" fill="#555555">diff · live enrichment</text>
+          </g>
+          <g>
+            <rect x="384" y="372" width="180" height="54" rx="9" fill="#ffffff" stroke="#0d7d8a" stroke-width="1.5"></rect>
+            <text x="399" y="396" font-size="13.5" font-weight="700" fill="#000055">Auth + RBAC</text>
+            <text x="399" y="413" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="10" fill="#555555">local JWT · viewer/op/admin</text>
+          </g>
+
+          <g>
+            <rect x="606" y="270" width="144" height="66" rx="9" fill="#ffffff" stroke="#0d7d8a" stroke-width="1.6"></rect>
+            <text x="621" y="293" font-size="13" font-weight="700" fill="#000055">Azure Managed</text>
+            <text x="621" y="309" font-size="13" font-weight="700" fill="#000055">Identity</text>
+            <text x="621" y="326" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="10" fill="#0b5a64">Microsoft Entra ID</text>
+          </g>
+          <g>
+            <rect x="758" y="270" width="144" height="66" rx="9" fill="#ffffff" stroke="#0d7d8a" stroke-width="1.7"></rect>
+            <text x="773" y="296" font-size="13" font-weight="700" fill="#000055">WIF token broker</text>
+            <text x="773" y="316" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="10" fill="#0b5a64">az-token.py</text>
+          </g>
+          <g>
+            <rect x="910" y="262" width="150" height="82" rx="9" fill="#ffffff" stroke="#0d7d8a" stroke-width="1.7"></rect>
+            <text x="925" y="286" font-size="13" font-weight="700" fill="#000055">GCP STS exchange</text>
+            <text x="925" y="306" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="10" fill="#555555">+ impersonate</text>
+            <text x="925" y="320" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="10" fill="#555555">read-only SA</text>
+          </g>
+
+          <g>
+            <rect x="1096" y="258" width="256" height="92" rx="9" fill="#ffffff" stroke="#8b93a3" stroke-width="1.3"></rect>
+            <text x="1111" y="282" font-size="13.5" font-weight="700" fill="#000055">GCP read APIs</text>
+            <text x="1111" y="300" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="10" fill="#555555">Logging · Monitoring · Asset Inventory</text>
+            <text x="1111" y="314" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="10" fill="#555555">Compute · GCS · Secret Manager</text>
+            <g>
+              <rect x="1111" y="324" width="98" height="17" rx="8.5" fill="rgba(13,125,138,0.10)"></rect>
+              <text x="1120" y="336" font-size="9" font-weight="700" letter-spacing="0.04em" fill="#0b5a64">KEYLESS · WIF</text>
+            </g>
+          </g>
+          <g>
+            <rect x="1096" y="402" width="256" height="76" rx="9" fill="#ffffff" stroke="#8b93a3" stroke-width="1.3"></rect>
+            <text x="1111" y="426" font-size="13.5" font-weight="700" fill="#000055">ColdVault API</text>
+            <text x="1111" y="444" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="10" fill="#555555">coldvault.ai · health/metrics · AI chat (SSE)</text>
+            <g>
+              <rect x="1111" y="452" width="110" height="17" rx="8.5" fill="rgba(231,90,30,0.10)"></rect>
+              <text x="1120" y="464" font-size="9" font-weight="700" letter-spacing="0.04em" fill="#9c3d10">HTTPS · API KEY</text>
+            </g>
+          </g>
+
+          <g class="dc-planned" id="dc-planned">
+            <g>
+              <rect x="188" y="528" width="1182" height="94" rx="12" fill="#fafbfc" stroke="#e0e2e8" stroke-width="1.2" stroke-dasharray="2 3"></rect>
+              <text x="190" y="520" font-size="11" font-weight="700" letter-spacing="0.1em" fill="#8a909c">CONTROL &amp; PLANNED · DASHED</text>
+
+              <g stroke="#9aa0ab" fill="none" stroke-dasharray="5 4">
+                <path d="M313,544 V506 H184 V300 H200" stroke-width="1.5" marker-end="url(#d2-grey)"></path>
+                <path d="M98,334 V512 H470 V542" stroke-width="1.5" marker-end="url(#d2-grey)"></path>
+                <path d="M320,334 V522 H740 V542" stroke-width="1.5" marker-end="url(#d2-grey)"></path>
+                <path d="M345,334 V530 H1040 V542" stroke-width="1.5" marker-end="url(#d2-grey)"></path>
+              </g>
+              <text x="206" y="498" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="10" fill="#8a909c">deploys image</text>
+              <text x="478" y="506" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="10" fill="#8a909c">OIDC (deferred)</text>
+              <text x="548" y="516" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="10" fill="#8a909c">sync · flag off</text>
+              <text x="820" y="524" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="10" fill="#8a909c">preferred · key absent</text>
+
+              <g>
+                <rect x="210" y="544" width="206" height="62" rx="9" fill="#ffffff" stroke="#aab0bd" stroke-width="1.3" stroke-dasharray="5 4"></rect>
+                <text x="225" y="570" font-size="13.5" font-weight="700" fill="#5b6473">Azure Container Registry</text>
+                <text x="225" y="588" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="10" fill="#8a909c">image source · deploy</text>
+              </g>
+              <g>
+                <rect x="470" y="544" width="228" height="62" rx="9" fill="#ffffff" stroke="#aab0bd" stroke-width="1.3" stroke-dasharray="5 4"></rect>
+                <text x="485" y="570" font-size="13.5" font-weight="700" fill="#5b6473">Corporate SSO</text>
+                <text x="485" y="588" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="10" fill="#8a909c">Auth0 / Microsoft Entra ID</text>
+              </g>
+              <g>
+                <rect x="740" y="544" width="250" height="62" rx="9" fill="#ffffff" stroke="#aab0bd" stroke-width="1.3" stroke-dasharray="5 4"></rect>
+                <text x="755" y="570" font-size="13.5" font-weight="700" fill="#5b6473">ServiceNow</text>
+                <text x="755" y="588" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="10" fill="#8a909c">incident / change correlation</text>
+              </g>
+              <g>
+                <rect x="1040" y="544" width="250" height="62" rx="9" fill="#ffffff" stroke="#aab0bd" stroke-width="1.3" stroke-dasharray="5 4"></rect>
+                <text x="1055" y="570" font-size="13.5" font-weight="700" fill="#5b6473">9robots Platform</text>
+                <text x="1055" y="588" font-family="ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace" font-size="10" fill="#8a909c">preferred inference</text>
+              </g>
+            </g>
+          </g>
+        </svg>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:14px 20px;margin-top:6px;padding-top:16px;border-top:1px solid #eceef2;font-size:11.5px;color:#555555;">
+          <span style="display:inline-flex;align-items:center;gap:8px;"><svg width="26" height="8" style="overflow:visible;"><line x1="0" y1="4" x2="26" y2="4" stroke="#0c41cd" stroke-width="1.8"></line></svg>Live request path</span>
+          <span style="display:inline-flex;align-items:center;gap:8px;"><svg width="26" height="8" style="overflow:visible;"><line x1="0" y1="4" x2="26" y2="4" stroke="#9aa0ab" stroke-width="1.5" stroke-dasharray="5 4"></line></svg>Control / planned</span>
+          <span style="width:1px;height:14px;background:#e0e2e8;"></span>
+          <span style="display:inline-flex;align-items:center;gap:7px;"><span style="width:11px;height:11px;border-radius:3px;border:1.6px solid #0c41cd;background:#ffffff;"></span>Client</span>
+          <span style="display:inline-flex;align-items:center;gap:7px;"><span style="width:11px;height:11px;border-radius:3px;border:1.6px solid #0d7d8a;background:rgba(13,125,138,0.10);"></span>Trust · no keys</span>
+          <span style="display:inline-flex;align-items:center;gap:7px;"><span style="width:11px;height:11px;border-radius:3px;border:1.6px solid #8b93a3;background:#ffffff;"></span>Cloud platform</span>
+          <span style="width:1px;height:14px;background:#e0e2e8;"></span>
+          <span style="display:inline-flex;align-items:center;gap:7px;"><span style="font-family:ui-monospace,monospace;font-size:9px;font-weight:700;color:#0b5a64;background:rgba(13,125,138,0.10);padding:2px 6px;border-radius:8px;">KEYLESS</span>WIF spine</span>
+          <span style="display:inline-flex;align-items:center;gap:7px;"><span style="font-family:ui-monospace,monospace;font-size:9px;font-weight:700;color:#9c3d10;background:rgba(231,90,30,0.10);padding:2px 6px;border-radius:8px;">API KEY</span>ColdVault</span>
+        </div>
+      </div>
+    </section>
+
+    <section style="margin-top:80px;max-width:1080px;">
+      <p style="display:inline-flex;align-items:center;gap:11px;font-size:11px;font-weight:700;letter-spacing:0.11em;text-transform:uppercase;color:#555555;margin:0 0 14px;">
+        <span style="width:24px;height:2px;background:#555555;opacity:0.45;display:inline-block;"></span>
+        Pillars
+      </p>
+      <h2 style="font-size:22px;font-weight:700;color:#000055;letter-spacing:-0.01em;margin:0;max-width:760px;line-height:1.25;">Four ideas hold the system together</h2>
+
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-top:30px;">
+
+        <div style="background:#f7f8fa;border:1px solid #e0e2e8;border-radius:10px;padding:24px 22px 22px;display:flex;flex-direction:column;transition:border-color 180ms cubic-bezier(0.4,0,0.2,1);">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+            <span style="font-family:ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace;font-size:12px;font-weight:700;color:#0c41cd;letter-spacing:0.04em;">01</span>
+            <span style="display:inline-flex;align-items:center;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#0b5a64;background:rgba(13,125,138,0.10);padding:4px 8px;border-radius:4px;">No stored keys</span>
+          </div>
+          <h3 style="font-size:18px;font-weight:700;color:#000055;line-height:1.3;margin:0 0 10px;">Key-less cross-cloud trust</h3>
+          <p style="font-size:15px;line-height:1.6;color:#555555;margin:0;flex:1;">The container runs as an Azure Managed Identity. A broker exchanges a short-lived Entra token at Google STS to impersonate a read-only service account — no service-account keys live anywhere.</p>
+          <div class="dc-evidence">
+            <div style="margin-top:16px;padding-top:14px;border-top:1px solid #e0e2e8;font-family:ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace;font-size:11.5px;color:#8a8f9a;letter-spacing:-0.01em;">az-token.py:22 · gcp-cred-config:2</div>
+          </div>
+        </div>
+
+        <div style="background:#f7f8fa;border:1px solid #e0e2e8;border-radius:10px;padding:24px 22px 22px;display:flex;flex-direction:column;transition:border-color 180ms cubic-bezier(0.4,0,0.2,1);">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+            <span style="font-family:ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace;font-size:12px;font-weight:700;color:#0c41cd;letter-spacing:0.04em;">02</span>
+          </div>
+          <h3 style="font-size:18px;font-weight:700;color:#000055;line-height:1.3;margin:0 0 10px;">Least privilege by construction</h3>
+          <p style="font-size:15px;line-height:1.6;color:#555555;margin:0;flex:1;">Federated credentials authorize read-only access — Logging, Monitoring, Asset Inventory, Compute, GCS and Secret Manager. The estate is observed, never mutated.</p>
+          <div class="dc-evidence">
+            <div style="margin-top:16px;padding-top:14px;border-top:1px solid #e0e2e8;font-family:ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace;font-size:11.5px;color:#8a8f9a;letter-spacing:-0.01em;">collectors/gcp_logging.py:20</div>
+          </div>
+        </div>
+
+        <div style="background:#f7f8fa;border:1px solid #e0e2e8;border-radius:10px;padding:24px 22px 22px;display:flex;flex-direction:column;transition:border-color 180ms cubic-bezier(0.4,0,0.2,1);">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+            <span style="font-family:ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace;font-size:12px;font-weight:700;color:#0c41cd;letter-spacing:0.04em;">03</span>
+          </div>
+          <h3 style="font-size:18px;font-weight:700;color:#000055;line-height:1.3;margin:0 0 10px;">Generic image, runtime estate</h3>
+          <p style="font-size:15px;line-height:1.6;color:#555555;margin:0;flex:1;">The container image stays sanitized and generic. The real topology is injected at runtime from an Azure Files manifest share — so one image can describe any estate.</p>
+          <div class="dc-evidence">
+            <div style="margin-top:16px;padding-top:14px;border-top:1px solid #e0e2e8;font-family:ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace;font-size:11.5px;color:#8a8f9a;letter-spacing:-0.01em;">routes/manifests.py:28</div>
+          </div>
+        </div>
+
+        <div style="background:#f7f8fa;border:1px solid #e0e2e8;border-radius:10px;padding:24px 22px 22px;display:flex;flex-direction:column;transition:border-color 180ms cubic-bezier(0.4,0,0.2,1);">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+            <span style="font-family:ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace;font-size:12px;font-weight:700;color:#0c41cd;letter-spacing:0.04em;">04</span>
+          </div>
+          <h3 style="font-size:18px;font-weight:700;color:#000055;line-height:1.3;margin:0 0 10px;">Live AI analysis</h3>
+          <p style="font-size:15px;line-height:1.6;color:#555555;margin:0;flex:1;">The backend streams infrastructure-analysis prompts to the ColdVault API over SSE for health, metrics and chat — the live AI path, with the 9robots Platform wired as a preferred upgrade.</p>
+          <div class="dc-evidence">
+            <div style="margin-top:16px;padding-top:14px;border-top:1px solid #e0e2e8;font-family:ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace;font-size:11.5px;color:#8a8f9a;letter-spacing:-0.01em;">coldvault_client.py:110</div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <footer style="margin-top:80px;padding-top:24px;border-top:1px solid #e0e2e8;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+      <span style="font-size:13px;color:#8a8f9a;">9robots · Architecture reference</span>
+      <span style="font-size:13px;color:#8a8f9a;font-family:ui-monospace,'SF Mono',Menlo,Monaco,Consolas,monospace;">GlassHood · LIVE — glasshood.ai</span>
+    </footer>
+
+  </div>
+</div>
+<script>
+(function(){
+  var p=document.getElementById('t-planned'), e=document.getElementById('t-evidence');
+  var planned=document.getElementById('dc-planned'), svg=document.getElementById('detail-svg');
+  function applyP(){ if(planned) planned.style.display = p.checked?'':'none';
+    if(svg) svg.setAttribute('viewBox', p.checked?'0 102 1392 540':'0 102 1392 412'); }
+  function applyE(){ document.querySelectorAll('.dc-evidence').forEach(function(n){ n.style.display = e.checked?'':'none'; }); }
+  p.addEventListener('change',applyP); e.addEventListener('change',applyE); applyP(); applyE();
+})();
+</script>
+</body>
+</html>
