@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Lato:wght@100;300;400;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/architecture/styles.css?v=12">
+  <link rel="stylesheet" href="/architecture/styles.css?v=13">
 </head>
 <body>
 <div class="container">
@@ -152,49 +152,6 @@
             <span><b class="bk" style="color:#9c3d10;background:rgba(231,90,30,0.10)">API KEY</b> ColdVault</span>
           </div>
         </div>
-
-        <details class="detail-block">
-          <summary>Identity mechanism &mdash; detail</summary>
-          <div>
-            <p>
-              The engine holds no Google Cloud service-account keys anywhere. At runtime the Azure Container App&rsquo;s
-              Entra managed identity is surfaced via <code>IDENTITY_ENDPOINT</code> / <code>IDENTITY_HEADER</code> (the
-              Container Apps endpoint, not the VM IMDS). A small broker fetches that token and hands it to
-              <code>google-auth</code>&rsquo;s executable credential source, which exchanges it at Google&rsquo;s STS for a
-              federated token and impersonates a <strong>viewer-only</strong> service account &mdash; a short-lived,
-              read-only access token, refreshed on demand.
-            </p>
-            <p class="code-label">The federation config (placeholders only)</p>
-            <pre class="code">{
-  "type": "external_account",
-  "audience": "//iam.googleapis.com/projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/POOL_ID/providers/PROVIDER_ID",
-  "subject_token_type": "urn:ietf:params:oauth:token-type:jwt",
-  "token_url": "https://sts.googleapis.com/v1/token",
-  "service_account_impersonation_url":
-      "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/SA_EMAIL:generateAccessToken",
-  "credential_source": { "executable": { "command": "/app/az-token.py", "timeout_millis": 5000 } }
-}</pre>
-            <p class="note">
-              Sanitized &mdash; every identifier is a placeholder. This is the trust binding, not a secret: there is no
-              key to leak.
-            </p>
-            <p>Why read-only toward the target holds even under a full compromise of the container:</p>
-            <div class="can-cannot">
-              <div class="cc-col cc-can">
-                <h4>Can</h4>
-                <ul><li>Read what the viewer token allows, for that token&rsquo;s short window</li></ul>
-              </div>
-              <div class="cc-col cc-cannot">
-                <h4>Cannot</h4>
-                <ul>
-                  <li>Write to, delete or modify the monitored target</li>
-                  <li>Mint a broader or longer-lived credential</li>
-                  <li>Exfiltrate a reusable key &mdash; none exists</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </details>
       </section>
 
       <section class="pd-section" id="collection">
@@ -315,6 +272,50 @@
           A qualified person reviews and adopts every artifact.
         </p>
       </section>
+
+      <details class="detail-block">
+          <summary>Identity mechanism &mdash; detail</summary>
+          <div>
+            <p>
+              The engine holds no Google Cloud service-account keys anywhere. At runtime the Azure Container App&rsquo;s
+              Entra managed identity is surfaced via <code>IDENTITY_ENDPOINT</code> / <code>IDENTITY_HEADER</code> (the
+              Container Apps endpoint, not the VM IMDS). A small broker fetches that token and hands it to
+              <code>google-auth</code>&rsquo;s executable credential source, which exchanges it at Google&rsquo;s STS for a
+              federated token and impersonates a <strong>viewer-only</strong> service account &mdash; a short-lived,
+              read-only access token, refreshed on demand.
+            </p>
+            <p class="code-label">The federation config (placeholders only)</p>
+            <pre class="code">{
+  "type": "external_account",
+  "audience": "//iam.googleapis.com/projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/POOL_ID/providers/PROVIDER_ID",
+  "subject_token_type": "urn:ietf:params:oauth:token-type:jwt",
+  "token_url": "https://sts.googleapis.com/v1/token",
+  "service_account_impersonation_url":
+      "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/SA_EMAIL:generateAccessToken",
+  "credential_source": { "executable": { "command": "/app/az-token.py", "timeout_millis": 5000 } }
+}</pre>
+            <p class="note">
+              Sanitized &mdash; every identifier is a placeholder. This is the trust binding, not a secret: there is no
+              key to leak.
+            </p>
+            <p>Why read-only toward the target holds even under a full compromise of the container:</p>
+            <div class="can-cannot">
+              <div class="cc-col cc-can">
+                <h4>Can</h4>
+                <ul><li>Read what the viewer token allows, for that token&rsquo;s short window</li></ul>
+              </div>
+              <div class="cc-col cc-cannot">
+                <h4>Cannot</h4>
+                <ul>
+                  <li>Write to, delete or modify the monitored target</li>
+                  <li>Mint a broader or longer-lived credential</li>
+                  <li>Exfiltrate a reusable key &mdash; none exists</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </details>
+
 
     </div>
   </div>
