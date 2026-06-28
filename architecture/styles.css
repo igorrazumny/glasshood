@@ -67,10 +67,11 @@ a.button:focus-visible{outline:2px solid var(--navy);outline-offset:2px}
 
 /* Quiet live-view line */
 .live-view-note{font-size:19px;line-height:1.55;color:var(--sub);max-width:none;margin:22px 0 0}
+.arch-cta{margin:24px 0 0}
 
 /* Progressive disclosure */
 .pd-hidden-until-reveal{display:none}
-.pd-page.revealed .pd-hidden-until-reveal{display:block}
+.pd-page.revealed .pd-hidden-until-reveal{display:block;margin-top:44px}
 
 /* Detail sections — exact 9robots */
 .pd-section{padding:28px 0;scroll-margin-top:24px}
