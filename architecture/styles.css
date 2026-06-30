@@ -132,7 +132,9 @@ footer{margin:48px 0 36px;padding-top:20px;border-top:1px solid var(--border);fo
 .arch-diagram{margin:6px 0 30px}
 .arch-diagram--overview svg{display:block;width:100%;height:auto}
 .arch-scroll{overflow-x:auto;overflow-y:hidden;margin:0 -4px;padding:0 4px}
-.arch-diagram--detail svg{display:block;width:100%;height:auto}
+/* detail diagram is now an HTML flexbox flow; small inline arrow svgs render at natural size */
+.arch-diagram--detail svg{width:auto;height:auto;min-width:0}
+.arch-detail-flow{max-width:880px;margin:0 auto}
 .arch-legend{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:10px 18px;
   margin-top:10px;font-size:12px;color:var(--sub)}
 .arch-legend span{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
@@ -149,3 +151,8 @@ footer{margin:48px 0 36px;padding-top:20px;border-top:1px solid var(--border);fo
 .cv-link:hover .cv-box{stroke:#e75a1e;stroke-width:2}
 .cv-link .cv-overlay{opacity:0;transition:opacity .15s ease;pointer-events:none}
 .cv-link:hover .cv-overlay{opacity:1}
+/* HTML variant of the cross-link (foreignObject detail diagram) */
+.cv-html-link{cursor:pointer;text-decoration:none;transition:outline-color .15s ease}
+.cv-html-link:hover{outline:2px solid #e75a1e;outline-offset:-2px}
+.cv-html-overlay{opacity:0;transition:opacity .15s ease}
+.cv-html-link:hover .cv-html-overlay{opacity:1}
