@@ -143,16 +143,28 @@ footer{margin:48px 0 36px;padding-top:20px;border-top:1px solid var(--border);fo
 .arch-legend .sw i{width:11px;height:11px;border-radius:3px;display:inline-block}
 .arch-legend .bk{font-family:ui-monospace,monospace;font-size:9px;font-weight:700;padding:2px 6px;border-radius:8px}
 
-/* ColdVault cross-link hover — orange border + button, like the hero cards */
-.cv-link{cursor:pointer;text-decoration:none}
-.cv-link:hover{text-decoration:none}
+/* ColdVault boxes — persistent gray CTA, hero-card hover parity (lift + shadow + orange border,
+   constant 1px apparent border via non-scaling-stroke on the scaled SVG). :focus-visible mirrors
+   :hover for keyboard parity. One text element per CTA: only color/fill transitions. */
+.cv-link{cursor:pointer;text-decoration:none;transform-box:fill-box;transform-origin:center;transition:transform .18s ease,filter .18s ease}
+.cv-link:hover,.cv-link:focus-visible{text-decoration:none;transform:translateY(-2px);filter:drop-shadow(0 6px 20px rgba(0,0,0,.06))}
+.cv-link:focus-visible,.cv-html-link:focus-visible{outline:2px solid #e75a1e;outline-offset:2px}
 .cv-link text{text-decoration:none}
 .cv-link .cv-box{transition:stroke .15s ease}
-.cv-link:hover .cv-box{stroke:#e75a1e;stroke-width:2}
-.cv-link .cv-overlay{opacity:0;transition:opacity .15s ease;pointer-events:none}
-.cv-link:hover .cv-overlay{opacity:1}
-/* HTML variant of the cross-link (foreignObject detail diagram) */
-.cv-html-link{cursor:pointer;text-decoration:none;transition:outline-color .15s ease}
-.cv-html-link:hover{outline:2px solid #e75a1e;outline-offset:-2px}
-.cv-html-overlay{opacity:0;transition:opacity .15s ease}
-.cv-html-link:hover .cv-html-overlay{opacity:1}
+.cv-link:hover .cv-box,.cv-link:focus-visible .cv-box{stroke:#e75a1e;stroke-width:1;vector-effect:non-scaling-stroke}
+.cv-link .cv-hover-btn rect{opacity:0;transition:opacity .15s;fill:#e75a1e}
+.cv-link:hover .cv-hover-btn rect,.cv-link:focus-visible .cv-hover-btn rect{opacity:1}
+.cv-link .cv-cta{fill:#6e7582;transition:fill .15s}
+.cv-link:hover .cv-cta,.cv-link:focus-visible .cv-cta{fill:#fff}
+.cv-html-link{cursor:pointer;text-decoration:none;display:block;border-radius:16px;transition:transform .18s ease,box-shadow .18s ease}
+.cv-html-link:hover,.cv-html-link:focus-visible{text-decoration:none;transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.06)}
+.cv-html-link>div{transition:border-color .15s}
+.cv-html-link:hover>div,.cv-html-link:focus-visible>div{border-color:#e75a1e}
+.cv-cta-tab{position:absolute;right:18px;top:-11px;background:#fff;padding:0 9px}
+/* Narrow viewports: the tab label and the CTA can't share the border line — drop the CTA into
+   the zone flow as a right-aligned line instead of colliding with the truncated tab. */
+@media(max-width:640px){.cv-cta-tab{position:static;display:block;background:transparent;padding:0;margin:-8px 0 12px;text-align:right}}
+.cv-cta-html{color:#6e7582;position:relative;display:inline-block;z-index:1;transition:color .15s}
+.cv-cta-html::before{content:"";position:absolute;inset:-3px -8px;background:#e75a1e;border-radius:6px;opacity:0;transition:opacity .15s;z-index:-1}
+.cv-html-link:hover .cv-cta-html,.cv-html-link:focus-visible .cv-cta-html{color:#fff}
+.cv-html-link:hover .cv-cta-html::before,.cv-html-link:focus-visible .cv-cta-html::before{opacity:1}
