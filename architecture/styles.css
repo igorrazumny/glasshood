@@ -131,7 +131,12 @@ footer{margin:48px 0 36px;padding-top:20px;border-top:1px solid var(--border);fo
 /* Borderless diagrams. Overview spans the card width; detail scrolls on narrow screens. */
 .arch-diagram{margin:6px 0 30px}
 .arch-diagram--overview svg{display:block;width:100%;height:auto}
-.arch-scroll{overflow-x:auto;overflow-y:hidden;margin:0 -4px;padding:0 4px}
+.arch-diagram--detail{overflow-x:auto;-webkit-overflow-scrolling:touch}
+/* Zone-row detail uses uniform fixed-height boxes sized for the 1070px design width — below it
+   the grid compresses and nowrap sublabels spill out of the 34px boxes (the TestRobin-documented
+   failure mode). Pin the composition (scoped to .arch-flow, NOT >div, so the legend stays fluid)
+   and let narrower viewports use the contained scroll above. */
+.arch-diagram--detail .arch-flow{min-width:1070px}
 /* detail diagram is now an HTML flexbox flow; small inline arrow svgs render at natural size */
 .arch-diagram--detail svg{width:auto;height:auto;min-width:0}
 .arch-detail-flow{max-width:880px;margin:0 auto}
