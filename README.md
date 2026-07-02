@@ -27,7 +27,7 @@ A portable deployment of GlassHood (a topology / observability tool) onto Azure 
 Why it matters: the target cloud's security posture *disables* service-account key creation. Rather than work around it, the design federates identity across clouds — the correct, key-less pattern for a regulated environment.
 
 ## Stack
-- **Azure:** Container Apps, Container Registry, Microsoft Entra ID (managed identity), Workload Identity Federation
+- **Azure:** Container Apps, Container Registry, Microsoft Entra ID (managed identity), Workload Identity Federation, Key Vault (the WIF federation config is a Key Vault secret, mounted into the container at runtime via the app's managed identity — images are built without any credential file in the build context)
 - **Google Cloud:** Cloud Logging / Monitoring / Compute / Asset Inventory (read-only)
 - **App:** FastAPI (Python 3.11) + React (Vite), single container
 
