@@ -11,11 +11,13 @@ from pathlib import Path
 
 import yaml
 
+from src.config.settings import BACKGROUND_POLL_INTERVAL
+
 logger = logging.getLogger(__name__)
 
 _metrics_cache: dict = {}  # node_id -> {status, metrics, last_poll}
 _lock = threading.Lock()
-_POLL_INTERVAL = 60  # seconds
+_POLL_INTERVAL = BACKGROUND_POLL_INTERVAL  # seconds (REQ-GHA-016)
 _client = None  # singleton MetricServiceClient
 
 

@@ -6,6 +6,24 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
+def _positive_int_env(name: str, default: str) -> int:
+    """Read a positive integer from the environment; fail loudly on anything else."""
+    raw = os.getenv(name, default)
+    try:
+        value = int(raw)
+    except ValueError:
+        raise ValueError(f"{name} must be a positive integer number of seconds, got {raw!r}")
+    if value <= 0:
+        raise ValueError(f"{name} must be a positive integer number of seconds, got {raw!r}")
+    return value
+
+
+# REQ-GHA-016: one cadence for every background collection and analysis loop.
+# Default 10 minutes keeps the replica billed at the idle rate most of the time;
+# lower it in the deployment's configuration (no rebuild) when someone is using it.
+BACKGROUND_POLL_INTERVAL = _positive_int_env("BACKGROUND_POLL_INTERVAL", "600")
+
 # ColdVault connection
 COLDVAULT_URL = os.getenv("COLDVAULT_URL", "https://coldvault.ai")
 COLDVAULT_ADMIN_KEY = os.getenv("COLDVAULT_ADMIN_KEY", "")
@@ -42,7 +60,7 @@ JWT_REFRESH_TTL = int(os.getenv("JWT_REFRESH_TTL", "86400"))  # 24h refresh toke
 
 # Discovery
 DISCOVERY_ENABLED = os.getenv("DISCOVERY_ENABLED", "true").lower() == "true"
-DISCOVERY_INTERVAL = int(os.getenv("DISCOVERY_INTERVAL", "300"))  # 5 minutes
+DISCOVERY_INTERVAL = _positive_int_env("DISCOVERY_INTERVAL", str(BACKGROUND_POLL_INTERVAL))
 TOPOLOGY_OVERRIDES_PATH = os.getenv("TOPOLOGY_OVERRIDES_PATH", "config/topology_overrides.yaml")
 
 # Multi-project / org-level discovery
@@ -99,7 +117,7 @@ RETENTION_ARCHIVE_BUCKET = os.getenv("RETENTION_ARCHIVE_BUCKET", "")
 STORAGE_ENCRYPTION_KEY = os.getenv("STORAGE_ENCRYPTION_KEY", "")  # hex-encoded 32-byte key
 
 # Polling intervals (seconds)
-COLDVAULT_POLL_INTERVAL = 30
-GCP_POLL_INTERVAL = 60
-ANALYSIS_INTERVAL = 300  # 5 minutes
+COLDVAULT_POLL_INTERVAL = BACKGROUND_POLL_INTERVAL
+GCP_POLL_INTERVAL = BACKGROUND_POLL_INTERVAL
+ANALYSIS_INTERVAL = BACKGROUND_POLL_INTERVAL
 ANALYSIS_COOLDOWN = 60   # manual refresh rate limit
