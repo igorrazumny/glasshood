@@ -21,6 +21,9 @@ Scenarios: normal wakes after --wake seconds; fail never becomes awake; sleeping
 "going-to-sleep" for 5 s and runs a wake posted meanwhile as soon as the sleep ends.
 --app-lag N keeps sending visitors back to the waking page for N seconds after the
 status reads "awake", like an app that has not caught up yet.
+--first-status changes only the first status request: hang-headers never answers,
+hang-body sends the headers and part of the body and then stops, late:N answers after
+N seconds with the state at that moment.
 """
 import argparse
 import html
@@ -35,11 +38,13 @@ from urllib.parse import quote, urlsplit
 PAGE = (Path(__file__).parent / "index.html").read_text(encoding="utf-8")
 WAKING_PATH = "/waking-page/"
 SLEEP_SECONDS = 5
+HANG_SECONDS = 600
 
 
 class Wake:
-    def __init__(self, scenario, wake_seconds, app_lag):
+    def __init__(self, scenario, wake_seconds, app_lag, first_status=None):
         self.lock = threading.Lock()
+        self.first_status = first_status
         self.scenario = scenario
         self.wake_seconds = wake_seconds
         self.app_lag = app_lag
@@ -79,6 +84,12 @@ class Wake:
             elif self.state == "going-to-sleep":
                 self.queued = True
             return self._json()
+
+    def take_first_status(self):
+        """The --first-status mode for the first status request; None after that."""
+        with self.lock:
+            mode, self.first_status = self.first_status, None
+            return mode
 
     def status(self):
         with self.lock:
@@ -141,6 +152,23 @@ class Controller(Base):
     def do_GET(self):
         path = urlsplit(self.path).path
         if path == "/status":
+            mode = WAKE.take_first_status()
+            if mode == "hang-headers":
+                time.sleep(HANG_SECONDS)
+                return
+            if mode == "hang-body":
+                body = json.dumps(WAKE.status()).encode()
+                self.send_response(200)
+                for k, v in dict(self._cors(), **{"Content-Type": "application/json", "Cache-Control": "no-store",
+                                                  "Content-Length": str(len(body))}).items():
+                    self.send_header(k, v)
+                self.end_headers()
+                self.wfile.write(body[:5])
+                self.wfile.flush()
+                time.sleep(HANG_SECONDS)
+                return
+            if mode and mode.startswith("late:"):
+                time.sleep(float(mode[5:]))
             self._json(200, WAKE.status())
         elif path == "/_mock/stats":
             self._json(200, WAKE.counters())
@@ -169,8 +197,11 @@ def main():
     p.add_argument("--wake", type=float, default=20, help="seconds from wake to awake")
     p.add_argument("--app-lag", type=float, default=0, help="seconds the app keeps sending visitors back after awake")
     p.add_argument("--scenario", choices=("normal", "fail", "sleeping"), default="normal")
+    p.add_argument("--first-status", help="hang-headers, hang-body or late:SECONDS, for the first status request only")
     a = p.parse_args()
-    WAKE = Wake(a.scenario, a.wake, a.app_lag)
+    if a.first_status and a.first_status not in ("hang-headers", "hang-body") and not a.first_status.startswith("late:"):
+        p.error("--first-status: hang-headers, hang-body or late:SECONDS")
+    WAKE = Wake(a.scenario, a.wake, a.app_lag, a.first_status)
     APP_ORIGIN = "http://127.0.0.1:%d" % a.port
     CONTROLLER_ORIGIN = "http://127.0.0.1:%d" % (a.port + 1)
     controller = ThreadingHTTPServer(("127.0.0.1", a.port + 1), Controller)

@@ -116,9 +116,12 @@ h1{margin:0;max-width:820px;font-size:34px;line-height:1.2;font-weight:700;color
   var STATUS_URL = CONTROLLER + "/status";
   var WAKE_URL = CONTROLLER + "/wake";
   var POLL_MS = 3000;
-  // Clause 6: give up after 3 minutes. Tests may shorten it by setting
-  // window.__WAKE_FAIL_AFTER_MS before this script runs.
+  // Clause 6: give up after 3 minutes, whatever the network does. Tests may shorten it
+  // by setting window.__WAKE_FAIL_AFTER_MS before this script runs.
   var FAIL_AFTER_MS = window.__WAKE_FAIL_AFTER_MS || 180000;
+  // A request that has not finished (headers and body) by then is cancelled; the next
+  // check starts as usual.
+  var REQUEST_MS = 10000;
   // A return to this page within this window continues the same attempt (the 3 minutes
   // keep counting), so an app that sends the visitor back here cannot loop forever.
   var SAME_ATTEMPT_MS = 30000;
@@ -151,12 +154,23 @@ h1{margin:0;max-width:820px;font-size:34px;line-height:1.2;font-weight:700;color
 
   // The attempt lives in sessionStorage, or in window.name when storage is blocked (it
   // survives navigations in the same tab), so the deadline and the pacing hold either way.
+  // A stored attempt is used only if its times and count make sense; anything else
+  // (edited, truncated, from another version) starts a new attempt.
+  function valid(a) {
+    var t = now();
+    function time(v) { return typeof v === "number" && isFinite(v) && v >= 0 && v <= t + 60000; }
+    return !!a && typeof a === "object" && time(a.start) && time(a.seen) && time(a.lastEntry) &&
+      a.start <= a.seen && typeof a.entries === "number" && a.entries >= 0 && a.entries <= 1000 &&
+      Math.floor(a.entries) === a.entries;
+  }
   function load() {
-    try { var s = sessionStorage.getItem(KEY); if (s) return JSON.parse(s); } catch (e) { /* blocked */ }
+    var a = null;
+    try { var s = sessionStorage.getItem(KEY); if (s) a = JSON.parse(s); } catch (e) { /* blocked or not JSON */ }
+    if (valid(a)) return a;
     try {
-      if (window.name.indexOf(NAME_PREFIX) === 0) return JSON.parse(window.name.slice(NAME_PREFIX.length));
+      if (window.name.indexOf(NAME_PREFIX) === 0) a = JSON.parse(window.name.slice(NAME_PREFIX.length));
     } catch (e) { /* not ours */ }
-    return null;
+    return valid(a) ? a : null;
   }
   function save(a) {
     var s = JSON.stringify(a);
@@ -201,6 +215,18 @@ h1{margin:0;max-width:820px;font-size:34px;line-height:1.2;font-weight:700;color
   var ticker = null;
   var failed = false;
   var last = { state: null, info: null };
+  var deadline = attempt.start + FAIL_AFTER_MS;
+  var pending = [];
+  function expired() { return now() >= deadline; }
+
+  // fetch with a bound: cancelled after REQUEST_MS, or when the page gives up.
+  function send(url, opts) {
+    var ctrl = window.AbortController ? new AbortController() : null;
+    if (ctrl) { opts.signal = ctrl.signal; pending.push(ctrl); }
+    var bound = setTimeout(function () { if (ctrl) ctrl.abort(); }, REQUEST_MS);
+    function done() { clearTimeout(bound); pending = pending.filter(function (c) { return c !== ctrl; }); }
+    return { ctrl: ctrl, done: done, response: fetch(url, opts) };
+  }
 
   function setProgress(fraction) {
     if (fraction === null) {
@@ -237,20 +263,26 @@ h1{margin:0;max-width:820px;font-size:34px;line-height:1.2;font-weight:700;color
 
   function wake() {
     try {
-      fetch(WAKE_URL, { method: "POST", cache: "no-store" }).catch(function () {});
+      var req = send(WAKE_URL, { method: "POST", cache: "no-store" });
+      req.response.then(req.done, req.done);
     } catch (e) { /* the next check retries */ }
   }
 
   function fail() {
+    if (failed) return;
     failed = true;
     clearTimeout(timer);
+    clearTimeout(deadlineTimer);
     clearInterval(ticker);
+    pending.forEach(function (c) { try { c.abort(); } catch (e) { /* already done */ } });
+    pending = [];
     el("waking").hidden = true;
     el("failed").hidden = false;
     el("failed-title").focus();
   }
 
   function enter() {
+    if (failed || expired()) { fail(); return; }
     attempt.entries += 1;
     attempt.lastEntry = now();
     attempt.seen = now();
@@ -262,13 +294,16 @@ h1{margin:0;max-width:820px;font-size:34px;line-height:1.2;font-weight:700;color
     if (failed) return;
     attempt.seen = now();
     save(attempt);
-    if (now() - attempt.start >= FAIL_AFTER_MS) { fail(); return; }
-    var ask = CONTROLLER ? fetch(STATUS_URL, { cache: "no-store" }) : Promise.reject(new Error("no controller"));
-    ask
+    if (expired()) { fail(); return; }
+    var req = CONTROLLER ? send(STATUS_URL, { cache: "no-store" }) : null;
+    (req ? req.response : Promise.reject(new Error("no controller")))
       .then(function (r) { return r.ok ? r.json() : null; })
       .catch(function () { return null; })
       .then(function (info) {
+        if (req) req.done();
         if (failed) return;
+        // An answer that arrives after the deadline is not acted on.
+        if (expired()) { fail(); return; }
         var state = info && typeof info.state === "string" ? info.state : null;
         last = { state: state, info: info };
         render(state, info);
@@ -291,8 +326,14 @@ h1{margin:0;max-width:820px;font-size:34px;line-height:1.2;font-weight:700;color
   });
 
   render(null, null);
-  // Between checks, keep the elapsed time and the bar moving from the last status.
-  ticker = setInterval(function () { if (!failed) render(last.state, last.info); }, 1000);
+  // The deadline does not wait for any request: it has its own timer, and the ticker,
+  // which keeps the elapsed time and the bar moving between checks, checks it too.
+  var deadlineTimer = setTimeout(fail, Math.max(0, deadline - now()));
+  ticker = setInterval(function () {
+    if (failed) return;
+    if (expired()) { fail(); return; }
+    render(last.state, last.info);
+  }, 1000);
   poll(true);
 })();
 </script>

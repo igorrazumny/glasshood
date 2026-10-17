@@ -38,6 +38,25 @@ def test_gives_up_after_three_minutes_with_a_way_to_ask_for_help():
     assert 'href="https://glasshood.ai/contact/"' in failed and 'id="retry"' in failed
 
 
+def test_the_deadline_does_not_wait_for_the_network():
+    # Its own timer, not the next poll: a request that never finishes cannot hold it off.
+    assert "setTimeout(fail, Math.max(0, deadline - now()))" in _SCRIPT
+    assert "if (expired()) { fail(); return; }" in _SCRIPT.split("ticker = setInterval", 1)[1]
+    # Every request is bounded, headers and body, and cancelled when the page gives up.
+    assert "var REQUEST_MS = 10000;" in _SCRIPT and "new AbortController()" in _SCRIPT
+    assert "ctrl.abort()" in _SCRIPT and "c.abort()" in _SCRIPT.split("function fail()", 1)[1]
+    # A late answer is not acted on, and nobody is taken in after the deadline.
+    answer = _SCRIPT.split("if (req) req.done();", 1)[1]
+    assert answer.index("if (expired())") < answer.index("render(state, info)")
+    assert "if (failed || expired()) { fail(); return; }" in _SCRIPT.split("function enter()", 1)[1]
+
+
+def test_a_stored_attempt_is_used_only_if_it_makes_sense():
+    assert "function valid(a)" in _SCRIPT and "isFinite(v)" in _SCRIPT
+    load = _SCRIPT.split("function load()", 1)[1].split("function save", 1)[0]
+    assert "valid(a)" in load
+
+
 def test_goes_only_to_a_path_on_its_own_site():
     assert 'get("next")' in _SCRIPT
     assert "u.origin !== location.origin" in _SCRIPT and "u.pathname === location.pathname" in _SCRIPT
