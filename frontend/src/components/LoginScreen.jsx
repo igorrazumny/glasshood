@@ -2,7 +2,7 @@
 // Purpose: Login gate — demo mode (no creds) + live mode (email/password/SSO)
 
 import { useState, useEffect } from 'react'
-import { useAuth0 } from '@auth0/auth0-react'
+import { useAuthSession } from './Auth0ProviderWrapper'
 import { Eye, EyeOff } from 'lucide-react'
 import { login } from '../utils/api'
 
@@ -11,7 +11,7 @@ const CV_BLUE = '#5BD3F4'
 const GH_ORANGE = '#E87040'
 
 export default function LoginScreen({ onLogin, onDemo, prefillDemo, setPrefillDemo }) {
-  const { loginWithRedirect } = useAuth0()
+  const { enabled: ssoEnabled, loginWithRedirect } = useAuthSession()
   const [loginEmail, setLoginEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -127,24 +127,28 @@ export default function LoginScreen({ onLogin, onDemo, prefillDemo, setPrefillDe
         >
           {loading ? 'Authenticating...' : 'Login'}
         </button>
-        <div className="flex items-center gap-2 my-4">
-          <div className="flex-1 border-t border-border dark:border-purple-700" />
-          <span className="text-gray-500 text-xs">or</span>
-          <div className="flex-1 border-t border-border dark:border-purple-700" />
-        </div>
-        <button
-          type="button"
-          onClick={() => loginWithRedirect()}
-          className="w-full bg-surface dark:bg-purple-900 border border-border dark:border-purple-700 text-gray-300 rounded py-2 text-sm font-medium hover:border-gray-500 transition-colors flex items-center justify-center gap-2"
-        >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M15.68 8.18c0-.567-.05-1.113-.145-1.636H8v3.094h4.305a3.68 3.68 0 0 1-1.597 2.415v2.007h2.585c1.513-1.393 2.387-3.444 2.387-5.88Z" fill="#4285F4"/>
-            <path d="M8 16c2.16 0 3.97-.716 5.293-1.94l-2.585-2.008c-.716.48-1.633.763-2.708.763-2.083 0-3.846-1.407-4.476-3.298H.862v2.073A7.997 7.997 0 0 0 8 16Z" fill="#34A853"/>
-            <path d="M3.524 9.517A4.81 4.81 0 0 1 3.273 8c0-.526.09-1.037.25-1.517V4.41H.863A7.997 7.997 0 0 0 0 8c0 1.29.31 2.512.862 3.59l2.662-2.073Z" fill="#FBBC05"/>
-            <path d="M8 3.185c1.174 0 2.229.404 3.058 1.196l2.294-2.294C11.966.792 10.156 0 8 0A7.997 7.997 0 0 0 .862 4.41l2.662 2.073C4.154 4.592 5.917 3.185 8 3.185Z" fill="#EA4335"/>
-          </svg>
-          Sign in with Corporate SSO
-        </button>
+        {ssoEnabled && (
+          <>
+            <div className="flex items-center gap-2 my-4">
+              <div className="flex-1 border-t border-border dark:border-purple-700" />
+              <span className="text-gray-500 text-xs">or</span>
+              <div className="flex-1 border-t border-border dark:border-purple-700" />
+            </div>
+            <button
+              type="button"
+              onClick={() => loginWithRedirect()}
+              className="w-full bg-surface dark:bg-purple-900 border border-border dark:border-purple-700 text-gray-300 rounded py-2 text-sm font-medium hover:border-gray-500 transition-colors flex items-center justify-center gap-2"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M15.68 8.18c0-.567-.05-1.113-.145-1.636H8v3.094h4.305a3.68 3.68 0 0 1-1.597 2.415v2.007h2.585c1.513-1.393 2.387-3.444 2.387-5.88Z" fill="#4285F4"/>
+                <path d="M8 16c2.16 0 3.97-.716 5.293-1.94l-2.585-2.008c-.716.48-1.633.763-2.708.763-2.083 0-3.846-1.407-4.476-3.298H.862v2.073A7.997 7.997 0 0 0 8 16Z" fill="#34A853"/>
+                <path d="M3.524 9.517A4.81 4.81 0 0 1 3.273 8c0-.526.09-1.037.25-1.517V4.41H.863A7.997 7.997 0 0 0 0 8c0 1.29.31 2.512.862 3.59l2.662-2.073Z" fill="#FBBC05"/>
+                <path d="M8 3.185c1.174 0 2.229.404 3.058 1.196l2.294-2.294C11.966.792 10.156 0 8 0A7.997 7.997 0 0 0 .862 4.41l2.662 2.073C4.154 4.592 5.917 3.185 8 3.185Z" fill="#EA4335"/>
+              </svg>
+              Sign in with Corporate SSO
+            </button>
+          </>
+        )}
         <div className="mt-4">
           <button type="button" onClick={handleExploreDemo}
             className="w-full bg-surface dark:bg-purple-900 border border-border dark:border-purple-700 text-gray-300 rounded py-2 text-base font-medium hover:border-gray-500 transition-colors">

@@ -2,7 +2,7 @@
 // Purpose: Root component — Auth0 + legacy login gate + dashboard, ?demo for demo mode
 
 import { useState, useEffect } from 'react'
-import { useAuth0 } from '@auth0/auth0-react'
+import { useAuthSession } from './components/Auth0ProviderWrapper'
 import LoginScreen from './components/LoginScreen'
 import Dashboard from './components/Dashboard'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -28,7 +28,7 @@ export default function App() {
   const initial = getInitialState()
   const [mode, setMode] = useState(initial.mode)
   const [prefillDemo, setPrefillDemo] = useState(initial.prefillDemo)
-  const { isAuthenticated, isLoading, user, getAccessTokenSilently, logout: auth0Logout } = useAuth0()
+  const { isAuthenticated, isLoading, user, getAccessTokenSilently, logout: auth0Logout } = useAuthSession()
 
   // When Auth0 authenticates, switch to live mode and wire up token getter
   useEffect(() => {

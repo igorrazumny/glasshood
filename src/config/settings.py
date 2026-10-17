@@ -48,8 +48,9 @@ GLASSHOOD_LOGIN = os.getenv("GLASSHOOD_LOGIN", "admin@example.com")
 GLASSHOOD_API_KEY = os.getenv("GLASSHOOD_API_KEY", "")
 GLASSHOOD_ADMIN_ROLE = os.getenv("GLASSHOOD_ADMIN_ROLE", "true").lower() == "true"
 
-# Auth0 (SSO / corporate login)
-AUTH0_DOMAIN = os.getenv("AUTH0_DOMAIN", "your-tenant.us.auth0.com")
+# Auth0 (SSO / corporate login) — REQ-GHA-017: parked. Off unless AUTH0_DOMAIN is
+# set; with it empty the backend never validates against, or contacts, Auth0.
+AUTH0_DOMAIN = os.getenv("AUTH0_DOMAIN", "")
 AUTH0_CLIENT_ID = os.getenv("AUTH0_CLIENT_ID", "YOUR_AUTH0_CLIENT_ID")
 AUTH0_AUDIENCE = os.getenv("AUTH0_AUDIENCE", "https://api.9robots.ai")
 
