@@ -172,10 +172,90 @@ def test_build_serves_the_architecture_page_from_one_set_of_files(tmp_path):
     assert (out / "site/index.html").read_bytes() == (_PUB / "index.html").read_bytes()
 
 
-def test_build_refuses_an_email_address(tmp_path):
+def _repo_copy(tmp_path):
+    """A disposable copy of what build.sh reads, plus one more repository folder."""
     src = tmp_path / "repo"
     for d in ("website", "architecture"):
         shutil.copytree(ROOT / d, src / d, ignore=shutil.ignore_patterns("out", ".DS_Store"))
+    (src / "docs").mkdir()
+    (src / "docs/keep.md").write_text("keep", encoding="utf-8")
+    return src
+
+
+def _build(src, *target):
+    return subprocess.run(["bash", str(src / "website/build.sh"), *map(str, target)], capture_output=True, text=True)
+
+
+def _files(path):
+    return {str(p.relative_to(path)): p.read_bytes() for p in sorted(path.rglob("*")) if p.is_file()}
+
+
+def test_build_refuses_an_email_address(tmp_path):
+    src = _repo_copy(tmp_path)
     (src / "website/public/contact/index.html").write_text("<p>write to someone@example.com</p>", encoding="utf-8")
-    r = subprocess.run(["bash", str(src / "website/build.sh"), str(tmp_path / "out")], capture_output=True, text=True)
+    r = _build(src, tmp_path / "out")
     assert r.returncode == 1 and "email address" in r.stderr and "contact/index.html" in r.stderr, r.stderr
+
+
+# The output folder is replaced on every build, so a target that is, or is inside, what the
+# build reads must be refused before anything is deleted, whatever the path looks like.
+_REFUSED = {
+    "the repository": lambda s: s,
+    "the repository with a slash": lambda s: f"{s}/",
+    "the repository by ..": lambda s: f"{s}/website/..",
+    "the folder above the repository": lambda s: s.parent,
+    "the website sources": lambda s: s / "website",
+    "the website sources with a slash": lambda s: f"{s}/website/",
+    "the public sources": lambda s: s / "website/public",
+    "a new folder inside the sources": lambda s: s / "website/public/new",
+    "the architecture sources": lambda s: s / "architecture",
+    "another repository folder": lambda s: s / "docs",
+}
+
+
+@pytest.mark.parametrize("name", _REFUSED)
+def test_build_refuses_its_own_sources_and_leaves_them_intact(tmp_path, name):
+    src = _repo_copy(tmp_path)
+    before = _files(tmp_path)
+    r = _build(src, _REFUSED[name](src))
+    assert r.returncode == 1 and "refusing to build" in r.stderr, r.stderr
+    assert _files(tmp_path) == before, "a refused build must not change any file"
+
+
+def test_build_refuses_an_alias_of_the_repository(tmp_path):
+    src = _repo_copy(tmp_path)
+    alias = tmp_path / "alias"
+    alias.symlink_to(src, target_is_directory=True)
+    before = _files(src)
+    for target in (alias, f"{alias}/", alias / "website", alias / "architecture"):
+        r = _build(src, target)
+        assert r.returncode == 1 and "refusing to build" in r.stderr, (target, r.stderr)
+    assert _files(src) == before and alias.is_symlink()
+
+
+def test_build_refuses_what_it_did_not_make(tmp_path):
+    src = _repo_copy(tmp_path)
+    other = tmp_path / "other"
+    other.mkdir()
+    (other / "keep.txt").write_text("keep", encoding="utf-8")
+    plain = tmp_path / "file.txt"
+    plain.write_text("keep", encoding="utf-8")
+    link = tmp_path / "link"
+    link.symlink_to(plain)
+    for target in (other, plain, link):
+        r = _build(src, target)
+        assert r.returncode == 1 and "refusing to build" in r.stderr, (target, r.stderr)
+    assert (other / "keep.txt").read_text() == "keep" and plain.read_text() == "keep" and link.is_symlink()
+
+
+def test_build_replaces_only_its_own_output(tmp_path):
+    src = _repo_copy(tmp_path)
+    out = tmp_path / "out"
+    assert _build(src, out).returncode == 0 and (out / ".glasshood-site-build").is_file()
+    (out / "site/stale.txt").write_text("old", encoding="utf-8")
+    assert _build(src, out).returncode == 0 and not (out / "site/stale.txt").exists()
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    assert _build(src, empty).returncode == 0 and (empty / "site/index.html").is_file()
+    # the default, website/out
+    assert _build(src).returncode == 0 and (src / "website/out/architecture/index.html").is_file()
