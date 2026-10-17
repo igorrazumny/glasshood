@@ -1,0 +1,19 @@
+{
+  "trailingSlash": "auto",
+  "routes": [
+    { "route": "/demo*", "redirect": "https://app.glasshood.ai/demo", "statusCode": 302 },
+    { "route": "/view*", "redirect": "https://app.glasshood.ai/demo", "statusCode": 302 }
+  ],
+  "responseOverrides": {
+    "404": { "rewrite": "/404.html" }
+  },
+  "globalHeaders": {
+    "Cache-Control": "no-cache, must-revalidate",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "X-Frame-Options": "DENY"
+  },
+  "mimeTypes": {
+    ".woff2": "font/woff2"
+  }
+}

@@ -24,3 +24,4 @@ gcp-cred-config.json
 # Real topology manifests (real infra identifiers) — local only; see platform.yaml.example
 config/manifests/platform.yaml
 config/manifests/_staging/
+website/out/

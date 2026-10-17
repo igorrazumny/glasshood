@@ -1,0 +1,47 @@
+# Builds glasshood.ai and architecture.glasshood.ai from website/ and architecture/,
+# deploys each to its Azure Static Web App, then checks them as served (REQ-GHA-018).
+# Each app's deployment token is a repository secret.
+name: Website
+
+on:
+  push:
+    branches: [main]
+    paths: ["website/**", "architecture/**", ".github/workflows/website.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: website
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build
+        run: bash website/build.sh
+
+      - name: Deploy glasshood.ai
+        uses: Azure/static-web-apps-deploy@1a947af9992250f3bc2e68ad0754c0b0c11566c9 # v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.SWA_TOKEN_SITE }}
+          action: upload
+          app_location: website/out/site
+          skip_app_build: true
+          skip_api_build: true
+
+      - name: Deploy architecture.glasshood.ai
+        uses: Azure/static-web-apps-deploy@1a947af9992250f3bc2e68ad0754c0b0c11566c9 # v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.SWA_TOKEN_ARCHITECTURE }}
+          action: upload
+          app_location: website/out/architecture
+          skip_app_build: true
+          skip_api_build: true
+
+      - name: Check what is served
+        run: bash website/verify.sh

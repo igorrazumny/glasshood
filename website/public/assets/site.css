@@ -1,0 +1,91 @@
+/* glasshood.ai — the public site (REQ-GHA-018 clause 1), in the family website design:
+   the same tokens, type and layout as testrobin.ai. Plain CSS, no build step. */
+
+@font-face{font-family:'Lato';font-style:normal;font-weight:400;font-display:swap;
+  src:url(/assets/fonts/lato-400.woff2) format('woff2')}
+@font-face{font-family:'Lato';font-style:normal;font-weight:700;font-display:swap;
+  src:url(/assets/fonts/lato-700.woff2) format('woff2')}
+
+:root{
+  --blue:#0c41cd; --navy:#000055; --orange:#e75a1e;
+  --bg:#ffffff; --text:#1a1a2e; --sub:#555555; --faint:#8a90a0;
+  --border:#e0e2e8; --max:1120px;
+}
+
+*{box-sizing:border-box}
+html{overflow-y:scroll}
+body{margin:0;background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;
+  font-size:16px;line-height:1.6;min-height:100vh;display:flex;flex-direction:column;overflow-x:clip}
+main{flex:1}
+a{color:var(--navy);text-decoration:none}
+a:hover{text-decoration:underline}
+/* Attribution is in the contact form's footnote, as Google's terms allow. */
+.grecaptcha-badge{visibility:hidden!important}
+
+/* ---- Nav: one row from 768 px up. Below that, the logo and Open app share the first
+   row and the page links wrap to a second, so nothing is squeezed (the logo never
+   shrinks). The app's state sits left of Open app from 768 px up, and under it below. */
+.nav{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.9);
+  -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border-bottom:1px solid rgba(0,0,0,.05)}
+.nav-in{max-width:var(--max);margin:0 auto;padding:12px 24px;display:flex;flex-wrap:wrap;
+  align-items:flex-start;row-gap:12px}
+.nav-logo{flex-shrink:0;display:block}
+.nav-logo img{display:block;height:40px;width:auto}
+.nav-links{order:3;width:100%;display:flex;align-items:center;gap:24px}
+.nav-links a{font-size:15px;font-weight:500;color:var(--sub);transition:color .15s}
+.nav-links a:hover{color:var(--navy);text-decoration:none}
+.nav-links a[aria-current="page"]{color:var(--navy)}
+.nav-app{margin-left:auto;flex-shrink:0;display:flex;flex-direction:column-reverse;align-items:flex-end;gap:4px}
+.nav-open{white-space:nowrap;font-size:15px;font-weight:500;padding:8px 16px;border-radius:12px;
+  border:1px solid rgba(0,0,0,.1);color:var(--sub);transition:background-color .15s,border-color .15s,color .15s}
+.nav-open:hover{background:var(--orange);border-color:var(--orange);color:#fff;text-decoration:none}
+@media (min-width:768px){
+  .nav-in{height:64px;padding-top:0;padding-bottom:0;flex-wrap:nowrap;align-items:center}
+  .nav-links{order:0;width:auto;margin-left:auto;gap:28px}
+  .nav-app{margin-left:28px;flex-direction:row;align-items:center;gap:16px}
+}
+
+/* ---- The app's state (REQ-GHA-018 clause 1), filled in by /architecture/app-state.js */
+.app-state{display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:13px;color:var(--sub)}
+.app-state[hidden]{display:none}
+.app-state-dot{width:8px;height:8px;border-radius:50%;background:#9aa3b2}
+.app-state[data-state="waking"] .app-state-dot,
+.app-state[data-state="going-to-sleep"] .app-state-dot{background:var(--orange)}
+.app-state[data-state="awake"] .app-state-dot{background:#1f9d55}
+
+/* ---- Page body */
+.wrap{max-width:var(--max);margin:0 auto;padding:0 24px;width:100%}
+.hero{padding:80px 0 56px}
+.hero h1{margin:0;max-width:820px;font-size:34px;line-height:1.2;font-weight:700;color:var(--navy)}
+.lead{margin:20px 0 0;max-width:760px;font-size:19px;line-height:1.55;color:var(--sub)}
+.actions{margin-top:32px;display:flex;flex-wrap:wrap;gap:16px}
+.btn{display:inline-block;padding:12px 20px;border-radius:12px;border:1px solid rgba(0,0,0,.1);background:#fff;
+  font:inherit;font-size:19px;line-height:1.6;color:var(--sub);cursor:pointer;
+  transition:background-color .15s,border-color .15s,color .15s,box-shadow .15s}
+.btn:hover{background:var(--orange);border-color:var(--orange);color:#fff;text-decoration:none;
+  box-shadow:0 10px 15px -3px rgba(0,0,0,.1),0 4px 6px -4px rgba(0,0,0,.1)}
+.btn:disabled{opacity:.5;cursor:default}
+.btn:disabled:hover{background:#fff;border-color:rgba(0,0,0,.1);color:var(--sub);box-shadow:none}
+
+.cards{padding-bottom:96px;display:grid;gap:20px}
+@media (min-width:768px){.cards{grid-template-columns:repeat(3,1fr)}}
+.card{border-radius:12px;border:1px solid var(--border);background:#fff;padding:24px;
+  transition:transform .15s,box-shadow .15s,border-color .15s}
+.card:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.06);border-color:var(--orange)}
+.card h2{margin:0;font-size:20px;line-height:1.4;font-weight:700;color:var(--text)}
+.card p{margin:12px 0 0;font-size:16.5px;line-height:1.55;color:var(--sub)}
+
+.page{padding-top:64px;padding-bottom:64px}
+.page h1{margin:0;font-size:28px;line-height:1.3;font-weight:700;color:var(--navy)}
+.page .lead{margin:16px 0 32px;max-width:560px}
+
+/* ---- Contact form */
+.form{max-width:560px;display:flex;flex-direction:column;gap:16px}
+.field{width:100%;border-radius:12px;border:1px solid var(--border);background:#fff;padding:12px 16px;
+  font:inherit;font-size:16.5px;line-height:1.5;color:var(--text);outline:none}
+.field:focus{border-color:var(--navy)}
+textarea.field{resize:vertical}
+.form .btn{align-self:flex-start}
+.form-note{margin:0;font-size:13px;line-height:1.5;color:var(--faint)}
+.form-note a{color:inherit;text-decoration:underline}
+.form-status{margin:0;min-height:24px;font-size:16px;color:var(--sub)}

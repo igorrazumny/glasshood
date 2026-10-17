@@ -173,3 +173,12 @@ footer{margin:48px 0 36px;padding-top:20px;border-top:1px solid var(--border);fo
 .cv-cta-html::before{content:"";position:absolute;inset:-3px -8px;background:#e75a1e;border-radius:6px;opacity:0;transition:opacity .15s;z-index:-1}
 .cv-html-link:hover .cv-cta-html,.cv-html-link:focus-visible .cv-cta-html{color:#fff}
 .cv-html-link:hover .cv-cta-html::before,.cv-html-link:focus-visible .cv-cta-html::before{opacity:1}
+/* The app's state next to "Launch live demo" (REQ-GHA-018 clause 1), as in the site's nav;
+   filled in by app-state.js. */
+.app-state{display:inline-flex;align-items:center;gap:6px;margin-left:16px;vertical-align:middle;
+  font-size:13px;color:var(--sub);white-space:nowrap}
+.app-state[hidden]{display:none}
+.app-state-dot{width:8px;height:8px;border-radius:50%;background:#9aa3b2}
+.app-state[data-state="waking"] .app-state-dot,
+.app-state[data-state="going-to-sleep"] .app-state-dot{background:var(--orange)}
+.app-state[data-state="awake"] .app-state-dot{background:#1f9d55}
