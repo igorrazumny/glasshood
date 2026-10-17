@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contact — GlassHood</title>
+<meta name="description" content="Get in touch with the GlassHood team.">
+<link rel="canonical" href="https://glasshood.ai/contact/">
+<link rel="icon" href="/assets/icon-32.png">
+<link rel="apple-touch-icon" href="/architecture/img/glasshood-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="GlassHood">
+<meta property="og:url" content="https://glasshood.ai/contact/">
+<meta property="og:title" content="Contact — GlassHood">
+<meta property="og:description" content="Get in touch with the GlassHood team.">
+<meta property="og:image" content="https://glasshood.ai/assets/glasshood-logo-full.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preload" href="/assets/fonts/lato-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/site.css">
+</head>
+<body>
+<nav class="nav" aria-label="Main">
+  <div class="nav-in">
+    <a href="/" class="nav-logo" aria-label="GlassHood — home"><img src="/assets/logo.png" alt="GlassHood" width="230" height="80"></a>
+    <div class="nav-links">
+      <a href="/">Home</a>
+      <a href="/architecture/">Architecture</a>
+      <a href="/contact/" aria-current="page">Contact</a>
+    </div>
+    <div class="nav-app">
+      <span class="app-state" data-app-state role="status" hidden><span class="app-state-dot" aria-hidden="true"></span><span class="app-state-label"></span></span>
+      <a class="nav-open" href="https://app.glasshood.ai">Open app</a>
+    </div>
+  </div>
+</nav>
+
+<main class="wrap page">
+  <h1>Contact</h1>
+  <p class="lead">Questions about GlassHood? Send us a message and we&rsquo;ll get back to you.</p>
+  <form id="contact-form" class="form">
+    <input id="contact-name" class="field" name="name" required placeholder="Name" aria-label="Name" autocomplete="name">
+    <input id="contact-email" class="field" name="email" type="email" required placeholder="Email" aria-label="Email" autocomplete="email">
+    <textarea id="contact-message" class="field" name="message" required rows="6" placeholder="How can we help?" aria-label="Message"></textarea>
+    <button type="submit" class="btn">Send message</button>
+    <p class="form-note">
+      This site is protected by reCAPTCHA and the Google
+      <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a> and
+      <a href="https://policies.google.com/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a> apply.
+    </p>
+    <p id="contact-status" class="form-status" role="status"></p>
+  </form>
+</main>
+<script src="/assets/contact.js" defer></script>
+<script src="/architecture/app-state.js" defer></script>
+</body>
+</html>

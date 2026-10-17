@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GlassHood — Cross-Cloud AI Infrastructure Monitoring</title>
+<meta name="description" content="Live AI-infrastructure monitoring on Azure, reading a Google Cloud estate cross-cloud via Workload Identity Federation — no stored keys.">
+<link rel="canonical" href="https://glasshood.ai/">
+<link rel="icon" href="/assets/icon-32.png">
+<link rel="apple-touch-icon" href="/architecture/img/glasshood-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="GlassHood">
+<meta property="og:url" content="https://glasshood.ai/">
+<meta property="og:title" content="GlassHood — Cross-Cloud AI Infrastructure Monitoring">
+<meta property="og:description" content="Live AI-infrastructure monitoring on Azure, reading a Google Cloud estate cross-cloud via Workload Identity Federation — no stored keys.">
+<meta property="og:image" content="https://glasshood.ai/assets/glasshood-logo-full.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preload" href="/assets/fonts/lato-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/site.css">
+<script>
+  // Older addresses of the live demo, glasshood.ai/?demo and /?view, go to the demo in the
+  // app (the /demo and /view paths are forwarded by the host, staticwebapp.config.json).
+  try {
+    var q = new URLSearchParams(location.search);
+    if (q.has('demo') || q.has('view')) location.replace('https://app.glasshood.ai/demo');
+  } catch (e) {}
+</script>
+</head>
+<body>
+<nav class="nav" aria-label="Main">
+  <div class="nav-in">
+    <a href="/" class="nav-logo" aria-label="GlassHood — home"><img src="/assets/logo.png" alt="GlassHood" width="230" height="80"></a>
+    <div class="nav-links">
+      <a href="/" aria-current="page">Home</a>
+      <a href="/architecture/">Architecture</a>
+      <a href="/contact/">Contact</a>
+    </div>
+    <div class="nav-app">
+      <span class="app-state" data-app-state role="status" hidden><span class="app-state-dot" aria-hidden="true"></span><span class="app-state-label"></span></span>
+      <a class="nav-open" href="https://app.glasshood.ai">Open app</a>
+    </div>
+  </div>
+</nav>
+
+<main class="wrap">
+  <section class="hero">
+    <h1>Cross-cloud AI-infrastructure monitoring for regulated systems.</h1>
+    <p class="lead">
+      GlassHood is a cross-cloud monitoring engine for regulated systems: live topology reconciled
+      against declared design, with compliance evidence derived from what it observes. It runs on
+      Azure and reads a Google Cloud estate through Workload Identity Federation &mdash; no stored keys.
+    </p>
+    <div class="actions">
+      <a class="btn" href="https://app.glasshood.ai/demo">Live demo &rarr;</a>
+      <a class="btn" href="/architecture/">See the architecture &rarr;</a>
+    </div>
+  </section>
+
+  <!-- The explainer goes here once it exists (REQ-GHA-018 clause 1). -->
+
+  <section class="cards" aria-label="What GlassHood does">
+    <div class="card">
+      <h2>Read-only by design</h2>
+      <p>GlassHood installs nothing in the system it watches. Every call toward the monitored system is
+        list, get or describe, made with a short-lived, viewer-only federated token.</p>
+    </div>
+    <div class="card">
+      <h2>Live topology against declared design</h2>
+      <p>Live discovery is merged with declarative YAML manifests into one graph, rebuilt every cycle,
+        so the gap between what was designed and what is actually running is visible.</p>
+    </div>
+    <div class="card">
+      <h2>Compliance as a byproduct of observation</h2>
+      <p>Evidence is derived from what the engine observed, not self-attestation &mdash; aligned to
+        Annex 11 / ALCOA+ / Part 11.</p>
+    </div>
+  </section>
+</main>
+<script src="/architecture/app-state.js" defer></script>
+</body>
+</html>
