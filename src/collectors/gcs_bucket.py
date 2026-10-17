@@ -5,6 +5,8 @@ import time
 import logging
 import threading
 
+from src.config.settings import BACKGROUND_POLL_INTERVAL
+
 logger = logging.getLogger(__name__)
 
 # Buckets to monitor: id -> bucket_name
@@ -16,7 +18,7 @@ _stats: dict = {}  # {bucket_id: {object_count, total_size_bytes, ...}}
 _lock = threading.Lock()
 _last_poll: float = 0
 
-POLL_INTERVAL = 300  # 5 minutes
+POLL_INTERVAL = BACKGROUND_POLL_INTERVAL
 
 
 def _query_bucket(bucket_name: str) -> dict:

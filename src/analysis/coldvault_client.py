@@ -15,9 +15,15 @@ from src.config.settings import (
     ANALYSIS_INTERVAL, ANALYSIS_COOLDOWN, ANALYSIS_ESCALATION_THRESHOLD,
 )
 
-# Platform API for inference (preferred over ColdVault direct)
-PLATFORM_URL = os.getenv("PLATFORM_URL", "https://api.9robots.ai")
+# Platform API for inference (preferred over ColdVault direct).
+# REQ-GHA-016: no default host — the platform this pointed at is retired. The
+# platform path is used only when BOTH the URL and the key are configured.
+PLATFORM_URL = os.getenv("PLATFORM_URL", "")
 PLATFORM_KEY = os.getenv("NINE_ROBOTS_PLATFORM_KEY", "")
+
+
+def _platform_enabled() -> bool:
+    return bool(PLATFORM_URL and PLATFORM_KEY)
 
 logger = logging.getLogger(__name__)
 
@@ -78,8 +84,8 @@ def _parse_response(raw_text: str) -> dict:
 def _call_platform(message: str, model: str = "gemini-3.1-flash-lite-preview",
                    timeout: float = 120.0) -> str:
     """Call Platform /api/v1/inference for AI analysis."""
-    if not PLATFORM_KEY:
-        raise ValueError("NINE_ROBOTS_PLATFORM_KEY not set")
+    if not _platform_enabled():
+        raise ValueError("Platform not configured (PLATFORM_URL and NINE_ROBOTS_PLATFORM_KEY)")
     resp = httpx.post(
         f"{PLATFORM_URL}/api/v1/inference",
         headers={"Authorization": f"Bearer {PLATFORM_KEY}"},
@@ -156,14 +162,14 @@ def analyze(topology_data: dict) -> dict:
     """Run ColdVault API analysis on topology state."""
     global _cached_analysis, _last_run
 
-    if not PLATFORM_KEY and not COLDVAULT_API_KEY:
+    if not _platform_enabled() and not COLDVAULT_API_KEY:
         with _lock:
             if _cached_analysis.get("timestamp"):
                 _cached_analysis["stale"] = True
                 return _cached_analysis
             _cached_analysis = {
                 "score": None,
-                "summary": "No API key configured (NINE_ROBOTS_PLATFORM_KEY or COLDVAULT_API_KEY)",
+                "summary": "Analysis backend not configured (PLATFORM_URL with NINE_ROBOTS_PLATFORM_KEY, or COLDVAULT_API_KEY)",
                 "issues": ["No API key"],
                 "recommendations": [],
                 "timestamp": None,
@@ -185,7 +191,7 @@ def analyze(topology_data: dict) -> dict:
         result = None
 
         # Prefer Platform API (fast, unified endpoint)
-        if PLATFORM_KEY:
+        if _platform_enabled():
             PLATFORM_MODELS = [
                 "gemini-3.1-flash-lite-preview",
                 "gpt-5.4",
@@ -326,7 +332,7 @@ Respond in JSON: {{"score": N, "summary": "...", "issues": [...], "recommendatio
 def _do_node_analysis(node_id: str, node_data: dict, connections: list):
     """Run node analysis in background thread. Updates cache when done."""
     try:
-        if not PLATFORM_KEY and not COLDVAULT_API_KEY:
+        if not _platform_enabled() and not COLDVAULT_API_KEY:
             return
 
         message = NODE_PROMPT.format(
@@ -337,7 +343,7 @@ def _do_node_analysis(node_id: str, node_data: dict, connections: list):
         parsed = None
 
         # Prefer Platform API
-        if PLATFORM_KEY:
+        if _platform_enabled():
             for model in ["gemini-3.1-flash-lite-preview", "gpt-5.4"]:
                 try:
                     raw = _call_platform(message, model=model)
