@@ -191,3 +191,14 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Out of scope:** scaling to zero or a smaller size; repointing the manifest at ColdVault production; any change to what the dashboard shows other than freshness.
 - **Status:** in progress. **Cadence and retired hosts: live 2026-10-17** — PR #6 (peer proceed for head 8f7d644, receipt in the PR) deployed as image wif37, revision glasshood--0000035, with BACKGROUND_POLL_INTERVAL=600 and PLATFORM_INFERENCE_URL removed. Size and replica count unchanged (0.5 vCPU / 1 Gi, min 1 / max 1). Live logs show ColdVault health and manifest discovery polling 10 minutes apart and no calls to api.coldvault.ai, api.9robots.ai or any inference endpoint; AI analysis now reports "not configured". Rollback: revision glasshood--0000034 / image wif36.
   - **Outstanding:** (1) **Registry move** — not started; needs package write permission on the GitHub account. (2) **Honest freshness, two pre-existing gaps found in review:** discovered nodes take `last_checked` from the request time, not the collector's observation time (`src/api/routes/topology.py`); and with no analysis backend, per-node analysis answers "in progress" forever, so the node modal keeps re-asking every 10 s. (3) **Measured result** — first full month is November 2026.
+
+## REQ-GHA-017: GlassHood login shows only sign-in options that work, with Auth0 switched off
+- **Goal:** The GlassHood login screen offers only working ways in: the password login and "Live demo". The Auth0 "Sign in with Corporate SSO" option is not shown, and neither the browser nor the backend contacts Auth0.
+- **Why:** Owner, 2026-10-17: the Auth0 account is being cancelled to save CHF 35 a month; the Auth0 integration was proven and is good enough to park. The live button has pointed at a placeholder tenant since the June sanitization, so it already fails for anyone who clicks it.
+- **Target-state acceptance criteria:**
+  - **No dead option.** The login screen shows no Auth0 or "Corporate SSO" option. Password login and "Live demo" look and behave as today.
+  - **No Auth0 traffic.** Loading the app, logging in, using the dashboard and logging out make no request to any Auth0 host, in the browser or on the server.
+  - **Parked, not deleted.** The Auth0 integration stays in the repository. Turning it back on needs only configuration and a rebuild, not a code change. While it is off, nothing tries to use it.
+  - **Sessions unaffected.** Existing password sessions, token refresh and logout keep working. Read-only "Live demo" access is unchanged.
+- **Out of scope:** "Sign in with Microsoft" (REQ-GHA-001, which stays planned) and any other change to authentication.
+- **Status:** planned (not started).
