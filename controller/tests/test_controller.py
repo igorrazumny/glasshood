@@ -8,6 +8,8 @@ from wake.api import Api, Config
 from wake.reconciler import Reconciler
 from wake.state import control_of, entity_of, intent_of
 
+from types import SimpleNamespace
+
 from .fakes import Clock, FakeAzure, Lease, MemStore
 
 ORIGIN = "https://app.glasshood.ai"
@@ -253,8 +255,164 @@ def test_sleep_never_deletes_a_newer_generations_message():
     api.sleep()
     g = intent(store).generation
     az.put_message(g + 5)                                  # from an intent not yet recorded
-    az.scan_and_delete(lambda x: x <= g)
+    reconcile()
     assert [x for _, x in az.queue] == [g + 5]
+    assert "newer_message" in store.kinds() and not intent(store).queue_cleared_at
+
+
+# ---- review of 2026-10-18: tokens, pending states, wake budget, queue scans, visits ----
+
+def test_a_use_token_never_renews_itself():
+    clock, store, az, api, reconcile = rig()
+    body = wake_and_settle(clock, store, az, api, reconcile)
+    t = body
+    for _ in range(4):
+        clock.sleep(3600)
+        r = api.wake({"use_token": t["use_token"]}, ORIGIN)
+        if r.status != 202:
+            break
+        assert r.body == body                               # the same token, same expiry
+        t = r.body
+    assert api.use({"use_token": body["use_token"]}, ORIGIN).status == 403    # 4 h > 3 h
+
+
+def test_a_token_wake_racing_a_completed_sleep_is_refused():
+    clock, store, az, api, reconcile = rig()
+    body = wake_and_settle(clock, store, az, api, reconcile)
+    api.sleep()
+    real_read = store.read
+    calls = {"n": 0}
+
+    def read():
+        calls["n"] += 1
+        if calls["n"] == 2:                                # between the check and the write
+            entity, etag = real_read()
+            store.write(entity_of(core.replace(intent_of(entity), asleep_done=True, settled=True),
+                                  control_of(entity)), etag)
+        return real_read()
+    store.read = read
+    assert api.wake({"use_token": body["use_token"]}, ORIGIN).status == 403
+    store.read = real_read
+    assert intent(store).desired == "asleep"
+
+
+def test_provider_pending_states_are_waited_out_not_read_as_failure():
+    clock, store, az, api, reconcile = rig()
+    az.pending_states = ["Running", "Accepted", "Updating"]
+    wake_and_settle(clock, store, az, api, reconcile)
+    assert "operation_failed" not in store.kinds()
+    assert az.arm_calls == ["open"]                         # nothing re-sent or conflicting
+
+
+def test_submitting_op_waits_while_the_resource_is_updating():
+    clock, store, az, api, reconcile = rig()
+    az.pending_states = ["Updating"]
+    handle = az.set_restricted(False)
+    entity, etag = store.read()
+    store.write(entity_of(intent_of(entity), {"epoch": 0, "op": {"kind": "open_ingress",
+                "state": "submitting", "issued_at": clock()}}), etag)
+    api.wake({"recaptcha_token": "good"}, ORIGIN)
+    reconcile()
+    assert az.ops[handle.url][2]                            # finished before anything else
+    assert az.arm_calls[0] == "open" and az.arm_calls.count("open") == 1
+
+
+def test_a_wake_whose_steps_keep_failing_ends_and_returns_to_asleep():
+    clock, store, az, api, reconcile = rig()
+    az.fail["open"] = "Failed"
+    t0 = clock()
+    api.wake({"recaptcha_token": "good"}, ORIGIN)
+    while not intent(store).asleep_done and clock() - t0 < 1200:
+        reconcile()
+        clock.sleep(60)
+    assert "wake_failed" in store.kinds()
+    assert intent(store).asleep_done and az.replicas == 0
+    assert clock() - t0 <= 600
+
+
+def test_a_slow_operation_gives_the_wake_its_time_again():
+    clock, store, az, api, reconcile = rig(arm_seconds=200)
+    api.wake({"recaptcha_token": "good"}, ORIGIN)
+    t0 = clock()
+    while intent(store).desired == "awake" and not intent(store).settled and clock() - t0 < 900:
+        reconcile()
+    assert "slow_operation" in store.kinds() and "wake_failed" not in store.kinds()
+    assert api.status().body["state"] == "awake"
+
+
+def test_an_invisible_message_keeps_the_sleep_from_being_marked_done():
+    clock, store, az, api, reconcile = rig()
+    wake_and_settle(clock, store, az, api, reconcile)
+    api.sleep()
+    g = intent(store).generation
+    az._queue.receive_messages(visibility_timeout=30)       # a crashed scan: now invisible
+    real = az.read_actual
+
+    def read_actual():
+        a, rev = real()
+        if any(x <= g for _, x in az.queue):
+            assert not intent(store).queue_cleared_at       # never D while one exists
+        return a, rev
+    az.read_actual = read_actual
+    assert reconcile() == "done"
+    assert az.queue == [] and intent(store).asleep_done
+
+
+def test_a_flood_of_older_messages_does_not_hide_the_current_one():
+    clock, store, az, api, reconcile = rig()
+    for x in range(200):                                   # more than one scan takes
+        az.put_message(-1000 + x)
+    wake_and_settle(clock, store, az, api, reconcile)
+    assert [x for _, x in az.queue] == [intent(store).generation]
+    assert not az.restricted
+
+
+def test_duplicate_current_messages_alone_are_reduced_to_one():
+    clock, store, az, api, reconcile = rig()
+    wake_and_settle(clock, store, az, api, reconcile)
+    g = intent(store).generation
+    az.put_message(g)
+    az.put_message(g)
+    reconcile()
+    assert [x for _, x in az.queue] == [g]
+
+
+def test_a_stale_receipt_is_never_read_as_empty():
+    clock, store, az, api, reconcile = rig()
+    wake_and_settle(clock, store, az, api, reconcile)
+    api.sleep()
+    g = intent(store).generation
+    hit = {"done": False}
+    az._queue.get_queue_properties = lambda: SimpleNamespace(approximate_message_count=0)  # lagging
+    real = az.read_actual
+
+    def read_actual():
+        a, rev = real()
+        if any(x <= g for _, x in az.queue):
+            assert not intent(store).queue_cleared_at
+        return a, rev
+    az.read_actual = read_actual
+
+    def steal(batch):                                      # another reader takes the receipt
+        if batch and not hit["done"]:
+            hit["done"] = True
+            m = az._queue.msgs[batch[0].id]
+            m["receipt"] = "someone-else"
+    az._queue.after_receive = steal
+    assert reconcile() == "done"
+    assert hit["done"] and az.queue == []
+
+
+def test_a_visit_during_idle_sleep_reverses_it():
+    clock, store, az, api, reconcile = rig()
+    wake_and_settle(clock, store, az, api, reconcile)
+    clock.sleep(core.IDLE_SECONDS + 1)
+    reconcile_once = Reconciler(store, az, Lease(clock), clock=clock, sleep=lambda s: None)
+    reconcile_once._idle_check(clock())
+    assert intent(store).desired == "asleep" and not intent(store).asleep_done
+    assert api.wake({"recaptcha_token": "good"}, ORIGIN).status == 202
+    assert reconcile() == "done"
+    assert intent(store).desired == "awake" and api.status().body["state"] == "awake"
 
 
 def test_stale_restrict_while_awake_is_repaired_and_recorded():

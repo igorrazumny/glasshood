@@ -93,7 +93,9 @@ class _BlobLease:
 
 def _notify(kind: str, detail: dict) -> None:
     endpoint, to = os.environ.get("ACS_EMAIL_ENDPOINT"), os.environ.get("ALERT_EMAIL_TO")
-    if not (endpoint and to):
+    if not (endpoint and to and os.environ.get("ALERT_EMAIL_FROM")):
+        # Never silent: without the email settings the failure is at least an error log.
+        logging.error("failure report NOT sent (email not configured): %s %s", kind, json.dumps(detail))
         return
     try:
         from azure.communication.email import EmailClient

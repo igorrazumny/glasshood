@@ -11,16 +11,22 @@ from dataclasses import replace
 from typing import Callable
 
 from . import core
-from .state import Conflict, control_of, entity_of, intent_of
+from .state import Conflict, control_of, entity_of, intent_of, update_intent
 
 LEASE_SECONDS = 60
 MIN_LEASE_LEFT = 45          # issue an ARM request only with this much lease left
 RUN_SECONDS = 9 * 60
 POLL_SECONDS = 5
+SLOW_SECONDS = 120           # an operation still pending after this is recorded as slow
+TERMINAL = ("Succeeded", "Failed", "Canceled")   # every other ARM status is still pending
 
 
 class LeaseLost(Exception):
     pass
+
+
+class RunOver(Exception):
+    """The run's time is up; a pending operation stays recorded for the next run."""
 
 
 class Reconciler:
@@ -30,6 +36,9 @@ class Reconciler:
         self.clock, self.sleep = clock, sleep
         self.notify = notify or (lambda kind, detail: None)
         self.epoch = None
+        self.started = None
+        self.queue_view = None       # the latest queue scan in this run
+        self._reported = set()       # failure kinds already reported in this run
 
     # ---- ownership ----
     def _renew(self) -> None:
@@ -77,33 +86,47 @@ class Reconciler:
         self._await_op({"kind": kind, "state": "accepted", "url": handle.url, "issued_at": self.clock()})
 
     def _await_op(self, op: dict) -> None:
-        """Wait for an operation to be terminal. One still running past its planned time
-        is slow, not an outage: it stays tracked and nothing conflicting is sent."""
-        slow_reported = False
+        """Wait until an operation is terminal (Succeeded, Failed or Canceled; anything
+        else is still pending). One still running past its planned time is slow, not an
+        outage: it stays tracked, nothing conflicting is sent, and a wake waiting on it
+        gets its full time again once it finishes."""
+        slow = False
         while True:
             self._renew()
             if op.get("state") == "accepted" and op.get("url"):
                 state = self.ops.op_status(op["url"])
             elif op.get("state") == "accepted":
                 state = "Succeeded"               # ARM finished it synchronously
-            else:                                  # "submitting": outcome unknown
+            else:
+                # "submitting": whether it reached ARM is unknown, so wait until the
+                # resource itself is no longer changing.
                 state = self.ops.provisioning_state()
-                state = "InProgress" if state == "InProgress" else "Succeeded"
-            if state != "InProgress":
+            if state in TERMINAL:
                 if state != "Succeeded":
                     self.store.record("operation_failed", {"op": op, "state": state})
+                    self._report("operation_failed", {"op": op.get("kind"), "state": state})
                 self._write_control(lambda c: {**c, "op": None})
+                if slow and state == "Succeeded":
+                    now = self.clock()
+                    update_intent(self.store, lambda i: core.extend_deadline(i, now))
                 return
-            if not slow_reported and self.clock() - op.get("issued_at", self.clock()) > 120:
-                self.store.record("slow_operation", {"op": op})
-                slow_reported = True
+            if not slow and self.clock() - op.get("issued_at", self.clock()) > SLOW_SECONDS:
+                self.store.record("slow_operation", {"op": op, "state": state})
+                slow = True
+            if self.started is not None and self.clock() - self.started >= RUN_SECONDS:
+                raise RunOver()
             self.sleep(POLL_SECONDS)
+
+    def _report(self, kind: str, detail: dict) -> None:
+        if kind not in self._reported:
+            self._reported.add(kind)
+            self.notify(kind, detail)
 
     # ---- the run ----
     def run(self) -> str:
         if not self._take():
             return "busy"
-        started = self.clock()
+        started = self.started = self.clock()
         try:
             entity, _ = self.store.read()
             pending = control_of(entity)["op"]
@@ -118,13 +141,14 @@ class Reconciler:
                         return "done"
                     self.sleep(POLL_SECONDS)
             return "timeout"
+        except RunOver:
+            return "timeout"
         except LeaseLost:
             return "lease_lost"
         finally:
             self.lease.release()
 
     def _idle_check(self, now: float) -> None:
-        from .state import update_intent
         update_intent(self.store, lambda i: core.sleep(i, now, "idle") if core.idle_due(i, now) else i)
 
     def _one_step(self) -> str:
@@ -133,6 +157,7 @@ class Reconciler:
         entity, _ = self.store.read()
         intent = intent_of(entity)
         actual, revision = self.ops.read_actual()
+        actual.queue = self.queue_view
         step = core.next_step(intent, actual, now)
         g = intent.generation
 
@@ -141,10 +166,11 @@ class Reconciler:
             return "done"
         if step.kind == "wait":
             return "wait"
-        if intent.settled:
+        if intent.settled and step.kind != "scan_queue":
             self.store.record("divergence", {"intent": intent.desired, "generation": g,
                                              "step": step.kind})
             self._mark(g, settled=False)
+            update_intent(self.store, lambda i: core.extend_deadline(i, now) if i.generation == g else i)
 
         if step.kind == "activate_revision":
             self._arm("activate", lambda: self.ops.set_revision_active(revision, True))
@@ -154,32 +180,38 @@ class Reconciler:
             self._arm("open_ingress", lambda: self.ops.set_restricted(False))
         elif step.kind == "restrict_ingress":
             self._arm("restrict_ingress", lambda: self.ops.set_restricted(True))
+        elif step.kind == "scan_queue":
+            self._scan()
         elif step.kind == "put_message":
             self.ops.put_message(g)
-        elif step.kind == "delete_older_messages":
-            kept = {"current": False}
-
-            def older_or_duplicate(x: int) -> bool:
-                if x == g and not kept["current"]:
-                    kept["current"] = True
-                    return False
-                return x <= g
-            self.ops.scan_and_delete(older_or_duplicate)
-        elif step.kind == "delete_messages_upto":
-            self.ops.scan_and_delete(lambda x: x <= g)
+            self.queue_view = None
         elif step.kind == "mark_cleared":
             self._mark(g, queue_cleared_at=self.clock())
         elif step.kind == "fail_wake":
-            from .state import update_intent
             self.store.record("wake_failed", {"generation": g, "t0": intent.t0})
-            self.notify("wake_failed", {"generation": g})
+            self._report("wake_failed", {"generation": g})
             update_intent(self.store, lambda i: core.sleep(i, self.clock(), "wake_failed")
                           if i.generation == g else i)
         return "step"
 
+    def _scan(self) -> None:
+        def read_intent():
+            i = intent_of(self.store.read()[0])
+            return i.desired, i.generation
+        before = self.queue_view
+        view = self.ops.scan_queue(read_intent, self.clock())
+        nothing = view.clean and not (view.current or view.older or view.newer)
+        if nothing:
+            same = (before is not None and before.desired == view.desired
+                    and before.generation == view.generation and before.empty_since)
+            view.empty_since = before.empty_since if same else view.at
+        if view.newer:
+            self.store.record("newer_message", {"intent": view.desired, "generation": view.generation,
+                                                "newer": view.newer})
+        self.queue_view = view
+
     def _mark(self, generation: int, **changes) -> None:
         """Change transition fields of the intent, only if it is still that generation."""
-        from .state import update_intent
         update_intent(self.store, lambda i: replace(i, **changes) if i.generation == generation else i)
 
     def _settle(self, intent: core.Intent, actual: core.Actual) -> None:

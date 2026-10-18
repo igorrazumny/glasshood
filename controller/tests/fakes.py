@@ -6,8 +6,12 @@ from __future__ import annotations
 
 import copy
 import itertools
+import json
+from types import SimpleNamespace
 
-from wake.azure_ops import OpHandle
+from azure.core.exceptions import ResourceNotFoundError
+
+from wake.azure_ops import AzureOps, OpHandle
 from wake.core import Actual, Intent
 from wake.state import Conflict, entity_of
 
@@ -75,6 +79,57 @@ class Lease:
         self.held = False
 
 
+class FakeQueue:
+    """The Storage queue calls AzureOps uses, with visibility and pop receipts: a
+    received message is invisible for its visibility timeout and only its newest
+    receipt works; a stale receipt gets 404, as in Azure."""
+
+    def __init__(self, clock: Clock):
+        self.clock = clock
+        self.msgs = {}                    # id -> {"g", "content", "visible_at", "receipt"}
+        self._ids = itertools.count()
+        self._receipts = itertools.count()
+        self.after_receive = None         # hook(batch) between receive and decisions
+
+    def send_message(self, content, time_to_live=None):
+        i = next(self._ids)
+        self.msgs[i] = {"content": content, "visible_at": 0.0, "receipt": None}
+
+    def receive_messages(self, messages_per_page=32, max_messages=32, visibility_timeout=30):
+        self.clock.sleep(0.1)                     # a Storage call takes time
+        now = self.clock()
+        out = []
+        for i, m in sorted(self.msgs.items()):
+            if len(out) >= max_messages:
+                break
+            if m["visible_at"] <= now:
+                m["receipt"] = f"r{next(self._receipts)}"
+                m["visible_at"] = now + visibility_timeout
+                out.append(SimpleNamespace(id=i, pop_receipt=m["receipt"], content=m["content"]))
+        if self.after_receive:
+            self.after_receive(out)
+        return out
+
+    def _check(self, i, receipt):
+        if i not in self.msgs or self.msgs[i]["receipt"] != receipt:
+            raise ResourceNotFoundError("receipt")
+
+    def delete_message(self, i, receipt):
+        self._check(i, receipt)
+        del self.msgs[i]
+
+    def update_message(self, i, receipt, visibility_timeout=0):
+        self._check(i, receipt)
+        self.msgs[i]["receipt"] = f"r{next(self._receipts)}"
+        self.msgs[i]["visible_at"] = self.clock() + visibility_timeout
+
+    def get_queue_properties(self):
+        return SimpleNamespace(approximate_message_count=len(self.msgs))
+
+    def generations(self):
+        return [(i, json.loads(m["content"])["generation"]) for i, m in sorted(self.msgs.items())]
+
+
 class FakeAzure:
     """A tiny model of the container app: ARM writes complete after `arm_seconds`;
     a replica starts `start_seconds` after there is a wake message and an active
@@ -86,14 +141,20 @@ class FakeAzure:
         self.arm_seconds, self.start_seconds, self.drain_seconds = arm_seconds, start_seconds, drain_seconds
         self.healthy_app = healthy_app
         self.restricted, self.active, self.replicas = True, True, 0
-        self.queue = []                              # list of (id, generation)
-        self._ids = itertools.count()
+        self._queue = FakeQueue(clock)
         self.ops = {}                                # url -> (done_at, apply)
         self._want_since = None
         self._empty_since = None
         self.arm_calls = []
         self.history = []                            # (time, "restricted"|"open"|"zero")
+        self.pending_states = ["InProgress"]        # statuses ARM reports while pending
+        self.fail = {}                               # op name -> terminal status to end with
         clock.hooks.append(self._tick)
+
+    @property
+    def queue(self):
+        """(id, generation) of every message, invisible ones too."""
+        return self._queue.generations()
 
     # model time
     def _tick(self, now):
@@ -117,25 +178,30 @@ class FakeAzure:
                     self.replicas = 0
 
     def _async(self, name, apply):
+        self.clock.sleep(1)                          # an ARM request takes time
         url = f"op/{name}/{len(self.ops)}"
-        self.ops[url] = (self.clock() + self.arm_seconds, apply, False)
+        failing = self.fail.get(name)
+        self.ops[url] = (self.clock() + self.arm_seconds, (lambda: None) if failing else apply, False)
+        self.op_end = getattr(self, "op_end", {})
+        self.op_end[url] = failing or "Succeeded"
         self.arm_calls.append(name)
         return OpHandle(url)
 
     # AzureOps interface
     def op_status(self, url):
-        return "Succeeded" if self.ops[url][2] else "InProgress"
+        if self.ops[url][2]:
+            return self.op_end[url]
+        return self.pending_states[len(self.arm_calls) % len(self.pending_states)]
 
     def provisioning_state(self):
-        return "InProgress" if any(not d for _, _, d in self.ops.values()) else "Succeeded"
+        return self.pending_states[0] if any(not d for _, _, d in self.ops.values()) else "Succeeded"
 
     def read_actual(self):
         healthy = (not self.restricted) and self.replicas > 0 and self.healthy_app
-        return Actual(self.restricted, self.active, self.replicas, healthy,
-                      [g for _, g in self.queue]), "rev1"
+        return Actual(self.restricted, self.active, self.replicas, healthy), "rev1"
 
-    def peek_generations(self):
-        return [g for _, g in self.queue]
+    put_message = AzureOps.put_message
+    scan_queue = AzureOps.scan_queue
 
     def set_restricted(self, restricted):
         def apply():
@@ -151,13 +217,3 @@ class FakeAzure:
                 self.replicas = 0
         return self._async("activate" if active else "deactivate", apply)
 
-    def put_message(self, generation):
-        self.queue.append((next(self._ids), generation))
-
-    def scan_and_delete(self, should_delete):
-        n = 0
-        for item in list(self.queue):
-            if should_delete(item[1]):
-                self.queue.remove(item)
-                n += 1
-        return n

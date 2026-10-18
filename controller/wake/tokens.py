@@ -33,14 +33,28 @@ def issue(secret: bytes, wake_id: str, now: float) -> dict:
     }
 
 
-def valid(secret: bytes, token: str, wake_id: str, now: float) -> bool:
-    """True only for an unexpired token, correctly signed, for the current wake."""
+def _claims(secret: bytes, token: str) -> dict | None:
     try:
         body, sig = token.split(".")
         expected = _b64(hmac.new(secret, body.encode(), hashlib.sha256).digest())
         if not hmac.compare_digest(sig, expected):
-            return False
-        claims = json.loads(_unb64(body))
+            return None
+        return json.loads(_unb64(body))
     except (ValueError, TypeError):
-        return False
-    return bool(wake_id) and claims.get("w") == wake_id and now < claims.get("exp", 0)
+        return None
+
+
+def valid(secret: bytes, token: str, wake_id: str, now: float) -> bool:
+    """True only for an unexpired token, correctly signed, for the current wake."""
+    claims = _claims(secret, token)
+    return bool(claims) and bool(wake_id) and claims.get("w") == wake_id and now < claims.get("exp", 0)
+
+
+def same(secret: bytes, token: str) -> dict:
+    """The answer for a wake authorized by this (valid) token: the token itself with
+    its own expiry, so presenting a token never extends it."""
+    exp = int(_claims(secret, token)["exp"])
+    return {
+        "use_token": token,
+        "use_token_expires": datetime.fromtimestamp(exp, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }

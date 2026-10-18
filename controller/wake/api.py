@@ -59,29 +59,53 @@ class Api:
         return Reply(200, {"state": s, "since": _iso(i.t0),
                            "expected_seconds": WAKING_EXPECTED_SECONDS if s == "waking" else 0})
 
-    # POST /wake — public; needs a verified reCAPTCHA token, or the current wake's use token
+    # POST /wake — public; needs a verified reCAPTCHA token, or the current wake's use token.
+    # Only a fresh reCAPTCHA gets a new token. A wake authorized by a use token gets
+    # that same token back with its own expiry, so a copied token never renews itself.
     def wake(self, body: dict, origin: str | None) -> Reply:
         if not self._origin_ok(origin):
             return Reply(403, {"error": "origin"})
+        token = body.get("use_token", "")
         current = self._intent()
-        by_token = self._token_ok(current, body.get("use_token", ""))
+        by_token = self._token_ok(current, token)
         if not by_token and not self._verify(body.get("recaptcha_token", "")):
             return Reply(403, {"error": "not verified"})
         now = self.clock()
-        after = update_intent(self.store, lambda i: core.wake(i, now, "visit"))
+        refused = False
+
+        def change(i: core.Intent) -> core.Intent:
+            # Checked again against the intent actually being changed: a sleep that
+            # completed since the first read ends this token's wake.
+            nonlocal refused
+            refused = by_token and not self._token_ok(i, token)
+            return i if refused else core.wake(i, now, "visit")
+        after = update_intent(self.store, change)
+        if refused:
+            return Reply(403, {"error": "token"})
         if after.generation != current.generation:
             self.kick()
+        if by_token:
+            return Reply(202, tokens.same(self.cfg.token_secret, token))
         return Reply(202, tokens.issue(self.cfg.token_secret, after.wake_id, now))
 
     # POST /use — public; person-caused use, needs the current wake's use token
     def use(self, body: dict, origin: str | None) -> Reply:
         if not self._origin_ok(origin):
             return Reply(403, {"error": "origin"})
+        token = body.get("use_token", "")
         current = self._intent()
-        if not self._token_ok(current, body.get("use_token", "")):
+        if not self._token_ok(current, token):
             return Reply(403, {"error": "token"})
         now = self.clock()
-        after = update_intent(self.store, lambda i: core.use(i, now))
+        refused = False
+
+        def change(i: core.Intent) -> core.Intent:
+            nonlocal refused
+            refused = not self._token_ok(i, token)
+            return i if refused else core.use(i, now)
+        after = update_intent(self.store, change)
+        if refused:
+            return Reply(403, {"error": "token"})
         if after.desired != current.desired:
             self.kick()
         return Reply(204)
