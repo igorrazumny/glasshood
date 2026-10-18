@@ -6,6 +6,7 @@ real controller replaces it.
 Usage:
   python3 deploy/waking-page/mock-controller.py [--port 8790] [--wake 20] [--app-lag 0]
                                                  [--scenario normal|fail|sleeping]
+                                                 [--recaptcha accept|reject|reject-first]
 
 Two origins, so the page's calls are cross-origin as they will be:
   http://127.0.0.1:PORT      the app's site. /waking-page/ serves the page, with CONTROLLER
@@ -15,12 +16,18 @@ Two origins, so the page's calls are cross-origin as they will be:
                              arrives while it is asleep.
   http://127.0.0.1:PORT+1    the wake controller, with CORS for the app's site:
                              GET /status  200 {"state", "since", "expected_seconds"}, no-store
-                             POST /wake   202, the same JSON; repeated posts cause one wake
+                             POST /wake   JSON {"recaptcha_token"} or {"use_token"}: 202
+                                          {"use_token", "use_token_expires"} (a use token
+                                          is good for the wake it was issued for, until
+                                          that wake ends); 403 when neither is accepted;
+                                          repeated posts cause one wake
                              GET /_mock/stats  counters for tests
 Scenarios: normal wakes after --wake seconds; fail never becomes awake; sleeping starts in
 "going-to-sleep" for 5 s and runs a wake posted meanwhile as soon as the sleep ends.
 --app-lag N keeps sending visitors back to the waking page for N seconds after the
 status reads "awake", like an app that has not caught up yet.
+--recaptcha decides reCAPTCHA tokens: accept (any non-empty token), reject (none), or
+reject-first (the first one refused, later ones accepted).
 --first-status changes only the first status request: hang-headers never answers,
 hang-body sends the headers and part of the body and then stops, late:N answers after
 N seconds with the state at that moment.
@@ -42,13 +49,18 @@ HANG_SECONDS = 600
 
 
 class Wake:
-    def __init__(self, scenario, wake_seconds, app_lag, first_status=None):
+    def __init__(self, scenario, wake_seconds, app_lag, first_status=None, recaptcha="accept"):
         self.lock = threading.Lock()
         self.first_status = first_status
+        self.recaptcha = recaptcha
+        self.recaptcha_seen = 0
+        self.wake_id = 0
+        self.tokens = {}  # use token -> (wake_id it was issued for, expiry)
         self.scenario = scenario
         self.wake_seconds = wake_seconds
         self.app_lag = app_lag
-        self.stats = {"posts": 0, "wakes": 0, "status_checks": 0, "waking_pages": 0, "sent_back": 0, "app_pages": 0}
+        self.stats = {"posts": 0, "posts_recaptcha": 0, "posts_use_token": 0, "refused": 0, "wakes": 0,
+                      "status_checks": 0, "waking_pages": 0, "sent_back": 0, "app_pages": 0}
         self.page_times = []
         self.queued = False
         self.state = "going-to-sleep" if scenario == "sleeping" else "asleep"
@@ -66,6 +78,7 @@ class Wake:
 
     def _start(self, t):
         self.state, self.since = "waking", t
+        self.wake_id += 1  # a new wake: earlier use tokens are no longer good
         self.stats["wakes"] += 1
 
     def _json(self):
@@ -75,15 +88,39 @@ class Wake:
             "expected_seconds": None if self.state == "awake" else self.wake_seconds,
         }
 
-    def post(self):
+    def _verified(self, body):  # the caller holds the lock
+        use, rc = body.get("use_token"), body.get("recaptcha_token")
+        if isinstance(use, str) and use:
+            self.stats["posts_use_token"] += 1
+            held = self.tokens.get(use)
+            return held is not None and held[0] == self.wake_id and held[1] > time.time() and self.state != "asleep"
+        if isinstance(rc, str):
+            self.stats["posts_recaptcha"] += 1
+            seen, self.recaptcha_seen = self.recaptcha_seen, self.recaptcha_seen + 1
+            if self.recaptcha == "reject":
+                return False
+            if self.recaptcha == "reject-first" and seen == 0:
+                return False
+            return bool(rc)
+        return False
+
+    def post(self, body):
+        """(status, JSON) for POST /wake."""
         with self.lock:
             self.stats["posts"] += 1
             self._advance()
+            if not self._verified(body):
+                self.stats["refused"] += 1
+                return 403, {"error": "not verified"}
             if self.state == "asleep":
                 self._start(time.time())
             elif self.state == "going-to-sleep":
                 self.queued = True
-            return self._json()
+            exp = time.time() + 4 * 3600
+            token = "mock-%d-%d" % (self.wake_id, len(self.tokens) + 1)
+            self.tokens[token] = (self.wake_id, exp)
+            return 202, {"use_token": token,
+                         "use_token_expires": datetime.fromtimestamp(exp, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
 
     def take_first_status(self):
         """The --first-status mode for the first status request; None after that."""
@@ -140,12 +177,17 @@ class Controller(Base):
     def do_OPTIONS(self):
         self._send(204, b"", "text/plain", dict(self._cors(), **{
             "Access-Control-Allow-Methods": "GET, POST",
-            "Access-Control-Allow-Headers": "Cache-Control, Pragma",
+            "Access-Control-Allow-Headers": "Content-Type, Cache-Control, Pragma",
             "Access-Control-Max-Age": "600"}))
 
     def do_POST(self):
         if urlsplit(self.path).path == "/wake":
-            self._json(202, WAKE.post())
+            try:
+                body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
+            except ValueError:
+                body = {}
+            code, data = WAKE.post(body if isinstance(body, dict) else {})
+            self._json(code, data)
         else:
             self._send(404, b"not found", "text/plain", self._cors())
 
@@ -198,10 +240,11 @@ def main():
     p.add_argument("--app-lag", type=float, default=0, help="seconds the app keeps sending visitors back after awake")
     p.add_argument("--scenario", choices=("normal", "fail", "sleeping"), default="normal")
     p.add_argument("--first-status", help="hang-headers, hang-body or late:SECONDS, for the first status request only")
+    p.add_argument("--recaptcha", choices=("accept", "reject", "reject-first"), default="accept")
     a = p.parse_args()
     if a.first_status and a.first_status not in ("hang-headers", "hang-body") and not a.first_status.startswith("late:"):
         p.error("--first-status: hang-headers, hang-body or late:SECONDS")
-    WAKE = Wake(a.scenario, a.wake, a.app_lag, a.first_status)
+    WAKE = Wake(a.scenario, a.wake, a.app_lag, a.first_status, a.recaptcha)
     APP_ORIGIN = "http://127.0.0.1:%d" % a.port
     CONTROLLER_ORIGIN = "http://127.0.0.1:%d" % (a.port + 1)
     controller = ThreadingHTTPServer(("127.0.0.1", a.port + 1), Controller)
