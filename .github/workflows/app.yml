@@ -1,0 +1,39 @@
+# Builds app.glasshood.ai (the React app plus the waking page) and deploys it to its
+# Azure Static Web App (REQ-GHA-018). The deployment token is a repository secret;
+# the API and controller addresses and the reCAPTCHA site key are repository variables.
+name: App site
+
+on:
+  push:
+    branches: [main]
+    paths: ["frontend/**", "deploy/app-site/**", "deploy/waking-page/**", ".github/workflows/app.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-site
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build
+        env:
+          API_BASE: ${{ vars.APP_API_BASE }}
+          CONTROLLER: ${{ vars.WAKE_CONTROLLER }}
+          RECAPTCHA_SITE_KEY: ${{ vars.WAKE_RECAPTCHA_SITE_KEY }}
+        run: bash deploy/app-site/build.sh
+
+      - name: Deploy app.glasshood.ai
+        uses: Azure/static-web-apps-deploy@1a947af9992250f3bc2e68ad0754c0b0c11566c9 # v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.SWA_TOKEN_APP }}
+          action: upload
+          app_location: deploy/app-site/out
+          skip_app_build: true
+          skip_api_build: true

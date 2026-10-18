@@ -18,9 +18,9 @@ APP=glasshood
 FUNC=${FUNC:-func-glasshood-wake}
 APP_ID=/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.App/containerApps/$APP
 APP_FQDN=$(az containerapp show -g "$RG" -n "$APP" --query properties.configuration.ingress.fqdn -o tsv </dev/null)
-ORIGINS=${ORIGINS:-https://app.glasshood.ai,https://glasshood.ai,https://architecture.glasshood.ai,https://ashy-sea-07717d00f.4.azurestaticapps.net,https://lemon-sand-00849da0f.5.azurestaticapps.net}
-APP_ORIGINS=${APP_ORIGINS:-https://app.glasshood.ai}
-RECAPTCHA_HOSTS=${RECAPTCHA_HOSTS:-app.glasshood.ai}
+ORIGINS=${ORIGINS:-https://app.glasshood.ai,https://red-river-0811aa70f.1.azurestaticapps.net,https://glasshood.ai,https://architecture.glasshood.ai,https://ashy-sea-07717d00f.4.azurestaticapps.net,https://lemon-sand-00849da0f.5.azurestaticapps.net}
+APP_ORIGINS=${APP_ORIGINS:-https://app.glasshood.ai,https://red-river-0811aa70f.1.azurestaticapps.net}
+RECAPTCHA_HOSTS=${RECAPTCHA_HOSTS:-app.glasshood.ai,red-river-0811aa70f.1.azurestaticapps.net}
 : "${RECAPTCHA_SECRET:?set RECAPTCHA_SECRET in the environment}"
 
 say() { printf '== %s\n' "$*"; }
