@@ -4,8 +4,9 @@
 # pieces. Safe to re-run. It does NOT change the container app's scale or ingress:
 # that is the cutover (cutover.sh), done only after verification (clause 13).
 #
-# Needs: az logged in; RECAPTCHA_SECRET in the environment (never written to disk).
-# Usage: RECAPTCHA_SECRET=... controller/deploy/setup.sh
+# Needs: az logged in, and the reCAPTCHA secret already in Key Vault as
+# wake-recaptcha-secret (written there straight from Google, never printed).
+# Usage: controller/deploy/setup.sh
 set -euo pipefail
 export CLOUDSDK_CORE_DISABLE_PROMPTS=1
 
@@ -21,7 +22,6 @@ APP_FQDN=$(az containerapp show -g "$RG" -n "$APP" --query properties.configurat
 ORIGINS=${ORIGINS:-https://app.glasshood.ai,https://red-river-0811aa70f.1.azurestaticapps.net,https://glasshood.ai,https://architecture.glasshood.ai,https://ashy-sea-07717d00f.4.azurestaticapps.net,https://lemon-sand-00849da0f.5.azurestaticapps.net}
 APP_ORIGINS=${APP_ORIGINS:-https://app.glasshood.ai,https://red-river-0811aa70f.1.azurestaticapps.net}
 RECAPTCHA_HOSTS=${RECAPTCHA_HOSTS:-app.glasshood.ai,red-river-0811aa70f.1.azurestaticapps.net}
-: "${RECAPTCHA_SECRET:?set RECAPTCHA_SECRET in the environment}"
 
 say() { printf '== %s\n' "$*"; }
 
@@ -59,12 +59,13 @@ grant "Storage Blob Data Owner" "$SA_ID"
 grant "Contributor" "$APP_ID"
 grant "Key Vault Secrets User" "$(az keyvault show -n "$KV" --query id -o tsv </dev/null)"
 
-say "secrets in Key Vault (use-token key generated once; reCAPTCHA secret from the environment)"
+say "secrets in Key Vault (use-token key generated once; reCAPTCHA secret must already be there)"
+az keyvault secret show --vault-name "$KV" -n wake-recaptcha-secret --query id -o none </dev/null \
+  || { echo "wake-recaptcha-secret is missing from $KV" >&2; exit 1; }
 if ! az keyvault secret show --vault-name "$KV" -n wake-use-token-secret -o none </dev/null 2>/dev/null; then
   az keyvault secret set --vault-name "$KV" -n wake-use-token-secret \
     --value "$(openssl rand -hex 32)" -o none </dev/null
 fi
-az keyvault secret set --vault-name "$KV" -n wake-recaptcha-secret --value "$RECAPTCHA_SECRET" -o none </dev/null
 
 say "settings"
 ref() { echo "@Microsoft.KeyVault(VaultName=$KV;SecretName=$1)"; }

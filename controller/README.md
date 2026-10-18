@@ -17,7 +17,7 @@ Design: the REQ-GHA-018 design v6 thread (peer proceed 2026-10-18). Requirement:
 
 | Command | Purpose |
 |---|---|
-| `controller/deploy/setup.sh` | Creates or updates the controller's Azure pieces. Needs `RECAPTCHA_SECRET` in the environment. It leaves the reconciler **off**: `RECONCILE=off`, and `/status` says `awake`. |
+| `controller/deploy/setup.sh` | Creates or updates the controller's Azure pieces. Needs the reCAPTCHA secret already in Key Vault as `wake-recaptcha-secret`. It leaves the reconciler **off**: `RECONCILE=off`, and `/status` says `awake`. |
 | `controller/deploy/budget.sh` | Sets the CHF 10/month forecast and actual alert. Needs `TO=<email>`. |
 | `controller/deploy/ops.sh status\|wake\|sleep\|hold <hours>` | Operator commands. All are safe to repeat. |
 
