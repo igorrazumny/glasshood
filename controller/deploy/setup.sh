@@ -57,6 +57,19 @@ grant "Storage Table Data Contributor" "$SA_ID"
 grant "Storage Queue Data Contributor" "$SA_ID"
 grant "Storage Blob Data Owner" "$SA_ID"
 grant "Contributor" "$APP_ID"
+# ARM reports an accepted operation's progress at a subscription-level URL
+# (.../providers/Microsoft.App/locations/<loc>/containerappOperationStatuses/<id>),
+# which the app-scoped Contributor does not cover: a read-only role for just that.
+ROLE="GlassHood wake operation reader"
+if [ -z "$(az role definition list --custom-role-only true --name "$ROLE" --query "[0].id" -o tsv </dev/null)" ]; then
+  az role definition create -o none --role-definition "{
+    \"Name\": \"$ROLE\",
+    \"Description\": \"REQ-GHA-018: read Container Apps operation status and results only\",
+    \"Actions\": [\"Microsoft.App/locations/containerappOperationStatuses/read\",
+                  \"Microsoft.App/locations/containerappOperationResults/read\"],
+    \"AssignableScopes\": [\"/subscriptions/$SUB\"]}" </dev/null
+fi
+grant "$ROLE" "/subscriptions/$SUB"
 grant "Key Vault Secrets User" "$(az keyvault show -n "$KV" --query id -o tsv </dev/null)"
 
 say "secrets in Key Vault (use-token key generated once; reCAPTCHA secret must already be there)"

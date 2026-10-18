@@ -10,7 +10,7 @@ from dataclasses import dataclass
 
 import httpx
 
-from .core import Actual
+from .core import SCAN_VISIBILITY, Actual, QueueView, queue_plan
 
 ARM = "https://management.azure.com"
 API_VERSION = "2024-03-01"
@@ -18,7 +18,7 @@ CLIENT_TIMEOUT = 30.0
 HEALTH_TIMEOUT = 3.0
 RESTRICTION = {"name": "asleep", "ipAddressRange": "127.0.0.1/32", "action": "Allow",
                "description": "REQ-GHA-018: asleep, refuse all outside traffic"}
-SCAN_VISIBILITY = 30
+SCAN_BATCHES = 4          # up to 128 messages per scan, all decided within one visibility
 
 
 @dataclass
@@ -55,7 +55,8 @@ class AzureOps:
         return OpHandle(None)
 
     def op_status(self, url: str) -> str:
-        """InProgress | Succeeded | Failed | Canceled (ARM async-operation contract)."""
+        """Succeeded | Failed | Canceled, or any other value while still pending (the
+        ARM async-operation contract allows provider-specific pending states)."""
         r = httpx.get(url, headers=self._headers(), timeout=CLIENT_TIMEOUT)
         if r.status_code == 202:
             return "InProgress"
@@ -83,7 +84,6 @@ class AzureOps:
         return Actual(
             ingress_restricted=restricted, revision_active=bool(rev.get("active")),
             replicas=len(replicas), healthy=healthy,
-            queue_generations=self.peek_generations(),
         ), revision
 
     def health(self) -> bool:
@@ -106,28 +106,48 @@ class AzureOps:
         return self._write("POST", f"{self._app}/revisions/{revision}/{verb}")
 
     # ---- the wake queue ----
-    def peek_generations(self) -> list[int]:
-        """Generations of the visible messages (peek: no receipts, used only to decide)."""
-        return [int(json.loads(m.content)["generation"])
-                for m in self._queue.peek_messages(max_messages=32)]
-
     def put_message(self, generation: int) -> None:
         self._queue.send_message(json.dumps({"generation": generation}), time_to_live=-1)
 
-    def scan_and_delete(self, should_delete) -> int:
-        """Receive messages with fresh receipts and decide each with them, once: delete
-        if should_delete(generation), otherwise make it visible again at once. Receipts
-        are never stored. Returns how many were deleted."""
+    def scan_queue(self, read_intent, now: float) -> QueueView:
+        """One fresh-receipt scan (design v6): receive every visible message (each now
+        invisible for SCAN_VISIBILITY s), re-read the intent, then decide each message
+        once with the receipt just returned: delete it, or make it visible again at
+        once. Receipts are never stored. A 404 makes the scan unclean (the next scan
+        decides afresh); it is never read as "empty"."""
         from azure.core.exceptions import ResourceNotFoundError
-        deleted = 0
-        for m in self._queue.receive_messages(messages_per_page=32, visibility_timeout=SCAN_VISIBILITY,
-                                              max_messages=32):
+        received, complete = [], False
+        for _ in range(SCAN_BATCHES):
+            batch = list(self._queue.receive_messages(messages_per_page=32, max_messages=32,
+                                                      visibility_timeout=SCAN_VISIBILITY))
+            received += batch
+            if len(batch) < 32:
+                complete = True
+                break
+        desired, g = read_intent()
+        gens = [_generation(m.content) for m in received]
+        view = QueueView(desired=desired, generation=g, at=now, clean=complete)
+        for m, x, delete in zip(received, gens, queue_plan(desired, g, gens)):
             try:
-                if should_delete(int(json.loads(m.content)["generation"])):
+                if delete:
                     self._queue.delete_message(m.id, m.pop_receipt)
-                    deleted += 1
-                else:
-                    self._queue.update_message(m.id, m.pop_receipt, visibility_timeout=0)
+                    continue
+                self._queue.update_message(m.id, m.pop_receipt, visibility_timeout=0)
             except ResourceNotFoundError:
-                pass     # receipt no longer valid: the next scan decides afresh, never "empty"
-        return deleted
+                view.clean = False
+                continue
+            if x == g:
+                view.current += 1
+            elif x < g:
+                view.older += 1
+            else:
+                view.newer += 1
+        view.approx = self._queue.get_queue_properties().approximate_message_count
+        return view
+
+
+def _generation(content: str) -> int:
+    try:
+        return int(json.loads(content)["generation"])
+    except (ValueError, KeyError, TypeError):
+        return -1                       # unreadable: older than any intent

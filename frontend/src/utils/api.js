@@ -2,7 +2,6 @@
 // Purpose: API fetch wrapper with Auth0 + legacy token + auto-reauth on 401
 
 import { WAKE } from '../config/wake'
-import { ensureAwakeOrRedirect } from './activity'
 
 // The API's address: same origin today, the app's own Azure address once the
 // frontend is served from app.glasshood.ai (REQ-GHA-018).
@@ -29,15 +28,12 @@ function _endSession() {
   throw new Error('Session ended')
 }
 
-// The app is asleep or waking: its ingress refuses the request without CORS
-// headers, so the browser reports a network error. Hand over to the waking page.
-async function _fetchApp(path, init) {
-  try {
-    return await fetch(apiUrl(path), init)
-  } catch (e) {
-    if (WAKE.controller) await ensureAwakeOrRedirect()
-    throw e
-  }
+// While the app is asleep its ingress refuses requests, so they fail as network
+// errors. That stays passive here: background polls must never wake the app. The
+// next person-caused event (utils/activity.js) finds it asleep and goes to the
+// waking page.
+function _fetchApp(path, init) {
+  return fetch(apiUrl(path), init)
 }
 
 let _token = sessionStorage.getItem('glasshood_token') || null
