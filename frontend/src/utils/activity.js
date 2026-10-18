@@ -8,7 +8,8 @@
 // The use token comes from the waking page (sessionStorage 'glasshood_use_token',
 // JSON {use_token, use_token_expires}). It is renewed only while sending a use and
 // only through a fresh reCAPTCHA, so a copied token cannot renew itself; renewal
-// itself is not use.
+// itself is not use. A tab opened while the app is already awake gets its first
+// token the same way.
 
 import { WAKE, wakingPageUrl } from '../config/wake.js'
 
@@ -96,8 +97,15 @@ export async function ensureAwakeOrRedirect(loc = window.location) {
 
 async function _sendUse() {
   if (!WAKE.controller || document.visibilityState === 'hidden') return
-  const t = readUseToken()
-  if (!t) { await ensureAwakeOrRedirect(); return }
+  let t = readUseToken()
+  if (!t) {
+    // Opened while already awake, so the waking page never gave this tab a token:
+    // get one through reCAPTCHA (not itself use), then report this use with it.
+    if (!(await ensureAwakeOrRedirect())) return
+    try { await _renew() } catch { return }
+    t = readUseToken()
+    if (!t) return
+  }
   try {
     const resp = await fetch(`${WAKE.controller}/use`, {
       method: 'POST', cache: 'no-store',
