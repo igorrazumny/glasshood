@@ -459,3 +459,40 @@ def test_before_the_cutover_status_says_awake_and_nothing_is_changed():
     clock, store, az, api, reconcile = rig()
     api.cfg.always_on = True
     assert api.status().body["state"] == "awake"
+
+
+# ---- rollback fence (clause 13) ----
+
+def test_rollback_during_a_pending_sleep_change_stays_rolled_back():
+    from wake import fence
+    clock, store, az, api, reconcile = rig()
+    wake_and_settle(clock, store, az, api, reconcile)
+    api.sleep()
+    halted = {"done": False}
+
+    def halt_when_deactivating(now):                       # the operator's rollback starts
+        if "restrict" in az.arm_calls and not halted["done"]:
+            halted["done"] = True
+            fence.halt(store)
+    clock.hooks.append(halt_when_deactivating)
+    assert reconcile() == "lease_lost"                     # stopped at its next check
+    clock.hooks.remove(halt_when_deactivating)
+    waited = fence.wait_pending(store, az, clock=clock, sleep=clock.sleep)
+    assert waited["kind"] == "restrict_ingress" and waited["final"] == "Succeeded"
+    assert az.restricted                                   # the late change has landed
+    calls = list(az.arm_calls)
+    az.restricted, az.active = False, True                 # rollback: open, active, min 1
+    for _ in range(10):
+        clock.sleep(60)
+        assert reconcile() == "halted"
+    assert az.arm_calls == calls and not az.restricted and az.active
+
+
+def test_a_halted_controller_sends_nothing_until_resumed():
+    from wake import fence
+    clock, store, az, api, reconcile = rig()
+    fence.halt(store)
+    api.wake({"recaptcha_token": "good"}, ORIGIN)
+    assert reconcile() == "halted" and az.arm_calls == []
+    fence.resume(store)
+    assert reconcile() == "done"

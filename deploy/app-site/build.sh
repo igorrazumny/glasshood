@@ -16,14 +16,19 @@ rm -rf "$out"
 
 mkdir -p "$out/waking"
 python3 - "$root/deploy/waking-page/index.html" "$out/waking/index.html" "$CONTROLLER" "$RECAPTCHA_SITE_KEY" <<'PY'
-import sys
+import re, sys
 src, dst, controller, site_key = sys.argv[1:]
 html = open(src).read()
-marker = 'var CONTROLLER = "";'
-assert html.count(marker) == 1, "waking page CONTROLLER constant not found exactly once"
-html = html.replace(marker, f'var CONTROLLER = "{controller}";')
-if 'var RECAPTCHA_SITE_KEY = "";' in html:
-    html = html.replace('var RECAPTCHA_SITE_KEY = "";', f'var RECAPTCHA_SITE_KEY = "{site_key}";')
+# The page must speak the controller's verified-wake contract (REQ-GHA-018 design v6).
+for needed in ("recaptcha_token", "use_token", "glasshood_use_token"):
+    assert needed in html, f"waking page lacks the verified-wake contract ({needed})"
+def set_const(name, value):
+    global html
+    pattern = re.compile(r'var %s = "[^"]*";' % name)
+    assert len(pattern.findall(html)) == 1, f"waking page {name} constant not found exactly once"
+    html = pattern.sub(lambda m: f'var {name} = "{value}";', html)
+set_const("CONTROLLER", controller)
+set_const("RECAPTCHA_SITE_KEY", site_key)      # the same key the React app is built with
 open(dst, "w").write(html)
 PY
 cp "$root/deploy/app-site/staticwebapp.config.json" "$root/deploy/app-site/robots.txt" "$out/"

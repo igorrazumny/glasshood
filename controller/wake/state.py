@@ -32,11 +32,15 @@ def intent_of(entity: dict) -> Intent:
 
 
 def control_of(entity: dict) -> dict:
-    return {"epoch": int(entity.get("epoch", 0)), "op": json.loads(entity.get("op") or "null")}
+    """Reconciler control: its epoch (fence), the operation it has in flight, and
+    `halted` (set by a rollback: no reconciler may take over or send anything)."""
+    return {"epoch": int(entity.get("epoch", 0)), "op": json.loads(entity.get("op") or "null"),
+            "halted": bool(entity.get("halted", False))}
 
 
 def entity_of(intent: Intent, control: dict) -> dict:
-    return {**asdict(intent), "epoch": control["epoch"], "op": json.dumps(control["op"])}
+    return {**asdict(intent), "epoch": control["epoch"], "op": json.dumps(control["op"]),
+            "halted": bool(control.get("halted", False))}
 
 
 def update_intent(store: Store, change: Callable[[Intent], Intent], tries: int = 10) -> Intent:
