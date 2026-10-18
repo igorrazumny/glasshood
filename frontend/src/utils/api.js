@@ -1,6 +1,45 @@
 // File: frontend/src/utils/api.js
 // Purpose: API fetch wrapper with Auth0 + legacy token + auto-reauth on 401
 
+import { WAKE } from '../config/wake'
+import { ensureAwakeOrRedirect } from './activity'
+
+// The API's address: same origin today, the app's own Azure address once the
+// frontend is served from app.glasshood.ai (REQ-GHA-018).
+export function apiUrl(path) {
+  return `${WAKE.apiBase}${path}`
+}
+
+// A sleep ended the session (REQ-GHA-018 clause 8): the app shows the login
+// screen instead of logging in again with stored credentials.
+export const SESSION_ENDED_EVENT = 'glasshood:session-ended'
+
+async function _isSessionEnded(resp) {
+  try {
+    const body = await resp.clone().json()
+    return body?.detail === 'session_ended'
+  } catch {
+    return false
+  }
+}
+
+function _endSession() {
+  clearToken()
+  window.dispatchEvent(new Event(SESSION_ENDED_EVENT))
+  throw new Error('Session ended')
+}
+
+// The app is asleep or waking: its ingress refuses the request without CORS
+// headers, so the browser reports a network error. Hand over to the waking page.
+async function _fetchApp(path, init) {
+  try {
+    return await fetch(apiUrl(path), init)
+  } catch (e) {
+    if (WAKE.controller) await ensureAwakeOrRedirect()
+    throw e
+  }
+}
+
 let _token = sessionStorage.getItem('glasshood_token') || null
 let _auth0GetToken = null  // Auth0 getAccessTokenSilently function
 
@@ -39,7 +78,7 @@ async function _reauth() {
   if (!raw) return false
   try {
     const { login: loginEmail, password } = JSON.parse(raw)
-    const resp = await fetch('/api/auth/login', {
+    const resp = await _fetchApp('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ login: loginEmail, password }),
@@ -75,7 +114,9 @@ export async function apiFetch(path, options = {}) {
     headers['Authorization'] = authHeader
   }
 
-  let resp = await fetch(path, { ...options, headers })
+  let resp = await _fetchApp(path, { ...options, headers })
+
+  if (resp.status === 401 && await _isSessionEnded(resp)) _endSession()
 
   // Auto-reauth on 401
   if (resp.status === 401) {
@@ -85,7 +126,7 @@ export async function apiFetch(path, options = {}) {
         const freshToken = await _auth0GetToken({ cacheMode: 'off' })
         if (freshToken) {
           headers['Authorization'] = `Bearer ${freshToken}`
-          resp = await fetch(path, { ...options, headers })
+          resp = await _fetchApp(path, { ...options, headers })
         }
       } catch {
         // Silent refresh failed — session expired
@@ -100,8 +141,9 @@ export async function apiFetch(path, options = {}) {
       const ok = await _reauth()
       if (ok) {
         headers['Authorization'] = `Bearer ${_token}`
-        resp = await fetch(path, { ...options, headers })
+        resp = await _fetchApp(path, { ...options, headers })
       }
+      if (resp.status === 401 && await _isSessionEnded(resp)) _endSession()
       if (resp.status === 401) {
         clearToken()
         throw new Error('Unauthorized')
@@ -118,7 +160,7 @@ export async function apiFetch(path, options = {}) {
 }
 
 export async function login(loginEmail, password) {
-  const resp = await fetch('/api/auth/login', {
+  const resp = await _fetchApp('/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ login: loginEmail, password }),

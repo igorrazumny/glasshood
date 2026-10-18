@@ -4,6 +4,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { RefreshCw, LogOut, ShieldCheck, Monitor, Sun, Moon } from 'lucide-react'
 import { useTheme } from '../hooks/useTheme'
+import { apiUrl } from '../utils/api'
 
 const STATUS_TEXT = {
   healthy: 'All Systems Operational',
@@ -130,7 +131,7 @@ export default function StatusHeader({ topology, lastUpdated, onRefresh, onLogou
   const [version, setVersion] = useState('')
 
   useEffect(() => {
-    fetch('/api/version')
+    fetch(apiUrl('/api/version'))
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.version) setVersion(d.version) })
       .catch(() => {})

@@ -5,6 +5,7 @@ import asyncio
 import logging
 import os
 import threading
+import time
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -46,14 +47,32 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="GlassHood")
 
-# CORS
+# CORS: CORS_ORIGINS (comma-separated) narrows it when the app is served from
+# app.glasshood.ai (REQ-GHA-018); unset keeps today's "*".
+_cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()] or ["*"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Request durations (REQ-GHA-018): evidence for the sleep drain's upper bound on
+# how long an ordinary request runs. Logs every request that takes 1 s or more.
+_SLOW_REQUEST_MS = 1000
+
+
+@app.middleware("http")
+async def _log_request_duration(request, call_next):
+    start = time.monotonic()
+    response = await call_next(request)
+    ms = int((time.monotonic() - start) * 1000)
+    if ms >= _SLOW_REQUEST_MS:
+        logger.info("request_duration method=%s path=%s status=%s ms=%d",
+                    request.method, request.url.path, response.status_code, ms)
+    return response
+
 
 # Routes
 app.include_router(auth_router)

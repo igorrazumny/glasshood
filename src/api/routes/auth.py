@@ -27,6 +27,11 @@ JWT_ALGORITHM = "HS256"
 # Dev-mode fallback secret (lost on restart — set JWT_SECRET in production)
 _DEV_SECRET = secrets.token_urlsafe(32)
 
+# One id per process (REQ-GHA-018 clause 8): every token carries it, so a token
+# issued before a sleep (the process ended) is refused after the wake.
+BOOT_ID = secrets.token_hex(8)
+SESSION_ENDED = "session_ended"
+
 # Refresh token store: jti -> {user, role, expiry}  (server-side for revocation)
 _refresh_tokens: dict[str, dict] = {}
 
@@ -61,7 +66,7 @@ def _make_access_token(user: str, role: str, customer_id: str = "") -> str:
     payload = {
         "sub": user, "role": role, "iat": now,
         "exp": now + JWT_ACCESS_TTL,
-        "jti": secrets.token_hex(16), "type": "access",
+        "jti": secrets.token_hex(16), "type": "access", "boot": BOOT_ID,
     }
     if customer_id:
         payload["customer_id"] = customer_id
@@ -74,7 +79,7 @@ def _make_refresh_token(user: str, role: str, customer_id: str = "") -> str:
     payload = {
         "sub": user, "role": role, "iat": now,
         "exp": now + JWT_REFRESH_TTL,
-        "jti": jti, "type": "refresh",
+        "jti": jti, "type": "refresh", "boot": BOOT_ID,
     }
     if customer_id:
         payload["customer_id"] = customer_id
@@ -83,6 +88,25 @@ def _make_refresh_token(user: str, role: str, customer_id: str = "") -> str:
         "customer_id": customer_id,
     }
     return pyjwt.encode(payload, _jwt_secret(), algorithm=JWT_ALGORITHM)
+
+
+def _decode_local(token: str, expired_detail: str, invalid_detail: str) -> dict:
+    """Decode a local HS256 token; a token from an earlier process is refused as
+    session_ended before expiry is looked at, so an expired pre-sleep token never
+    takes the ordinary expired-token path. The signature is always verified."""
+    try:
+        unexpired = pyjwt.decode(token, _jwt_secret(), algorithms=[JWT_ALGORITHM],
+                                 options={"verify_exp": False})
+    except pyjwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail=invalid_detail)
+    if unexpired.get("boot") != BOOT_ID:
+        raise HTTPException(status_code=401, detail=SESSION_ENDED)
+    try:
+        return pyjwt.decode(token, _jwt_secret(), algorithms=[JWT_ALGORITHM])
+    except pyjwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail=expired_detail)
+    except pyjwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail=invalid_detail)
 
 
 def _hash_key(key: str) -> str:
@@ -168,12 +192,7 @@ def verify_token(request: Request) -> dict:
                 logger.warning(f"GCP identity token check failed: {gcp_err}")
 
         # Local JWT (HS256 — issued by /api/auth/login)
-        try:
-            payload = pyjwt.decode(token, _jwt_secret(), algorithms=[JWT_ALGORITHM])
-        except pyjwt.ExpiredSignatureError:
-            raise HTTPException(status_code=401, detail="Token expired")
-        except pyjwt.InvalidTokenError:
-            raise HTTPException(status_code=401, detail="Invalid token")
+        payload = _decode_local(token, "Token expired", "Invalid token")
         if payload.get("type") != "access":
             raise HTTPException(status_code=401, detail="Not an access token")
         ctx = {"user": payload["sub"], "role": payload["role"],
@@ -234,12 +253,9 @@ def login(body: LoginRequest):
 @router.post("/api/auth/refresh")
 def refresh(body: RefreshRequest):
     """Exchange a valid refresh token for a new access token (Annex 11 idle timeout)."""
-    try:
-        payload = pyjwt.decode(body.refresh_token, _jwt_secret(), algorithms=[JWT_ALGORITHM])
-    except pyjwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Refresh token expired — re-login required")
-    except pyjwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid refresh token")
+    payload = _decode_local(body.refresh_token,
+                            "Refresh token expired — re-login required",
+                            "Invalid refresh token")
 
     if payload.get("type") != "refresh":
         raise HTTPException(status_code=401, detail="Not a refresh token")

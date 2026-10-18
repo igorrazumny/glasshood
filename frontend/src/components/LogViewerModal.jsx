@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
-import { apiFetch } from '../utils/api'
+import { apiFetch, apiUrl } from '../utils/api'
 
 const SEVERITY_COLORS = {
   ERROR: 'text-red-400',
@@ -38,7 +38,7 @@ export default function LogViewerModal({ nodeId, nodeLabel, nodeStatus, isDemo, 
     // sending them invites accidental reliance and gives a misleading sense
     // of where the trust boundary is).
     const url = isDemo ? `/api/demo/logs/${nodeId}` : `/api/logs/${nodeId}`
-    const fetcher = isDemo ? fetch(url).then(r => r.json()) : apiFetch(url)
+    const fetcher = isDemo ? fetch(apiUrl(url)).then(r => r.json()) : apiFetch(url)
 
     fetcher
       .then(data => {

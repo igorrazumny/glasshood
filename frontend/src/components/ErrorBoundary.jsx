@@ -2,6 +2,7 @@
 // Purpose: Catch rendering crashes, display error, send crash report to backend
 
 import { Component } from 'react'
+import { apiUrl } from '../utils/api'
 
 // Send crash report to backend for Cloud Logging visibility
 function reportCrash(error, errorInfo) {
@@ -16,7 +17,7 @@ function reportCrash(error, errorInfo) {
       uptime_ms: performance.now(),
     }
     // Fire and forget — don't let reporting failure cause another crash
-    fetch('/api/frontend-error', {
+    fetch(apiUrl('/api/frontend-error'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(report),
