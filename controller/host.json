@@ -1,0 +1,19 @@
+{
+  "version": "2.0",
+  "functionTimeout": "00:10:00",
+  "extensions": {
+    "queues": {
+      "batchSize": 1,
+      "newBatchThreshold": 0,
+      "maxPollingInterval": "00:00:02",
+      "maxDequeueCount": 3
+    }
+  },
+  "logging": {
+    "logLevel": { "default": "Warning", "Function": "Information" }
+  },
+  "extensionBundle": {
+    "id": "Microsoft.Azure.Functions.ExtensionBundle",
+    "version": "[4.*, 5.0.0)"
+  }
+}
