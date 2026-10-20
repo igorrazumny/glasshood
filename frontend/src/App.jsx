@@ -6,7 +6,8 @@ import { useAuthSession } from './components/Auth0ProviderWrapper'
 import LoginScreen from './components/LoginScreen'
 import Dashboard from './components/Dashboard'
 import ErrorBoundary from './components/ErrorBoundary'
-import { getToken, clearToken, setAuth0TokenGetter } from './utils/api'
+import { getToken, clearToken, setAuth0TokenGetter, SESSION_ENDED_EVENT } from './utils/api'
+import { ensureAwakeOrRedirect, startActivityTracking, reportUse } from './utils/activity'
 
 function getInitialState() {
   const params = new URLSearchParams(window.location.search)
@@ -30,6 +31,19 @@ export default function App() {
   const [prefillDemo, setPrefillDemo] = useState(initial.prefillDemo)
   const { isAuthenticated, isLoading, user, getAccessTokenSilently, logout: auth0Logout } = useAuthSession()
 
+  // REQ-GHA-018: an asleep app hands the visitor to the waking page; an awake one
+  // starts reporting person-caused use. Both are no-ops without a wake controller.
+  useEffect(() => {
+    ensureAwakeOrRedirect().then((awake) => { if (awake) startActivityTracking() })
+  }, [])
+
+  // A sleep ended the session: show the login screen, do not log in silently.
+  useEffect(() => {
+    const onEnded = () => { setMode('login'); setPrefillDemo(false) }
+    window.addEventListener(SESSION_ENDED_EVENT, onEnded)
+    return () => window.removeEventListener(SESSION_ENDED_EVENT, onEnded)
+  }, [])
+
   // When Auth0 authenticates, switch to live mode and wire up token getter
   useEffect(() => {
     if (isAuthenticated && mode !== 'demo') {
@@ -38,13 +52,14 @@ export default function App() {
     }
   }, [isAuthenticated])
 
-  const handleLogin = () => setMode('live')
+  const handleLogin = () => { reportUse(); setMode('live') }
 
   const handleDemo = async () => {
     // Demo = live view, no masking (REQ-214). Silent login with demo creds.
     try {
       const { login: loginFn } = await import('./utils/api.js')
       await loginFn('demo@glasshood.example.com', 'demo')
+      reportUse()
       setMode('live')
     } catch {
       // Fallback to old static demo if login fails

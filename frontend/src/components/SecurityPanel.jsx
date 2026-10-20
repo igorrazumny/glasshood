@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from 'react'
 import { Shield, ShieldAlert, ShieldCheck, ChevronDown, ChevronUp } from 'lucide-react'
+import { apiUrl } from '../utils/api'
 
 // REQ-009: severity + status pill pairs — light uses bg-100 + text-700,
 // dark uses bg-400/10 + text-400 so CVE rows read on both themes.
@@ -41,7 +42,7 @@ export default function SecurityPanel({ isDemo }) {
     const fetchFindings = () => {
       const token = localStorage.getItem('token')
       if (!token) return
-      fetch('/api/security/findings', {
+      fetch(apiUrl('/api/security/findings'), {
         headers: { Authorization: `Bearer ${token}` }
       })
         .then(r => r.ok ? r.json() : null)

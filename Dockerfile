@@ -33,4 +33,6 @@ ENV PORT=8080
 
 EXPOSE 8080
 
-CMD ["python", "-m", "uvicorn", "src.api.asgi:app", "--host", "0.0.0.0", "--port", "8080"]
+# Graceful shutdown (REQ-GHA-018): on SIGTERM at sleep, requests in progress get
+# up to 120 s to finish; the container app's termination grace is the hard cap.
+CMD ["python", "-m", "uvicorn", "src.api.asgi:app", "--host", "0.0.0.0", "--port", "8080", "--timeout-graceful-shutdown", "120"]

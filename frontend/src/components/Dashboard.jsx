@@ -17,15 +17,15 @@ import AlertDetailModal from './AlertDetailModal'
 import AnomalyDetailModal from './AnomalyDetailModal'
 import VerificationReportModal from './VerificationReportModal'
 import { usePolling } from '../hooks/usePolling'
-import { clearToken, apiFetch } from '../utils/api'
+import { clearToken, apiFetch, apiUrl } from '../utils/api'
 
 function useDemoData() {
   const [topology, setTopology] = useState(null)
   const [analysis, setAnalysis] = useState(null)
 
   useEffect(() => {
-    fetch('/api/demo/topology').then(r => r.json()).then(setTopology)
-    fetch('/api/demo/analysis').then(r => r.json()).then(setAnalysis)
+    fetch(apiUrl('/api/demo/topology')).then(r => r.json()).then(setTopology)
+    fetch(apiUrl('/api/demo/analysis')).then(r => r.json()).then(setAnalysis)
   }, [])
 
   return {
