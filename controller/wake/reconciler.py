@@ -38,6 +38,7 @@ class Reconciler:
         self.epoch = None
         self.started = None
         self.queue_view = None       # the latest queue scan in this run
+        self._step_generation = None # the intent generation the current step serves
         self._reported = set()       # failure kinds already reported in this run
 
     # ---- ownership ----
@@ -84,10 +85,12 @@ class Reconciler:
         if self.lease.seconds_left() < MIN_LEASE_LEFT:
             self._renew()
         self._write_control(lambda c: {**c, "op": {"kind": kind, "state": "submitting",
-                                                   "issued_at": self.clock(), "epoch": self.epoch}})
+                                                   "issued_at": self.clock(), "epoch": self.epoch,
+                                                   "generation": self._step_generation}})
         handle = send()
         self._write_control(lambda c: {**c, "op": {**c["op"], "state": "accepted", "url": handle.url}})
-        self._await_op({"kind": kind, "state": "accepted", "url": handle.url, "issued_at": self.clock()})
+        self._await_op({"kind": kind, "state": "accepted", "url": handle.url, "issued_at": self.clock(),
+                        "generation": self._step_generation})
 
     def _await_op(self, op: dict) -> None:
         """Wait until an operation is terminal (Succeeded, Failed or Canceled; anything
@@ -109,6 +112,10 @@ class Reconciler:
                 if state != "Succeeded":
                     self.store.record("operation_failed", {"op": op, "state": state})
                     self._report("operation_failed", {"op": op.get("kind"), "state": state})
+                    now = self.clock()
+                    gen = op.get("generation")
+                    update_intent(self.store, lambda i: core.refused(i, op.get("kind", ""), now)
+                                  if gen is None or i.generation == gen else i)
                 self._write_control(lambda c: {**c, "op": None})
                 if slow and state == "Succeeded":
                     now = self.clock()
@@ -163,7 +170,7 @@ class Reconciler:
         actual, revision = self.ops.read_actual()
         actual.queue = self.queue_view
         step = core.next_step(intent, actual, now)
-        g = intent.generation
+        g = self._step_generation = intent.generation
 
         if step.kind == "done":
             self._settle(intent, actual)

@@ -216,4 +216,3 @@ class FakeAzure:
             if not active:
                 self.replicas = 0
         return self._async("activate" if active else "deactivate", apply)
-

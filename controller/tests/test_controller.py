@@ -496,3 +496,89 @@ def test_a_halted_controller_sends_nothing_until_resumed():
     assert reconcile() == "halted" and az.arm_calls == []
     fence.resume(store)
     assert reconcile() == "done"
+
+
+# ---- review of 2026-10-20: a sleep step Azure refuses (clause 11) ----
+
+import pytest  # noqa: E402
+
+
+def _sleep_with(fail, end="Failed", app_exits_after=150, **rig_args):
+    clock, store, az, api, reconcile = rig(drain_seconds=app_exits_after, **rig_args)
+    wake_and_settle(clock, store, az, api, reconcile)
+    for kind in fail:
+        az.fail[kind] = end
+    api.sleep()
+    t0 = clock()
+    while not intent(store).asleep_done and clock() - t0 < 1200:
+        reconcile()
+        clock.sleep(60)                                    # the 1-minute timer
+    return clock, store, az, api, reconcile, t0
+
+
+@pytest.mark.parametrize("end", ["Failed", "Canceled"])
+@pytest.mark.parametrize("fail", [["restrict"], ["deactivate"], ["restrict", "deactivate"]])
+@pytest.mark.parametrize("app_exits_after", [35, 150, 100_000])   # responsive / killed after grace / never
+def test_a_refused_sleep_step_does_not_stop_the_sleep(fail, end, app_exits_after):
+    if "deactivate" in fail and app_exits_after > core.DRAIN_SECONDS:
+        pytest.skip("nothing else stops a replica that never exits: see the next test")
+    clock, store, az, api, reconcile, t0 = _sleep_with(fail, end, app_exits_after)
+    assert intent(store).asleep_done and api.status().body["state"] == "asleep"
+    assert az.replicas == 0 and az.queue == []
+    assert clock() - t0 <= 600                             # asleep within 10 minutes
+    if "restrict" in fail or app_exits_after > core.DRAIN_SECONDS:
+        assert "operation_failed" in store.kinds()
+    assert az.arm_calls.count("restrict") <= 2             # not retried in a loop
+
+
+def test_a_refused_deactivate_with_a_replica_that_never_exits_is_reported_and_retried_slowly():
+    reports = []
+    clock, store, az, api, reconcile = rig(drain_seconds=100_000)
+    wake_and_settle(clock, store, az, api, reconcile)
+    az.fail["deactivate"] = "Failed"
+    api.sleep()
+    rec = Reconciler(store, az, Lease(clock), clock=clock, sleep=clock.sleep,
+                     notify=lambda kind, detail: reports.append(kind))
+    t0 = clock()
+    while clock() - t0 < 1800:
+        rec.run()
+        clock.sleep(60)
+    assert reports and "operation_failed" in reports
+    assert az.arm_calls.count("deactivate") <= 1 + 1800 // core.RETRY_FAILED_SECONDS
+    assert api.status().body["state"] == "going-to-sleep"  # honest: not asleep
+    del az.fail["deactivate"]
+    while clock() - t0 < 1800 + core.RETRY_FAILED_SECONDS + 120:
+        rec.run()
+        clock.sleep(60)
+    assert az.replicas == 0 and intent(store).asleep_done
+
+
+def test_a_refused_restriction_is_tried_again_later_and_repaired():
+    clock, store, az, api, reconcile, t0 = _sleep_with(["restrict"])
+    assert not az.restricted
+    del az.fail["restrict"]
+    for _ in range(12):
+        clock.sleep(60)
+        reconcile()
+    assert az.restricted and intent(store).asleep_done
+
+
+def test_a_wake_during_sleep_recovery_wins():
+    clock, store, az, api, reconcile = rig()
+    body = wake_and_settle(clock, store, az, api, reconcile)
+    az.fail["restrict"] = "Failed"
+    api.sleep()
+    used = {}
+
+    def use_once_refused(now):                             # a person acts during recovery
+        if "operation_failed" in store.kinds() and not used:
+            used["status"] = api.use({"use_token": body["use_token"]}, ORIGIN).status
+            del az.fail["restrict"]
+    clock.hooks.append(use_once_refused)
+    reconcile()
+    clock.hooks.remove(use_once_refused)
+    assert used["status"] == 204
+    i = intent(store)
+    assert i.desired == "awake" and i.failed == ""
+    reconcile()
+    assert not az.restricted and az.active and az.replicas == 1
