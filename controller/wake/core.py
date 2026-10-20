@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import json
 import secrets
 from dataclasses import dataclass, field, replace
 
@@ -15,6 +16,7 @@ DRAIN_SECONDS = 160              # cooldown 30 s + grace 120 s + 10 s margin (de
 SCAN_VISIBILITY = 30             # a scanned message is invisible this long (design v6)
 SCAN_FRESH_SECONDS = 15          # a queue scan older than this is scanned again
 EMPTY_TRUST_SECONDS = 120        # clean empty scans this long outweigh the approximate count
+RETRY_FAILED_SECONDS = 600       # a sleep step Azure refused is tried again only after this
 
 
 @dataclass
@@ -31,6 +33,7 @@ class Intent:
     settled: bool = True               # actual state matched intent at the last check
     asleep_done: bool = True           # the last sleep reached zero replicas
     deadline: float = 0.0              # awake: the wake fails if not awake by then
+    failed: str = ""                   # JSON {step: time} of steps Azure refused (this generation)
 
 
 @dataclass
@@ -91,7 +94,7 @@ def wake(intent: Intent, now: float, reason: str) -> Intent:
         intent, desired="awake", generation=intent.generation + 1,
         wake_id=secrets.token_hex(8) if fresh else intent.wake_id,
         last_use=max(intent.last_use, now), reason=reason, t0=now,
-        deadline=now + WAKE_DEADLINE_SECONDS,
+        deadline=now + WAKE_DEADLINE_SECONDS, failed="",
         queue_cleared_at=0.0, settled=False, asleep_done=False,
     )
 
@@ -102,7 +105,7 @@ def use(intent: Intent, now: float) -> Intent:
     if intent.desired == "asleep" and not intent.asleep_done:
         out = replace(out, desired="awake", generation=intent.generation + 1,
                       reason="use_during_sleep", t0=now, deadline=now + WAKE_DEADLINE_SECONDS,
-                      queue_cleared_at=0.0, settled=False)
+                      failed="", queue_cleared_at=0.0, settled=False)
     return out
 
 
@@ -120,8 +123,20 @@ def sleep(intent: Intent, now: float, reason: str) -> Intent:
     if intent.desired == "asleep":
         return replace(intent, hold_until=0.0)
     return replace(intent, desired="asleep", generation=intent.generation + 1,
-                   hold_until=0.0, reason=reason, t0=now, queue_cleared_at=0.0,
+                   hold_until=0.0, reason=reason, t0=now, queue_cleared_at=0.0, failed="",
                    settled=False, asleep_done=False)
+
+
+def refused(intent: Intent, step: str, now: float) -> Intent:
+    """Record that Azure refused a step (terminal Failed or Canceled) at now."""
+    f = json.loads(intent.failed or "{}")
+    f[step] = now
+    return replace(intent, failed=json.dumps(f, sort_keys=True))
+
+
+def recently_refused(intent: Intent, step: str, now: float) -> bool:
+    t = json.loads(intent.failed or "{}").get(step)
+    return t is not None and now - t < RETRY_FAILED_SECONDS
 
 
 def hold(intent: Intent, now: float, seconds: int) -> Intent:
@@ -198,7 +213,10 @@ def queue_empty(q: QueueView, now: float) -> bool:
 
 
 def _toward_asleep(intent: Intent, a: Actual, now: float) -> Step:
-    if not a.ingress_restricted:
+    # A step Azure refused is not repeated at once: the sleep goes on without it and
+    # it is tried again later (clause 11). Zero replicas then come from the emptied
+    # queue (the scale rule's scale-in, which ends even a hung replica after its grace).
+    if not a.ingress_restricted and not recently_refused(intent, "restrict_ingress", now):
         return Step("restrict_ingress")
     q = a.queue
     if not intent.queue_cleared_at:
@@ -209,11 +227,12 @@ def _toward_asleep(intent: Intent, a: Actual, now: float) -> Step:
         return Step("mark_cleared")            # D: the drain is measured from here
     if a.replicas == 0:
         return Step("done")
+    may_deactivate = a.revision_active and not recently_refused(intent, "deactivate", now)
     # An unhealthy wake never served anyone: no drain. Otherwise wait out the drain,
     # measured from when the queue was actually emptied, never cutting it short.
     if intent.reason == "wake_failed":
-        return Step("deactivate_revision") if a.revision_active else Step("wait", {"for": "zero"})
-    if now - intent.queue_cleared_at >= DRAIN_SECONDS and a.revision_active:
+        return Step("deactivate_revision") if may_deactivate else Step("wait", {"for": "zero"})
+    if now - intent.queue_cleared_at >= DRAIN_SECONDS and may_deactivate:
         return Step("deactivate_revision")
     return Step("wait", {"for": "drain"})
 
