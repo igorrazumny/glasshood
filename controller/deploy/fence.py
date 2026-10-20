@@ -2,10 +2,11 @@
 # File: controller/deploy/fence.py
 # Purpose: REQ-GHA-018 clause 13 — the cutover's view of the controller's state, as the
 # logged-in az user (needs azure-identity, azure-data-tables, azure-storage-queue, httpx).
-#   fence.py halt                stop every reconciler (halted + epoch bump)
-#   fence.py wait                wait out the operation it may have left with Azure
-#   fence.py resume              allow reconcilers again
-#   fence.py intent              {"desired", "generation", "settled", "halted"}
+#   fence.py pin                 rollback: awake and pinned (never sleeps), epoch bumped
+#   fence.py unpin               enable: the app may sleep again
+#   fence.py wait                wait out the operation a reconciler may have left with Azure
+#   fence.py halt | resume       last resort: stop every reconciler (nothing repairs) / allow again
+#   fence.py intent              {"desired", "generation", "settled", "pinned", "halted"}
 #   fence.py has-message <gen>   exit 0 if a wake message of that generation is seen
 # Settings from the environment: SA, CONTAINER_APP_ID, CONTAINER_APP_FQDN.
 import json
@@ -31,7 +32,13 @@ def queue():
 
 
 def main(cmd: str, args: list[str]) -> int:
-    if cmd == "halt":
+    if cmd == "pin":
+        import time
+        fence.pin(store, time.time())
+    elif cmd == "unpin":
+        import time
+        fence.unpin(store, time.time())
+    elif cmd == "halt":
         print(json.dumps(fence.halt(store)))
     elif cmd == "resume":
         print(json.dumps(fence.resume(store)))
@@ -43,7 +50,7 @@ def main(cmd: str, args: list[str]) -> int:
         entity = store.read()[0]
         i, c = intent_of(entity), control_of(entity)
         print(json.dumps({"desired": i.desired, "generation": i.generation,
-                          "settled": i.settled, "halted": c["halted"]}))
+                          "settled": i.settled, "pinned": i.pinned, "halted": c["halted"]}))
     elif cmd == "has-message":
         # Verification only (Peek shows visible messages; the caller retries while a
         # scan has them briefly invisible). Decisions never rely on Peek.

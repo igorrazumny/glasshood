@@ -1,9 +1,16 @@
 # File: controller/wake/fence.py
-# Purpose: REQ-GHA-018 clause 13 — stopping the reconciler for a rollback, so that no
-# change of its can land after the rollback's own. halt() sets `halted` and bumps the
-# epoch in one conditional write: a running reconciler fails its next ownership check
-# before it can send anything, and no new run may take over. wait_pending() then waits
-# out the one operation that may already be with Azure.
+# Purpose: REQ-GHA-018 clause 13 — the rollback's hold on the controller.
+#   pin()    the rollback. One conditional write makes the intent awake and pinned
+#            (never put to sleep, no idle, no failed-wake sleep) and bumps the epoch, so a
+#            running reconciler fails its next ownership check. A sender already past
+#            that check (or a request already with Azure) can still land one late
+#            change; there is no ETag to refuse it. The reconciler stays on and
+#            repairs it like any divergence, within a minute's run (clause 11).
+#   unpin()  the cutover's enable: the app may sleep again, idle counted from now.
+#   halt()   last resort for a controller that itself misbehaves: no reconciler takes
+#            over or sends anything, so nothing repairs a late change either. Check
+#            the app again after 5 minutes.
+#   wait_pending()  waits out the one operation that may be with Azure.
 
 from __future__ import annotations
 
@@ -24,6 +31,31 @@ def _set(store, change) -> dict:
             return control
         except Conflict:
             continue
+
+
+def _pin_write(store, change_intent, change_control) -> None:
+    while True:
+        entity, etag = store.read()
+        try:
+            store.write(entity_of(change_intent(intent_of(entity)), change_control(control_of(entity))), etag)
+            return
+        except Conflict:
+            continue
+
+
+def pin(store, now: float) -> None:
+    from dataclasses import replace
+    from . import core
+    _pin_write(store,
+               lambda i: replace(core.wake(i, now, "rollback"), pinned=True),
+               lambda c: {**c, "halted": False, "epoch": c["epoch"] + 1})
+
+
+def unpin(store, now: float) -> None:
+    from dataclasses import replace
+    _pin_write(store,
+               lambda i: replace(i, pinned=False, last_use=max(i.last_use, now)),
+               lambda c: c)
 
 
 def halt(store) -> dict:

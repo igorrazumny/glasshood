@@ -30,6 +30,8 @@ Gates for the cutover that fake tests cannot show (design v6, peer review 2026-1
 - Failure reports reach the operator: `ACS_EMAIL_ENDPOINT`, `ALERT_EMAIL_FROM` and `ALERT_EMAIL_TO` are set and one test report arrives. Until then a failure is only an error log.
 - Real image startup, ordinary and hung-request drain, Envoy stream survival, lease and late-write recovery, rollback, and the whole estate's cost.
 
+**Rollback** (`cutover.sh rollback`) pins the controller to always on: the intent is awake and can no longer be put to sleep (no idle, no failed-wake sleep, operator sleep answers 409), and the epoch is bumped. A reconciler already past its last ownership check can still land one late change, because the container app has no ETag to refuse it; the pinned controller keeps running and undoes that change within a run. The script waits out any recorded operation, applies min 1 / max 1 without the queue rule, verifies, and verifies again after 6 minutes. `cutover.sh enable` unpins only at its very end.
+
 Nothing changes the live app until the cutover (clause 13 step e) sets `RECONCILE=on`. The cutover also gives the app its queue scale rule (min 0 / max 1, cooldown 30 s) and its 120 s termination grace.
 
 ## Tests

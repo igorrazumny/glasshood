@@ -6,10 +6,12 @@
 #   cutover.sh enable            step (e): record an awake intent, switch the reconciler
 #                                on, wait until it holds the wake message, then let the
 #                                app scale to zero on the queue rule (min 0 / max 1).
-#   cutover.sh rollback          back to always on: reconciler off and halted, any
-#                                operation it left with Azure waited out, then ingress
-#                                open, revision active, min 1 / max 1, no queue rule,
-#                                and that final state verified. Tested before (e).
+#   cutover.sh rollback          back to always on: the controller is pinned (keeps the
+#                                app awake and open, never puts it to sleep, and repairs
+#                                any late change), any operation it left with Azure is
+#                                waited out, then ingress open, revision active, min 1 /
+#                                max 1, no queue rule; verified, and verified again after
+#                                the repair window. Tested before (e).
 # Needs PY (default python3) with azure-identity, azure-data-tables, azure-storage-queue
 # and httpx, for controller/deploy/fence.py.
 set -euo pipefail
@@ -46,23 +48,17 @@ case "${1:-}" in
     "$here/ops.sh" wake >/dev/null || die "operator wake refused; nothing changed"
     intent=$(fence intent)
     [ "$(field desired <<<"$intent")" = awake ] || die "intent is not awake after the wake: $intent"
+    fence pin                                        # stays always on until the very end
     fence resume >/dev/null
     settings RECONCILE=on
     say "waiting for the reconciler to place the current generation's wake message"
     ok=
     for _ in $(seq 1 60); do
       intent=$(fence intent)
-      if [ "$(field desired <<<"$intent")" != awake ]; then
-        ok=; break                                   # someone asked for sleep: stop here
-      fi
       if fence has-message "$(field generation <<<"$intent")"; then ok=1; break; fi
       sleep 5
     done
-    if [ -z "$ok" ]; then
-      settings RECONCILE=off
-      fence halt >/dev/null
-      die "no wake message for the awake intent ($intent); reconciler switched off and halted, app scale unchanged"
-    fi
+    [ -n "$ok" ] || die "no wake message for the awake intent ($intent); the controller stays pinned to always on, app scale unchanged"
     say "the app's own identity may read the wake queue (for its scale rule)"
     az containerapp identity assign -g "$RG" -n "$APP" --system-assigned -o none </dev/null
     pid=$(az containerapp identity show -g "$RG" -n "$APP" --query principalId -o tsv </dev/null)
@@ -76,14 +72,15 @@ case "${1:-}" in
       --scale-rule-identity system -o none </dev/null
     az resource update -g "$RG" -n "$APP" --resource-type Microsoft.App/containerApps \
       --set properties.template.scale.cooldownPeriod=30 -o none </dev/null
+    say "unpinned: from now on the app sleeps after 2 hours without use"
+    fence unpin
     "$here/ops.sh" status
     ;;
 
   rollback)
-    say "reconciler off and halted: no running or new reconciler can send another change"
-    settings RECONCILE=off
-    fence halt >/dev/null
-    say "waiting out any operation it already handed to Azure"
+    say "controller pinned to always on: it stops sleeping the app and repairs any late change"
+    fence pin
+    say "waiting out any operation already handed to Azure"
     fence wait
     say "ingress open, revision active, always on (min 1 / max 1, no queue rule)"
     az containerapp ingress access-restriction remove -g "$RG" -n "$APP" --rule-name asleep -o none </dev/null 2>/dev/null || true
@@ -92,8 +89,8 @@ case "${1:-}" in
     az containerapp update -g "$RG" -n "$APP" --min-replicas 1 --max-replicas 1 \
       --remove-all-scale-rules -o none </dev/null 2>/dev/null \
       || az containerapp update -g "$RG" -n "$APP" --min-replicas 1 --max-replicas 1 -o none </dev/null
-    say "verifying the final always-on state"
-    for _ in $(seq 1 60); do
+    always_on() {
+      local state active code
       state=$(az containerapp show -g "$RG" -n "$APP" -o json </dev/null | "$PY" -c '
 import json, sys
 p = json.load(sys.stdin)["properties"]
@@ -102,13 +99,17 @@ s = p["template"]["scale"]
 print("ok" if not r and s.get("minReplicas") == 1 and not s.get("rules") else "pending")')
       active=$(az containerapp revision show -g "$RG" -n "$APP" --revision "$rev" --query properties.active -o tsv </dev/null)
       code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "https://$CONTAINER_APP_FQDN/api/health" || true)
-      if [ "$state" = ok ] && [ "$active" = true ] && [ "$code" = 200 ]; then
-        say "rolled back: open, active, min 1, no queue rule, health 200"
-        exit 0
-      fi
-      sleep 5
-    done
-    die "final state not reached (scale/ingress: $state, revision active: $active, health: $code)"
+      [ "$state" = ok ] && [ "$active" = true ] && [ "$code" = 200 ] && return 0
+      echo "   not yet: scale/ingress $state, revision active $active, health $code"
+      return 1
+    }
+    settle() { for _ in $(seq 1 60); do always_on && return 0; sleep 5; done; return 1; }
+    say "verifying the always-on state"
+    settle || die "always-on state not reached"
+    say "verifying it again after the repair window (a late change is repaired within a run)"
+    sleep 360
+    settle || die "always-on state lost after the repair window"
+    say "rolled back: open, active, min 1, no queue rule, health 200, and it stayed so"
     ;;
 
   *) echo "usage: cutover.sh prepare <image> | enable | rollback" >&2; exit 2 ;;

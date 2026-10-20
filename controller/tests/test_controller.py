@@ -463,7 +463,7 @@ def test_before_the_cutover_status_says_awake_and_nothing_is_changed():
 
 # ---- rollback fence (clause 13) ----
 
-def test_rollback_during_a_pending_sleep_change_stays_rolled_back():
+def test_halt_stops_a_reconciler_during_a_pending_change():
     from wake import fence
     clock, store, az, api, reconcile = rig()
     wake_and_settle(clock, store, az, api, reconcile)
@@ -582,3 +582,65 @@ def test_a_wake_during_sleep_recovery_wins():
     assert i.desired == "awake" and i.failed == ""
     reconcile()
     assert not az.restricted and az.active and az.replicas == 1
+
+
+
+# ---- review of 2026-10-20: rollback against a sender paused before its send ----
+
+def test_rollback_holds_against_a_sender_paused_before_its_send():
+    from wake import fence
+    from wake.reconciler import LeaseLost
+    clock, store, az, api, reconcile = rig()
+    wake_and_settle(clock, store, az, api, reconcile)
+    api.sleep()
+    old = Reconciler(store, az, Lease(clock), clock=clock, sleep=clock.sleep)
+    assert old._take()
+    old._step_generation = intent(store).generation
+
+    def send_after_rollback():
+        # The old owner has written "submitting" and is paused here. The operator's
+        # rollback runs to completion: pin, wait out the record, always-on applied.
+        fence.pin(store, clock())
+        waited = fence.wait_pending(store, az, clock=clock, sleep=clock.sleep)
+        assert waited["kind"] == "restrict_ingress"
+        az.restricted, az.active = False, True
+        assert not az.restricted
+        return az.set_restricted(True)                     # then the old owner resumes
+    with pytest.raises(LeaseLost):
+        old._arm("restrict_ingress", send_after_rollback)
+    old.lease.release()
+    clock.sleep(az.arm_seconds + 1)
+    assert az.restricted                                   # the late change has landed
+    landed = clock()
+    for _ in range(5):                                     # the 1-minute timer
+        clock.sleep(60)
+        reconcile()
+    assert not az.restricted and az.active and az.replicas == 1
+    repaired = [t for t, what in az.history if what == "open"][-1]
+    assert repaired > landed                               # the controller undid the late change
+    assert repaired - landed <= 300                        # within the clause-11 bound
+    for _ in range(10):                                    # and it stays rolled back
+        clock.sleep(60)
+        reconcile()
+    assert not az.restricted and intent(store).desired == "awake"
+
+
+def test_a_pinned_app_never_sleeps_until_enable_unpins_it():
+    from wake import fence
+    clock, store, az, api, reconcile = rig()
+    fence.pin(store, clock())
+    assert reconcile() == "done"
+    assert api.sleep().status == 409
+    clock.sleep(core.IDLE_SECONDS + 600)
+    reconcile()
+    assert intent(store).desired == "awake" and not az.restricted
+    az.healthy_app = False                                 # unhealthy: no failed-wake sleep
+    az.restricted = True
+    for _ in range(6):
+        clock.sleep(60)
+        reconcile()
+    assert intent(store).desired == "awake" and "wake_failed" not in store.kinds()
+    pinned = intent(store)
+    assert core.sleep(pinned, clock(), "idle") == pinned  # no path to sleep while pinned
+    fence.unpin(store, clock())
+    assert api.sleep().status == 202

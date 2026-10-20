@@ -112,6 +112,8 @@ class Api:
 
     # Operator endpoints (function key)
     def sleep(self) -> Reply:
+        if self._intent().pinned:
+            return Reply(409, {"error": "pinned: rolled back to always on (cutover.sh enable undoes it)"})
         now = self.clock()
         update_intent(self.store, lambda i: core.sleep(i, now, "operator"))
         self.kick()
