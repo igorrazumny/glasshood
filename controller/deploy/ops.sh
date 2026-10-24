@@ -10,7 +10,9 @@ export CLOUDSDK_CORE_DISABLE_PROMPTS=1
 RG=rg-glasshood-azure
 FUNC=${FUNC:-func-glasshood-wake}
 
-host=$(az functionapp show -g "$RG" -n "$FUNC" --query defaultHostName -o tsv </dev/null)
+# Flex Consumption: `az functionapp show` leaves defaultHostName empty; the resource has it.
+host=$(az resource show -g "$RG" -n "$FUNC" --resource-type Microsoft.Web/sites --query properties.defaultHostName -o tsv </dev/null)
+[ -n "$host" ] || { echo "ops.sh: no host name for $FUNC" >&2; exit 1; }
 key=$(az functionapp keys list -g "$RG" -n "$FUNC" --query functionKeys.default -o tsv </dev/null)
 # Prints the response body; exits non-zero unless the HTTP status is the expected one.
 call() {
