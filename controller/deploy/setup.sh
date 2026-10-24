@@ -102,4 +102,4 @@ for o in ${ORIGINS//,/ }; do
   grep -qx "$o" <<<"$EXISTING" || az functionapp cors add -g "$RG" -n "$FUNC" --allowed-origins "$o" -o none </dev/null
 done
 
-say "done: https://$(az functionapp show -g "$RG" -n "$FUNC" --query defaultHostName -o tsv </dev/null)"
+say "done: https://$(az resource show -g "$RG" -n "$FUNC" --resource-type Microsoft.Web/sites --query properties.defaultHostName -o tsv </dev/null)"
