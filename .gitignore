@@ -25,3 +25,4 @@ gcp-cred-config.json
 config/manifests/platform.yaml
 config/manifests/_staging/
 website/out/
+deploy/app-site/out/

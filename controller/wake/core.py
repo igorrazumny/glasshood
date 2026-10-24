@@ -34,6 +34,7 @@ class Intent:
     asleep_done: bool = True           # the last sleep reached zero replicas
     deadline: float = 0.0              # awake: the wake fails if not awake by then
     failed: str = ""                   # JSON {step: time} of steps Azure refused (this generation)
+    pinned: bool = False               # rolled back to always on: kept awake, never put to sleep
 
 
 @dataclass
@@ -119,7 +120,10 @@ def extend_deadline(intent: Intent, now: float) -> Intent:
 
 
 def sleep(intent: Intent, now: float, reason: str) -> Intent:
-    """A sleep request (operator, idle timer, failed wake). Ends any hold."""
+    """A sleep request (operator, idle timer, failed wake). Ends any hold. A pinned
+    (rolled-back) app is never put to sleep."""
+    if intent.pinned:
+        return intent
     if intent.desired == "asleep":
         return replace(intent, hold_until=0.0)
     return replace(intent, desired="asleep", generation=intent.generation + 1,
@@ -147,7 +151,7 @@ def hold(intent: Intent, now: float, seconds: int) -> Intent:
 
 def idle_due(intent: Intent, now: float) -> bool:
     """Clause 7: 2 hours without use and no hold."""
-    return (intent.desired == "awake" and now - intent.last_use >= IDLE_SECONDS
+    return (intent.desired == "awake" and not intent.pinned and now - intent.last_use >= IDLE_SECONDS
             and now >= intent.hold_until)
 
 
@@ -163,7 +167,8 @@ def _toward_awake(intent: Intent, a: Actual, now: float) -> Step:
     g = intent.generation
     # The wake's whole budget, checked before every step: a step that keeps failing
     # ends the wake at its deadline instead of being retried for ever.
-    if not intent.settled and now >= (intent.deadline or intent.t0 + WAKE_DEADLINE_SECONDS):
+    if (not intent.pinned and not intent.settled
+            and now >= (intent.deadline or intent.t0 + WAKE_DEADLINE_SECONDS)):
         return Step("fail_wake")
     if not a.revision_active:
         return Step("activate_revision")

@@ -46,7 +46,8 @@ class Reconciler:
         if not self.lease.renew():
             raise LeaseLost()
         entity, _ = self.store.read()
-        if control_of(entity)["epoch"] != self.epoch:
+        control = control_of(entity)
+        if control["epoch"] != self.epoch or control["halted"]:
             raise LeaseLost()
 
     def _write_control(self, change) -> None:
@@ -54,7 +55,7 @@ class Reconciler:
         while True:
             entity, etag = self.store.read()
             control = control_of(entity)
-            if control["epoch"] != self.epoch:
+            if control["epoch"] != self.epoch or control["halted"]:
                 raise LeaseLost()
             try:
                 self.store.write(entity_of(intent_of(entity), change(control)), etag)
@@ -68,6 +69,9 @@ class Reconciler:
         while True:
             entity, etag = self.store.read()
             control = control_of(entity)
+            if control["halted"]:
+                self.lease.release()
+                return False
             control = {**control, "epoch": control["epoch"] + 1}
             try:
                 self.store.write(entity_of(intent_of(entity), control), etag)
@@ -132,7 +136,7 @@ class Reconciler:
     # ---- the run ----
     def run(self) -> str:
         if not self._take():
-            return "busy"
+            return "halted" if control_of(self.store.read()[0])["halted"] else "busy"
         started = self.started = self.clock()
         try:
             entity, _ = self.store.read()
