@@ -850,6 +850,7 @@ export default function TopologyMap({ data, error, isDemo, hideCosts, onNodeSele
             totalCost += sol.cost; company = sol.company || company
           }
           if (coMinX === Infinity) return null
+          const multiSolution = Object.keys(solutions).length > 1
 
           // REQ-006: the `frameOpacity` argument applies ONLY to the wrapper
           // <rect> stroke so the boundary stays a quiet hint, not a hard
@@ -885,12 +886,13 @@ export default function TopologyMap({ data, error, isDemo, hideCosts, onNodeSele
                 (eb.maxX - eb.minX) + pad.env * 2, (eb.maxY - eb.minY) + pad.env * 2 + labelH,
                 'var(--canvas-boundary-label)', '4 3', 0.35, 1, eb.label, formatCost(eb.cost_yearly_usd), 8
               ))}
-              {Object.entries(solutions).map(([name, sol], i) => drawBox(
+              {/* REQ-GHA-021: with a single solution only its environment boundary is drawn */}
+              {multiSolution && Object.entries(solutions).map(([name, sol], i) => drawBox(
                 sol.minX - pad.sol, sol.minY - pad.sol - labelH,
                 (sol.maxX - sol.minX) + pad.sol * 2, (sol.maxY - sol.minY) + pad.sol * 2 + labelH,
                 'var(--canvas-boundary-label)', '6 4', 0.35, 1.2, name, formatCost(sol.cost), 10
               ))}
-              {drawBox(
+              {multiSolution && drawBox(
                 coMinX - pad.co, coMinY - pad.co - labelH,
                 (coMaxX - coMinX) + pad.co * 2, (coMaxY - coMinY) + pad.co * 2 + labelH,
                 'var(--canvas-boundary-label)', '8 4', 0.3, 1.5, (company ? `${company} — All Projects` : 'All Projects'), formatCost(totalCost), 12
