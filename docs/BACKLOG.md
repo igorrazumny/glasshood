@@ -241,3 +241,22 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
   6. The running app and its cost are unchanged.
 - **Who builds what:** Neo, the MCP server (clauses 1–4, 6). Cypher, the architecture page (clause 5).
 - **Status:** confirmed by Igor 2026-11-04 (full text), with approval of the official `mcp` Python package for the MCP server only. Clauses 1–4 and 6 built in `mcp-server/` (stdio, `mcp==2.3.0`, three read-only tools over the public demo endpoints; the app is not changed). The demo's own analysis covers the whole estate; per-node detail comes from each node's status, metrics and diagnostics in the topology. Clause 5 with Cypher.
+
+## REQ-GHA-020: GlassHood shows today's ColdVault, and checks it through ColdVault's MCP server
+
+- **Goal:** The logged-in GlassHood dashboard monitors coldvault.ai as it runs today, instead of the ColdVault Platform switched off on 2026-10-03. It checks ColdVault through ColdVault's MCP server (ColdVault REQ-227).
+- **Why:** Owner, 2026-11-04: the dashboard has been all red since the platform was switched off. It should show a real picture, using MCP as a client, without bringing the platform back.
+- **Target state:**
+  1. **Real components.** The dashboard shows ColdVault's components as they run today, as ColdVault's architect describes them. Nothing that is switched off is shown, and none of the old platform's checks run.
+  2. **Confidential hardware.** A "Confidential hardware" component is checked regularly through the MCP tool `verify_attestation`, with a fresh nonce that GlassHood makes for each check. It is healthy only when the result is verified and bound to that nonce. Otherwise it is in error, with ColdVault's reason. The component's detail says what the proof shows and what it does not, as REQ-227 states it.
+  3. **Recheck on demand.** A logged-in user can press "Recheck via MCP" on ColdVault's answering component. GlassHood then sends one short question through the MCP tool `ask` in Vault Mode. It shows whether an answer came back, from which model and how long it took, or the failure reason. Partner Mode is used only by an explicit choice that is labelled as sending the question to outside providers. The answer text is treated as untrusted and is not stored. Live demo cannot trigger a recheck.
+  4. **No running cost.** Regular checks never call `ask`. They use only a small share of ColdVault's per-caller limits, so they never cause a recheck to be refused. No new Azure resource is added.
+  5. **Never wakes ColdVault.** Regular checks neither wake ColdVault nor keep it awake (ColdVault REQ-226). While ColdVault is asleep, the dashboard shows it as asleep, not as an error. Only a person's recheck may wake it, and the button says so.
+  6. **Honest states.** An MCP server that does not answer, refuses, or answers with a protocol error is shown in error, with the reason, never as healthy. No result older than the last check is shown as current.
+  7. **Nothing else changes.** GlassHood's own MCP server (REQ-GHA-019), Live demo, login, sleeping and waking (REQ-GHA-018), and GlassHood's cost stay as they are.
+  8. **Architecture page.** architecture.glasshood.ai shows GlassHood as an MCP client of ColdVault, next to its own MCP server.
+- **Depends on:** ColdVault REQ-227 being live; ColdVault REQ-226, for how to tell that ColdVault is asleep without waking it; the architect's component list and log filters.
+- **Out of scope:** bringing the platform back; calling `ask` on a schedule; checking each partner provider separately.
+- **Package:** the official `mcp` Python package in the GlassHood app (approved by Igor, 2026-11-04).
+- **Who builds what:** Neo, clauses 1–7. Cypher, clause 8.
+- **Status:** confirmed by Igor 2026-11-04 (full text). Not started; waiting for ColdVault REQ-227 to be live and for the architect's description of today's ColdVault.
