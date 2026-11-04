@@ -214,6 +214,7 @@ export function computeManifestLayout(topologyNodes, manifests) {
           solution: manifest.solution || '',
           cost_yearly_usd: mNode.cost_yearly_usd || null,
           monitoring_logs: mNode.monitoring?.logs || null,
+          mcp_recheck: mNode.monitoring?.recheck?.type === 'mcp_ask',
           children: topoNode?.children || mNode.children || null,
         })
 

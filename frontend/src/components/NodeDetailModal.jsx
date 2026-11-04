@@ -2,8 +2,9 @@
 // Purpose: Modal popup for detailed node inspection — metrics + diagnostics + AI analysis
 
 import { useEffect, useState, useCallback } from 'react'
-import { X, FileText, Brain, AlertTriangle, CheckCircle, RefreshCw, Clock } from 'lucide-react'
+import { X, FileText, Brain, AlertTriangle, CheckCircle, RefreshCw, Clock, Cpu } from 'lucide-react'
 import { apiFetch } from '../utils/api'
+import { canRecheck, describeRecheck, recheckError, PARTNER_NOTE, WAKE_NOTE } from '../utils/mcpRecheck'
 import LogViewerModal from './LogViewerModal'
 
 const STATUS_COLORS = {
@@ -54,6 +55,10 @@ export default function NodeDetailModal({ node, onClose, isDemo, hideCosts }) {
   const [nodeAnalysis, setNodeAnalysis] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
   const [tick, setTick] = useState(0)
+  // REQ-GHA-020: Recheck via MCP (on demand only; result kept in this modal, not stored)
+  const [partner, setPartner] = useState(false)
+  const [rechecking, setRechecking] = useState(false)
+  const [recheck, setRecheck] = useState(null)
 
   // Tick every second for live timer
   useEffect(() => {
@@ -99,6 +104,19 @@ export default function NodeDetailModal({ node, onClose, isDemo, hideCosts }) {
       .catch(() => {})
     // Polling useEffect above will pick up the fresh result
   }, [node, refreshing])
+
+  const handleRecheck = useCallback(() => {
+    if (!node || rechecking) return
+    setRechecking(true)
+    setRecheck(null)
+    apiFetch(`/api/mcp-recheck/${node.id}`, {
+      method: 'POST',
+      body: JSON.stringify({ mode: partner ? 'partner' : 'vault' }),
+    })
+      .then(r => setRecheck({ ok: r.ok, text: describeRecheck(r) }))
+      .catch(e => setRecheck({ ok: false, text: recheckError(e) }))
+      .finally(() => setRechecking(false))
+  }, [node, rechecking, partner])
 
   if (!node) return null
 
@@ -287,6 +305,30 @@ export default function NodeDetailModal({ node, onClose, isDemo, hideCosts }) {
               </p>
             ) : (
               <p className="text-sm text-gray-600 dark:text-purple-200">{nodeAnalysis?.summary || 'Analysis unavailable'}</p>
+            )}
+          </div>
+        )}
+
+        {/* REQ-GHA-020: Recheck via MCP — logged-in users only, never Live demo */}
+        {canRecheck(node, isDemo) && (
+          <div className="mt-4 bg-surface/30 dark:bg-purple-900/40 border border-border/50 dark:border-purple-700 rounded-lg p-3">
+            <button
+              onClick={handleRecheck}
+              disabled={rechecking}
+              className="w-full flex items-center justify-center gap-2 bg-surface hover:bg-surface/80 dark:bg-purple-900/40 dark:hover:bg-purple-900/60 border border-border dark:border-purple-700 rounded-lg py-2 text-sm text-gray-700 dark:text-purple-100 disabled:opacity-50"
+            >
+              <Cpu size={14} className={rechecking ? 'animate-pulse' : ''} />
+              {rechecking ? 'Rechecking via MCP…' : 'Recheck via MCP'}
+            </button>
+            <label className="mt-2 flex items-start gap-2 text-xs text-gray-600 dark:text-purple-200">
+              <input type="checkbox" checked={partner} onChange={e => setPartner(e.target.checked)} disabled={rechecking} />
+              <span>Use Partner Mode. {PARTNER_NOTE}</span>
+            </label>
+            <div className="mt-1 text-xs text-gray-500 dark:text-purple-300">{WAKE_NOTE}</div>
+            {recheck && (
+              <div className={`mt-2 text-sm ${recheck.ok ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                {recheck.text}
+              </div>
             )}
           </div>
         )}
