@@ -259,3 +259,56 @@ def test_build_replaces_only_its_own_output(tmp_path):
     assert _build(src, empty).returncode == 0 and (empty / "site/index.html").is_file()
     # the default, website/out
     assert _build(src).returncode == 0 and (src / "website/out/architecture/index.html").is_file()
+
+
+# --- the look (REQ-GHA-018 clause 14): as neat and tidy as 9robots.ai, in GlassHood's colours ---
+
+
+def _shared_block(css):
+    start = css.index("==== masthead and footer: start ====")
+    body = css[css.index("*/", start) + 2:css.index("/* ==== masthead and footer: end ====")]
+    return " ".join(re.sub(r"/\*.*?\*/", "", body, flags=re.S).split())
+
+
+def test_the_architecture_page_has_the_same_masthead_and_footer_styles():
+    site = _shared_block(_read(_PUB / "assets/site.css"))
+    assert ".nav-links a[aria-current=\"page\"]" in site and ".site-footer-row" in site and ".page-title" in site
+    assert _shared_block(_read(_ARCH / "styles.css")) == site
+
+
+@pytest.mark.parametrize("page", _NAV_PAGES + (_ARCH / "index.html",), ids=lambda p: str(p.relative_to(ROOT)))
+def test_every_page_ends_with_the_footer(page):
+    html = _read(page)
+    footer = html.split('<footer class="footer">', 1)[1].split("</footer>", 1)[0]
+    for label in (">Home<", ">Architecture<", ">Contact<", ">Open app<"):
+        assert label in footer, label
+    assert html.index("</main>" if "</main>" in html else '<div class="container">') < html.index('<footer class="footer">')
+    for legal in ("©", "&copy;", "copyright", "rights reserved", "gmbh"):
+        assert legal not in footer.lower(), legal
+
+
+def test_the_architecture_page_carries_the_site_masthead_on_both_hosts():
+    html = _read(_ARCH / "index.html")
+    nav = _nav(html)
+    # Absolute addresses: the same file is the page at glasshood.ai/architecture/ and at architecture.glasshood.ai.
+    for href in ('href="https://glasshood.ai/"', 'href="https://glasshood.ai/contact/"', 'href="https://app.glasshood.ai"'):
+        assert href in nav, href
+    assert 'href="https://glasshood.ai/architecture/" aria-current="page"' in nav
+    assert '<h1 class="page-title">Architecture reference</h1>' in html
+    assert "pd-logo-link" not in html, "no second logo; no logo opens the app"
+
+
+def test_home_has_the_two_colour_hero_and_cards_with_icons():
+    home = _read(_PUB / "index.html")
+    assert '<span class="hero-title-first">' in home and '<span class="hero-title-rest">' in home
+    assert '<div class="hero-wash" aria-hidden="true"></div>' in home
+    assert home.count('<span class="feature-icon">') == 3
+
+
+def test_contact_has_labels_and_marks_the_required_fields():
+    html = _read(_PUB / "contact/index.html")
+    for field in ("contact-name", "contact-email", "contact-message"):
+        assert f'<label for="{field}" class="form-label form-label-required">' in html, field
+    assert "Required fields" in html and '<div class="form-row">' in html
+    css = _read(_PUB / "assets/site.css")
+    assert '.form-label-required::after{content:" *"' in css
