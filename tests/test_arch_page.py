@@ -147,7 +147,7 @@ def test_no_svg_arrow_markers():
 def test_cards_map_to_real_sections():
     targets = re.findall(r'class="pd-card" data-target="([a-z-]+)"', _HTML)
     ids = set(re.findall(r'<section class="pd-section" id="([a-z-]+)"', _HTML))
-    assert len(targets) == 2 and all(t in ids for t in targets)
+    assert targets == ["implementation", "compliance", "zero-trust", "mcp"] and all(t in ids for t in targets)
 
 
 def test_launch_cta_present():
@@ -162,3 +162,14 @@ def test_noindex_and_title():
 def test_lock_icon_trap_css():
     assert re.search(r"\.arch-diagram--detail\s+svg\s*\{[^}]*width\s*:\s*auto", _CSS), \
         "inline lock icons must not inherit full-width svg sizing (the lock-icon blowup trap)"
+
+
+def test_zero_trust_mcp_and_current_facts():
+    # The zero-trust and MCP sections, the MCP server in the detail diagram, and only facts that hold today.
+    for needle in ('id="zero-trust"', 'id="mcp"', "Verify explicitly", "Least privilege", "Assume breach",
+                   "<code>get_topology</code>", "<code>get_impact_analysis</code>", "<code>get_node_logs</code>",
+                   ">MCP server</span>", "AI agents through a local MCP server"):
+        assert needle in _HTML, needle
+    low = _HTML.lower()
+    assert "idle timeout" not in low, "sessions renew silently today: no idle-timeout claim"
+    assert "auth0 sso + local fallback" not in low and "acr &#183;" not in low
