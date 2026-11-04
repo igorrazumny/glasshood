@@ -14,6 +14,12 @@ const node = { source: 'manifest', mcp_recheck: true }
 
 test('offered on a manifest node with an MCP recheck', () => assert.equal(canRecheck(node, false), true))
 test('never in Live demo', () => assert.equal(canRecheck(node, true), false))
+test('offered on a template child with an MCP recheck', () => {
+  const child = { source: 'manifest', monitoring: { recheck: { type: 'mcp_ask', url: 'u' } } }
+  assert.equal(canRecheck(child, false), true)
+  assert.equal(canRecheck(child, true), false)
+  assert.equal(canRecheck({ source: 'manifest', monitoring: { recheck: { type: 'other' } } }, false), false)
+})
 test('not on nodes without an MCP recheck', () => {
   assert.equal(canRecheck({ source: 'manifest' }, false), false)
   assert.equal(canRecheck({ ...node, source: 'gcp' }, false), false)
