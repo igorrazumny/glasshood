@@ -271,4 +271,4 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
   3. **Only the application.** The architecture site is not shown.
   4. **No false warnings.** GlassHood runs no check of a component that does not exist, that it has no permission to read, or that it addresses wrongly. Its log has no repeated warnings from such checks. A real failure of a real component is still reported.
   5. **Nothing else changes.** Every other part of the dashboard, and every other check, is unchanged.
-- **Status:** confirmed by Igor 2026-11-04 (full text). Not started.
+- **Status:** confirmed by Igor 2026-11-04 (full text). Built: the canvas draws the "All Projects" and solution frames only with more than one solution; the GCS bucket poll is no longer started (it listed coldvault-vault-data, which does not exist and which GlassHood may not read, and nothing used its result); the invalid wildcard Cloud Run CPE is removed from the CVE scan. Clauses 2 and 3 are in the ColdVault manifest (deployment config).

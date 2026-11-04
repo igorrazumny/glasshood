@@ -32,7 +32,7 @@ from src.api.routes.customers import router as customers_router
 from src.api.routes.projects import router as projects_router
 from src.api.routes.manifests import router as manifests_router
 from src.api.routes.mcp_recheck import router as mcp_recheck_router
-from src.collectors import coldvault, gcp_logging, gcp_monitoring, gcs_bucket, manifest_metrics
+from src.collectors import coldvault, gcp_logging, gcp_monitoring, manifest_metrics
 from src.security import cve_scanner
 from src.analysis.coldvault_client import analysis_loop
 from src.integrations.sync import sync_loop
@@ -121,9 +121,8 @@ async def startup():
         else:
             threading.Thread(target=discovery_loop, args=(DISCOVERY_INTERVAL,), daemon=True).start()
             logger.info("Single-project discovery loop started")
-    # GCS bucket monitoring (sync, runs in thread)
-    threading.Thread(target=gcs_bucket.poll_loop, daemon=True).start()
-    logger.info("GCS bucket monitor started")
+    # REQ-GHA-021: no GCS bucket poll — it listed a bucket that does not exist, which GlassHood
+    # may not read, and nothing on the dashboard used its result.
     # CVE scanner (sync, runs in thread — default: every 6h)
     if SECURITY_SCAN_ENABLED:
         threading.Thread(target=cve_scanner.poll_loop, daemon=True).start()

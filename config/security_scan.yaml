@@ -24,12 +24,6 @@ components:
     node_ids: ["glasshood-vm"]
     gxp_critical: true
 
-  - id: cloud-run-service
-    name: "Google Cloud Run"
-    cpe: "cpe:2.3:a:google:cloud_run:*:*:*:*:*:*:*:*"
-    node_ids: ["coldvault-service"]
-    gxp_critical: true
-
   - id: fastapi
     name: "FastAPI 0.115"
     cpe: "cpe:2.3:a:tiangolo:fastapi:0.115:*:*:*:*:*:*:*"
