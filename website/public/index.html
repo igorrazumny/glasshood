@@ -42,40 +42,61 @@
   </div>
 </nav>
 
-<main class="wrap">
+<main>
   <section class="hero">
-    <h1>Cross-cloud AI-infrastructure monitoring for regulated systems.</h1>
-    <p class="lead">
-      GlassHood is a cross-cloud monitoring engine for regulated systems: live topology reconciled
-      against declared design, with compliance evidence derived from what it observes. It runs on
-      Azure and reads a Google Cloud estate through Workload Identity Federation &mdash; no stored keys.
-    </p>
-    <div class="actions">
-      <a class="btn" href="https://app.glasshood.ai/demo">Live demo &rarr;</a>
-      <a class="btn" href="/architecture/">See the architecture &rarr;</a>
+    <div class="hero-wash" aria-hidden="true"></div>
+    <div class="wrap hero-body">
+      <h1 class="hero-title"><span class="hero-title-first">Cross-cloud AI-infrastructure monitoring</span> <span class="hero-title-rest">for regulated systems.</span></h1>
+      <p class="hero-text">
+        GlassHood is a cross-cloud monitoring engine for regulated systems: live topology reconciled
+        against declared design, with compliance evidence derived from what it observes. It runs on
+        Azure and reads a Google Cloud estate through Workload Identity Federation &mdash; no stored keys.
+      </p>
+      <div class="cta">
+        <a class="button" href="https://app.glasshood.ai/demo">Live demo &rarr;</a>
+        <a class="button" href="/architecture/">See the architecture &rarr;</a>
+      </div>
     </div>
   </section>
 
   <!-- The explainer goes here once it exists (REQ-GHA-018 clause 1). -->
 
-  <section class="cards" aria-label="What GlassHood does">
-    <div class="card">
-      <h2>Read-only by design</h2>
-      <p>GlassHood installs nothing in the system it watches. Every call toward the monitored system is
-        list, get or describe, made with a short-lived, viewer-only federated token.</p>
+  <section class="wrap features" aria-label="What GlassHood does">
+    <div class="feature">
+      <span class="feature-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></span>
+      <h2 class="feature-title">Read-only by design</h2>
+      <p class="feature-text">GlassHood installs nothing in the system it watches. Every call toward the
+        monitored system is list, get or describe, made with a short-lived, viewer-only federated token.</p>
     </div>
-    <div class="card">
-      <h2>Live topology against declared design</h2>
-      <p>Live discovery is merged with declarative YAML manifests into one graph, rebuilt every cycle,
-        so the gap between what was designed and what is actually running is visible.</p>
+    <div class="feature">
+      <span class="feature-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4"/><path d="m15.4 6.5-6.8 4"/></svg></span>
+      <h2 class="feature-title">Live topology against declared design</h2>
+      <p class="feature-text">Live discovery is merged with declarative YAML manifests into one graph, rebuilt
+        every cycle, so the gap between what was designed and what is actually running is visible.</p>
     </div>
-    <div class="card">
-      <h2>Compliance as a byproduct of observation</h2>
-      <p>Evidence is derived from what the engine observed, not self-attestation &mdash; aligned to
+    <div class="feature">
+      <span class="feature-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m9 15 2 2 4-4"/></svg></span>
+      <h2 class="feature-title">Compliance as a byproduct of observation</h2>
+      <p class="feature-text">Evidence is derived from what the engine observed, not self-attestation &mdash; aligned to
         Annex 11 / ALCOA+ / Part 11.</p>
     </div>
   </section>
 </main>
+
+<footer class="footer">
+  <div class="site-footer-row">
+    <div class="site-footer-brand">
+      <img src="/assets/logo.png" alt="GlassHood" width="230" height="80">
+      <p>Cross-Cloud AI Infrastructure Monitoring</p>
+    </div>
+    <nav class="site-footer-links" aria-label="Footer">
+      <a href="/" class="site-footer-link">Home</a>
+      <a href="/architecture/" class="site-footer-link">Architecture</a>
+      <a href="/contact/" class="site-footer-link">Contact</a>
+      <a href="https://app.glasshood.ai" class="site-footer-link">Open app</a>
+    </nav>
+  </div>
+</footer>
 <script src="/architecture/app-state.js" defer></script>
 </body>
 </html>

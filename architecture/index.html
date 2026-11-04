@@ -11,19 +11,27 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Lato:wght@100;300;400;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/architecture/styles.css?v=25">
+  <link rel="stylesheet" href="/architecture/styles.css?v=26">
 </head>
 <body>
+<nav class="nav" aria-label="Main">
+  <div class="nav-in">
+    <a href="https://glasshood.ai/" class="nav-logo" aria-label="GlassHood — home"><img src="/architecture/img/glasshood-logo.png" alt="GlassHood" width="1203" height="417"></a>
+    <div class="nav-links">
+      <a href="https://glasshood.ai/">Home</a>
+      <a href="https://glasshood.ai/architecture/" aria-current="page">Architecture</a>
+      <a href="https://glasshood.ai/contact/">Contact</a>
+    </div>
+    <div class="nav-app">
+      <a class="nav-open" href="https://app.glasshood.ai">Open app</a>
+    </div>
+  </div>
+</nav>
 <div class="container">
   <div class="pd-page">
 
-    <!-- Header -->
-    <div class="pd-header">
-      <a href="https://glasshood.ai" class="pd-logo-link" aria-label="GlassHood — go to the live service">
-        <img src="/architecture/img/glasshood-logo.png" alt="GlassHood" class="pd-logo">
-      </a>
-      <p class="pd-eyebrow">Architecture reference</p>
-    </div>
+    <!-- The page's own header is its title; the site's masthead sits above it (REQ-GHA-018 clause 14). -->
+    <h1 class="page-title">Architecture reference</h1>
 
     <!-- Hero — one clean sentence, engine-first -->
     <p class="pd-hero">
@@ -323,6 +331,20 @@
     </div>
   </div>
 </div>
+<footer class="footer">
+  <div class="site-footer-row">
+    <div class="site-footer-brand">
+      <img src="/architecture/img/glasshood-logo.png" alt="GlassHood" width="1203" height="417">
+      <p>Cross-Cloud AI Infrastructure Monitoring</p>
+    </div>
+    <nav class="site-footer-links" aria-label="Footer">
+      <a href="https://glasshood.ai/" class="site-footer-link">Home</a>
+      <a href="https://glasshood.ai/architecture/" class="site-footer-link">Architecture</a>
+      <a href="https://glasshood.ai/contact/" class="site-footer-link">Contact</a>
+      <a href="https://app.glasshood.ai" class="site-footer-link">Open app</a>
+    </nav>
+  </div>
+</footer>
 <script src="/architecture/app.js"></script>
 <script src="/architecture/app-state.js"></script>
 </body>

@@ -7,7 +7,11 @@
   --blue:#0c41cd; --navy:#000055; --orange:#e75a1e;
   --bg:#ffffff; --card:#f7f8fa; --text:#1a1a2e; --sub:#555555;
   --muted:#f0f1f4; --border:#e0e2e8; --max:1120px;
+  /* The site's masthead and footer (REQ-GHA-018 clause 14): the same values as the site. */
+  --amber:#e89008; --amber-ink:#c87400; --nav-sub:#6b7280; --site-max:1120px; --masthead-h:96px;
 }
+@media (max-width:900px){:root{--masthead-h:84px}}
+@media (max-width:768px){:root{--masthead-h:72px}}
 *{box-sizing:border-box}
 html{overflow-y:scroll}
 body{margin:0;padding:0;background:var(--bg);color:var(--text);
@@ -15,7 +19,8 @@ body{margin:0;padding:0;background:var(--bg);color:var(--text);
 a{color:var(--navy);text-decoration:none}
 a:hover{text-decoration:underline}
 p{margin:0 0 1em}
-.container{max-width:var(--max);margin:0 auto;padding:24px}
+/* The page's column lines up with the site's pages: the title starts where theirs does. */
+.container{max-width:var(--max);margin:0 auto;padding:64px 24px 96px}
 
 /* Button */
 a.button{display:inline-block;padding:12px 20px;border-radius:12px;border:1px solid rgba(0,0,0,.12);
@@ -121,7 +126,7 @@ details.detail-block>div{padding:4px 0 0}
 
 footer{margin:48px 0 36px;padding-top:20px;border-top:1px solid var(--border);font-size:17px;line-height:1.55;color:var(--sub);max-width:none}
 
-@media(max-width:768px){.container{padding:16px}.pd-logo{height:52px}}
+@media(max-width:768px){.container{padding:40px 24px 64px}.pd-logo{height:52px}}
 
 /* --- Architecture-reference eyebrow + integrated diagrams (REQ-GHA-015 merge) --- */
 .pd-eyebrow{display:flex;align-items:center;gap:10px;font-size:12px;font-weight:700;
@@ -182,3 +187,47 @@ footer{margin:48px 0 36px;padding-top:20px;border-top:1px solid var(--border);fo
 .app-state[data-state="waking"] .app-state-dot,
 .app-state[data-state="going-to-sleep"] .app-state-dot{background:var(--orange)}
 .app-state[data-state="awake"] .app-state-dot{background:#1f9d55}
+
+/* ==== masthead and footer: start ====
+   website/public/assets/site.css carries this block word for word; a test keeps them equal. */
+.nav{background:#fff;background-image:linear-gradient(to left,var(--border),transparent 95%);
+  background-size:100% 1px;background-position:bottom;background-repeat:no-repeat}
+.nav-in{max-width:var(--site-max);margin:0 auto;padding:0 24px;height:var(--masthead-h);
+  display:flex;align-items:center}
+.nav-logo{display:block;flex-shrink:0}
+.nav-logo img{display:block;height:40px;width:auto;opacity:.6;transition:opacity .2s ease}
+.nav-logo:hover img{opacity:1}
+.nav-links{display:flex;align-items:center;gap:24px;margin-left:auto}
+.nav-links a{padding:6px 12px 4px;border-bottom:2px solid transparent;color:var(--nav-sub);
+  font-size:16px;font-weight:500;white-space:nowrap;text-decoration:none;transition:color .15s ease}
+.nav-links a:hover{color:var(--amber-ink);text-decoration:none}
+.nav-links a[aria-current="page"]{color:var(--blue);border-bottom-color:var(--blue)}
+.nav-app{display:flex;align-items:center;gap:16px;margin-left:28px;flex-shrink:0}
+.nav-open{display:inline-block;padding:8px 18px;border:1px solid rgba(0,0,0,.12);border-radius:12px;
+  color:var(--sub);font-size:16px;font-weight:500;white-space:nowrap;text-decoration:none;
+  transition:border-color .15s ease,color .15s ease,background .15s ease,box-shadow .15s ease}
+.nav-open:hover{background:var(--blue);border-color:var(--blue);color:#fff;
+  box-shadow:0 4px 16px rgba(0,0,0,.12);text-decoration:none}
+.nav-links a:focus-visible,.nav-open:focus-visible,.nav-logo:focus-visible,.site-footer-link:focus-visible{
+  outline:2px solid var(--navy);outline-offset:2px}
+.page-title{margin:0 0 16px;font-size:28px;line-height:1.25;font-weight:700;color:var(--blue)}
+.footer{margin:0;padding:0;border-top:1px solid var(--border);background:var(--muted);
+  font-size:16px;line-height:1.6;color:var(--sub)}
+.site-footer-row{max-width:var(--site-max);margin:0 auto;padding:40px 24px;display:flex;
+  align-items:center;justify-content:space-between;gap:24px}
+.site-footer-brand img{display:block;height:28px;width:auto;opacity:.6}
+.site-footer-brand p{margin:10px 0 0;font-size:14px;color:var(--nav-sub)}
+.site-footer-links{display:flex;flex-wrap:wrap;gap:8px 28px}
+.site-footer-link{font-size:14px;color:var(--nav-sub);text-decoration:none;transition:color .15s ease}
+.site-footer-link:hover{color:var(--amber-ink);text-decoration:none}
+/* Below 768 px the logo and Open app share the first row and the page links take a
+   second, so nothing is squeezed (the logo never shrinks); the app state sits under
+   Open app. */
+@media (max-width:767px){
+  .nav-in{height:auto;flex-wrap:wrap;align-items:flex-start;row-gap:10px;padding-top:14px;padding-bottom:8px}
+  .nav-links{order:3;width:100%;gap:4px;margin-left:-10px}
+  .nav-links a{padding:6px 10px 4px}
+  .nav-app{flex-direction:column-reverse;align-items:flex-end;gap:4px;margin-left:auto}
+  .site-footer-row{flex-direction:column;align-items:flex-start}
+}
+/* ==== masthead and footer: end ==== */
