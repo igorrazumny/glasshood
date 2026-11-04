@@ -260,3 +260,14 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Package:** the official `mcp` Python package in the GlassHood app (approved by Igor, 2026-11-04).
 - **Who builds what:** Neo, clauses 1–7. Cypher, clause 8.
 - **Status:** confirmed by Igor 2026-11-04 (full text). In progress. Built: the MCP client (Streamable HTTP, on the httpx GlassHood already uses — `mcp` 1.x does not import with the current pydantic and 2.x requires a newer uvicorn, so no package was added), the `mcp_attestation` check (clauses 2, 6), the on-demand `mcp_ask` recheck with its endpoint and button (clauses 3, 4). Waiting: ColdVault REQ-227 live (its /api/mcp answers 405 on 2026-11-04), the architect's description of today's ColdVault for the manifest (clause 1), and REQ-226 for telling asleep from down without waking it (clause 5). The live manifest is not switched until all three are in.
+
+## REQ-GHA-022: architecture.glasshood.ai states GlassHood's zero-trust design, its MCP access, and only the components in use
+
+- **Target state:**
+  - From the top cards, a visitor reaches a section that maps "verify explicitly", "least privilege" and "assume breach" to GlassHood's own mechanisms, with the identities of people, workloads and AI agents.
+  - A card and a diagram node show MCP (REQ-GHA-019 clause 5).
+  - The page names only the sign-in options and the image registry in use.
+  - The page makes no idle-timeout claim while sessions renew silently.
+- **Why:** Owner, 2026-11-04, after an outside review of the architecture pages asked for zero trust.
+- **Who builds:** Cypher; facts checked by Neo.
+- **Status:** confirmed by Igor 2026-11-04 (full text). The same day Igor also approved making the public site's wording true where GlassHood now also calls coldvault.ai's public endpoints anonymously: "toward the monitored system" becomes "toward the monitored cloud project" (an exception to REQ-GHA-018 clause 14's unchanged wording). Not started.
