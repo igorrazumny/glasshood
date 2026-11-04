@@ -6,7 +6,7 @@
 // CONTROLLER: nothing is requested until the controller's address is set here.
 // The labels are placeholders until Igor writes them.
 (function () {
-  var CONTROLLER = ''; // the wake controller's base address, without a trailing slash
+  var CONTROLLER = 'https://func-glasshood-wake.azurewebsites.net/api'; // the wake controller's base address, without a trailing slash
   var LABELS = {
     asleep: 'App asleep',
     waking: 'App waking up',

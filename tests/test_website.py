@@ -136,6 +136,8 @@ def test_the_state_is_read_from_the_controller_only_and_never_wakes_the_app():
     assert "credentials" not in src, "no cookies sent to the controller"
     assert "typeof state === 'string'" in src, "only a string state is accepted"
     assert "if (!CONTROLLER" in src, "nothing is requested while the controller's address is unset"
+    assert "var CONTROLLER = 'https://func-glasshood-wake.azurewebsites.net/api';" in src, \
+        "the state comes from the deployed wake controller (its base address, no trailing slash)"
     labels = dict(re.findall(r"""['"]?([a-z-]+)['"]?:\s*'([^']+)'""", src.split("LABELS", 1)[1].split("}", 1)[0]))
     assert set(labels) == set(_STATES), labels
 
