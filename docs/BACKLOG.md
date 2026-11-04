@@ -227,3 +227,17 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **What this changes:** REQ-GHA-016: its "always up" clause, its exclusion of scaling to zero and its "propose, not apply" sleep condition no longer apply, and its CHF 12 monthly target is replaced by clause 4. Its slower polling, no calls to retired hosts, honest freshness and free registry still hold. REQ-GHA-015: the architecture page moves from the app to the static site (clause 2); its direct-200 and revalidation rules carry over. REQ-GHA-014: replaced by clause 1. REQ-GHA-017: holds; its session guarantee applies while the app is awake, and clause 8 governs what happens across a sleep.
 - **Out of scope:** writing the GlassHood explainer; repointing what GlassHood monitors; Sign in with Microsoft (REQ-GHA-001); keeping history or sessions across a sleep.
 - **Status:** confirmed by Igor 2026-10-17 (full text); amended 2026-10-18 with Igor's confirmation (idle-sleep acceptance timing; clause 11 slow Azure operations and machinery-failure divergence); clause 14 (Look) added 2026-10-20 with Igor's confirmation of the full text; peer text review proceed 2026-10-17. Not started. Build plan must show: the Contact refusal test uses an origin outside the shared allow-list (9robots.ai and testrobin.ai stay valid) and proves real delivery with the glasshood.ai tag; an ordinary in-progress request and a permanently hung request are tested separately, with a stated upper bound on waiting; scanner and direct-address non-wake and the CHF 2 asleep budget are proven on the chosen design, not inferred from Azure's built-in scaling.
+
+## REQ-GHA-019: GlassHood's demo can be queried by AI assistants through MCP
+
+- **Goal:** Any MCP client (Claude Desktop, Claude Code and others) can read GlassHood's public demo through the Model Context Protocol.
+- **Why:** Owner, 2026-11-04: show MCP in a reference implementation, in the simplest form that is real and checkable.
+- **Target state:**
+  1. An MCP server in the GlassHood repository lets any MCP client read GlassHood's public demo: the integration topology, the business-impact analysis for each node, and the recent logs of one node.
+  2. It only reads. It cannot change anything in GlassHood, and it uses only the public demo, with no login, key or customer data.
+  3. Its answers are GlassHood's own data, unchanged. When GlassHood is asleep or unreachable, the tool says so plainly and names app.glasshood.ai as the way to wake it. It never returns made-up or stale data as current.
+  4. Someone can install it and see it work in under five minutes, from instructions in the repository.
+  5. architecture.glasshood.ai shows where MCP sits in the architecture and what the tools do.
+  6. The running app and its cost are unchanged.
+- **Who builds what:** Neo, the MCP server (clauses 1–4, 6). Cypher, the architecture page (clause 5).
+- **Status:** confirmed by Igor 2026-11-04 (full text), with approval of the official `mcp` Python package for the MCP server only. Clauses 1–4 and 6 built in `mcp-server/` (stdio, `mcp==2.3.0`, three read-only tools over the public demo endpoints; the app is not changed). The demo's own analysis covers the whole estate; per-node detail comes from each node's status, metrics and diagnostics in the topology. Clause 5 with Cypher.

@@ -37,6 +37,7 @@ Why it matters: the target cloud's security posture *disables* service-account k
 - `az-token.py` — Workload Identity Federation token broker (Azure MI → GCP)
 - `gcp-cred-config.example.json` — example external-account config (the real one is injected at deploy, never committed)
 - `config/manifests/platform.yaml.example` — example topology manifest (the real one is deployment config, injected at runtime)
+- `mcp-server/` — MCP server: AI assistants can read the public demo's topology, analysis and logs (read-only)
 - `architecture-site/` — static architecture portal
 - `Dockerfile` — multi-stage (Vite build → Python runtime)
 - `docs/BACKLOG.md` — roadmap
