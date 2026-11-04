@@ -108,10 +108,12 @@ def test_diagram_roles():
 
 
 def test_two_access_paths_stay_distinct():
-    # GlassHood's content-accuracy invariant: keyless WIF reads vs API-key narrative,
+    # GlassHood's content-accuracy invariant: keyless WIF reads vs anonymous MCP checks of
+    # coldvault.ai (REQ-GHA-020 clause 8; the API-key path went with the old platform),
     # visually and textually distinct in BOTH diagrams.
-    assert "KEYLESS" in _HTML and "API KEY" in _HTML
-    assert ">keyless<" in _HTML and ">API key<" in _HTML, "overview needs both labeled paths"
+    assert "KEYLESS" in _HTML and "MCP &#183; NO KEY" in _HTML
+    assert ">keyless<" in _HTML and ">MCP<" in _HTML, "overview needs both labeled paths"
+    assert "API KEY" not in _HTML and "API key" not in _HTML, "no API-key path is left"
     assert _HTML.count("0d7d8a") >= 4, "the teal trust accent must survive"
 
 
@@ -173,3 +175,13 @@ def test_zero_trust_mcp_and_current_facts():
     low = _HTML.lower()
     assert "idle timeout" not in low, "sessions renew silently today: no idle-timeout claim"
     assert "auth0 sso + local fallback" not in low and "acr &#183;" not in low
+
+
+def test_glasshood_is_an_mcp_client_of_coldvault_next_to_its_own_mcp_server():
+    # REQ-GHA-020 clause 8: GlassHood as an MCP client of ColdVault, next to its own MCP server.
+    section = _HTML[_HTML.index('id="mcp"'):]
+    section = section[:section.index("</section>")]
+    for needle in ("GlassHood as an MCP client", "<code>verify_attestation</code>", "fresh nonce",
+                   "Recheck via MCP", "never call <code>ask</code>", "no key"):
+        assert needle in section, needle
+    assert ">MCP server</span>" in _HTML, "its own MCP server stays in the detail diagram"
