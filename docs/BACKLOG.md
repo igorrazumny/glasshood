@@ -240,4 +240,4 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
   5. architecture.glasshood.ai shows where MCP sits in the architecture and what the tools do.
   6. The running app and its cost are unchanged.
 - **Who builds what:** Neo, the MCP server (clauses 1–4, 6). Cypher, the architecture page (clause 5).
-- **Status:** confirmed by Igor 2026-11-04 (full text), with approval of the official `mcp` Python package for the MCP server only. Not started.
+- **Status:** confirmed by Igor 2026-11-04 (full text), with approval of the official `mcp` Python package for the MCP server only. Clauses 1–4 and 6 built in `mcp-server/` (stdio, `mcp==2.3.0`, three read-only tools over the public demo endpoints; the app is not changed). The demo's own analysis covers the whole estate; per-node detail comes from each node's status, metrics and diagnostics in the topology. Clause 5 with Cypher.
