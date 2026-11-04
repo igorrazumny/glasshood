@@ -263,3 +263,38 @@ def test_endpoint_bad_mode_and_rate_limit(api, cv):
     second = api("cv-api")
     assert second.status_code == 429 and "Next recheck" in second.json()["detail"]
     assert [a["mode"] for t, a in cv.calls] == ["partner"]
+
+
+# --- recheck on a child resolved from children_template ---
+
+@pytest.fixture
+def api_child(cv, tmp_path, monkeypatch):
+    manifest = {"schema_version": 2, "solution": "ColdVault", "product": "coldvault", "environments": [{
+        "environment": "prod", "nodes": [{
+            "id": "cv-mig", "label": "MIG",
+            "monitoring": {"discover": {"type": "gcp_mig", "project": "p", "zone": "z", "instance_group": "g"}},
+            "children_template": [{"id_suffix": "-docker", "label": "Docker", "children": [
+                {"id_suffix": "-api", "label": "ColdVault",
+                 "monitoring": {"recheck": {"type": "mcp_ask", "url": cv.url}}}]}]}]}]}
+    (tmp_path / "coldvault.yaml").write_text(yaml.safe_dump(manifest))
+    monkeypatch.setattr("src.api.routes.manifests.MANIFEST_DIR", tmp_path)
+    import src.api.routes.mcp_recheck as rc
+    monkeypatch.setattr(rc, "_last_start", 0.0)
+    monkeypatch.setattr(rc.manifest_metrics, "get_discovered_children",
+                        lambda pid: [{"id": "vm-g-abcd"}] if pid == "cv-mig" else [])
+    from src.api.routes.auth import _make_access_token
+    from src.api.server import app
+    client = TestClient(app)
+    h = {"Authorization": f"Bearer {_make_access_token('u@example.com', 'operator')}"}
+    return lambda node: client.post(f"/api/mcp-recheck/{node}", json={}, headers=h)
+
+
+def test_child_of_a_discovered_vm_rechecks(api_child, cv):
+    r = api_child("vm-g-abcd-api")
+    assert r.status_code == 200 and r.json()["ok"] is True
+
+
+def test_child_of_an_unknown_vm_or_without_recheck_is_refused(api_child, cv):
+    assert api_child("vm-other-api").status_code == 404
+    assert api_child("vm-g-abcd-docker").status_code == 404
+    assert cv.calls == []

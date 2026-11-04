@@ -6,7 +6,9 @@ export const WAKE_NOTE = 'Sends one short question to ColdVault through its MCP 
 
 // Live demo (viewer) never sees the button; the server refuses it too.
 export function canRecheck(node, isDemo) {
-  return !isDemo && node?.source === 'manifest' && node?.mcp_recheck === true
+  if (isDemo || node?.source !== 'manifest') return false
+  // static manifest nodes carry mcp_recheck; children from a template carry their monitoring
+  return node.mcp_recheck === true || node.monitoring?.recheck?.type === 'mcp_ask'
 }
 
 // One line for the result; the answer text itself is never shown or kept.
