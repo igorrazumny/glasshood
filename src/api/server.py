@@ -31,6 +31,7 @@ from src.api.routes.storage import router as storage_router
 from src.api.routes.customers import router as customers_router
 from src.api.routes.projects import router as projects_router
 from src.api.routes.manifests import router as manifests_router
+from src.api.routes.mcp_recheck import router as mcp_recheck_router
 from src.collectors import coldvault, gcp_logging, gcp_monitoring, gcs_bucket, manifest_metrics
 from src.security import cve_scanner
 from src.analysis.coldvault_client import analysis_loop
@@ -92,6 +93,7 @@ app.include_router(storage_router)
 app.include_router(customers_router)
 app.include_router(projects_router)
 app.include_router(manifests_router)
+app.include_router(mcp_recheck_router)
 
 
 # Frontend crash reporting — no auth required (fire-and-forget from ErrorBoundary)

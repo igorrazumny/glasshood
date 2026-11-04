@@ -393,6 +393,16 @@ def _poll_node(node_config: dict) -> dict:
                 },
                 "check_description": result.get("desc", ""),
             }
+        if probe_type == "mcp_attestation":
+            # REQ-GHA-020: ColdVault's MCP verify_attestation with a fresh nonce; no model is called.
+            from src.collectors.coldvault_mcp import check_attestation
+            result = check_attestation(probe_config.get("url", ""), probe_config.get("timeout_s", 30))
+            return {
+                "node_id": node_id,
+                "status": "healthy" if result["ok"] else "error",
+                "metrics": result["metrics"],
+                "check_description": result["desc"],
+            }
 
     if not metrics_config:
         # Nodes with logs-only monitoring are still monitored
