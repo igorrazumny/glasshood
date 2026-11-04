@@ -272,3 +272,14 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
   4. **No false warnings.** GlassHood runs no check of a component that does not exist, that it has no permission to read, or that it addresses wrongly. Its log has no repeated warnings from such checks. A real failure of a real component is still reported.
   5. **Nothing else changes.** Every other part of the dashboard, and every other check, is unchanged.
 - **Status:** confirmed by Igor 2026-11-04 (full text). Built: the canvas draws the "All Projects" and solution frames only with more than one solution; the GCS bucket poll is no longer started (it listed coldvault-vault-data, which does not exist and which GlassHood may not read, and nothing used its result); the invalid wildcard Cloud Run CPE is removed from the CVE scan. Clauses 2 and 3 are in the ColdVault manifest (deployment config).
+
+## REQ-GHA-022: architecture.glasshood.ai states GlassHood's zero-trust design, its MCP access, and only the components in use
+
+- **Target state:**
+  - From the top cards, a visitor reaches a section that maps "verify explicitly", "least privilege" and "assume breach" to GlassHood's own mechanisms, with the identities of people, workloads and AI agents.
+  - A card and a diagram node show MCP (REQ-GHA-019 clause 5).
+  - The page names only the sign-in options and the image registry in use.
+  - The page makes no idle-timeout claim while sessions renew silently.
+- **Why:** Owner, 2026-11-04, after an outside review of the architecture pages asked for zero trust.
+- **Who builds:** Cypher; facts checked by Neo.
+- **Status:** confirmed by Igor 2026-11-04 (full text). The same day Igor also approved making the public site's wording true where GlassHood now also calls coldvault.ai's public endpoints anonymously: "toward the monitored system" becomes "toward the monitored cloud project" (an exception to REQ-GHA-018 clause 14's unchanged wording). Not started.
