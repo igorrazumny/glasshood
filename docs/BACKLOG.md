@@ -260,3 +260,15 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Package:** the official `mcp` Python package in the GlassHood app (approved by Igor, 2026-11-04).
 - **Who builds what:** Neo, clauses 1–7. Cypher, clause 8.
 - **Status:** confirmed by Igor 2026-11-04 (full text). In progress. Built: the MCP client (Streamable HTTP, on the httpx GlassHood already uses — `mcp` 1.x does not import with the current pydantic and 2.x requires a newer uvicorn, so no package was added), the `mcp_attestation` check (clauses 2, 6), the on-demand `mcp_ask` recheck with its endpoint and button (clauses 3, 4). Waiting: ColdVault REQ-227 live (its /api/mcp answers 405 on 2026-11-04), the architect's description of today's ColdVault for the manifest (clause 1), and REQ-226 for telling asleep from down without waking it (clause 5). The live manifest is not switched until all three are in.
+
+## REQ-GHA-021: GlassHood's ColdVault view is plain, and shows no false warnings
+
+- **Goal:** The logged-in dashboard draws ColdVault as simply as it is built, and GlassHood logs no warnings about things that are not there.
+- **Why:** Owner, 2026-11-04, after the switch to today's ColdVault.
+- **Target state:**
+  1. **One boundary.** When the dashboard shows a single solution, the canvas draws only its environment boundary ("coldvault.ai"). The "All Projects" and solution frames appear only when there is more than one solution.
+  2. **No group box for dependencies.** Cloud SQL and Secret Manager are not boxed or labelled as a group. Their connections from the ColdVault app show the relationship.
+  3. **Only the application.** The architecture site is not shown.
+  4. **No false warnings.** GlassHood runs no check of a component that does not exist, that it has no permission to read, or that it addresses wrongly. Its log has no repeated warnings from such checks. A real failure of a real component is still reported.
+  5. **Nothing else changes.** Every other part of the dashboard, and every other check, is unchanged.
+- **Status:** confirmed by Igor 2026-11-04 (full text). Not started.
