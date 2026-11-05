@@ -34,7 +34,7 @@ def refresh_analysis(request: Request):
     verify_token(request)
     if not _is_operator(request):
         raise HTTPException(status_code=403, detail="Only an operator can ask for a fresh overview")
-    wait = ov.manual_refresh_allowed()
+    wait = ov.reserve_manual_refresh()  # check and take the slot in one step, before any work
     if wait:
         raise HTTPException(status_code=429, detail=f"Next fresh overview possible in {wait}s")
     ov.manual_refresh(get_topology_data())

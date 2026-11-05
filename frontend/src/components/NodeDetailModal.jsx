@@ -5,6 +5,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { X, FileText, Brain, AlertTriangle, CheckCircle, RefreshCw, Clock, Cpu } from 'lucide-react'
 import { apiFetch } from '../utils/api'
 import { canRecheck, describeRecheck, recheckError, PARTNER_NOTE, WAKE_NOTE } from '../utils/mcpRecheck'
+import { overviewStamp, isStale } from '../utils/overview.js'
 import LogViewerModal from './LogViewerModal'
 
 const STATUS_COLORS = {
@@ -71,13 +72,19 @@ export default function NodeDetailModal({ node, onClose, isDemo, hideCosts }) {
     return () => window.removeEventListener('keydown', handler)
   }, [onClose])
 
-  // Fetch per-node AI analysis when modal opens — returns instantly (cached or placeholder)
+  // REQ-GHA-024: read this part's overview from the cache, and again every minute while the
+  // modal is open, so a newly written overview appears. Reading never triggers the model.
+  const [now, setNow] = useState(Date.now())
   useEffect(() => {
     if (!node || isDemo) return
-    apiFetch(`/api/analysis/node/${node.id}`)
+    const load = () => apiFetch(`/api/analysis/node/${node.id}`)
       .then(setNodeAnalysis)
       .catch(() => setNodeAnalysis(null))
+    load()
+    const t = setInterval(() => { setNow(Date.now()); load() }, 60000)
+    return () => clearInterval(t)
   }, [node?.id, isDemo])
+  const overviewStale = isStale(nodeAnalysis, now)
 
   const handleRecheck = useCallback(() => {
     if (!node || rechecking) return
@@ -222,11 +229,11 @@ export default function NodeDetailModal({ node, onClose, isDemo, hideCosts }) {
                 )}
               </div>
               {/* REQ-GHA-024: per-part overviews are written every 3 hours; no on-demand call */}
-              <span className="text-xs text-gray-500 dark:text-purple-300">{overviewStamp(nodeAnalysis)}</span>
+              <span className="text-xs text-gray-500 dark:text-purple-300">{overviewStamp(nodeAnalysis, now)}</span>
             </div>
 
             {/* Stale/refreshing banner */}
-            {(nodeAnalysis?.stale && nodeAnalysis?.analyzed_at) && (
+            {(overviewStale && nodeAnalysis?.analyzed_at) && (
               <div className="text-sm text-gray-600 dark:text-purple-200 bg-surface/50 dark:bg-purple-900/40 rounded px-2 py-1 mb-2">
                 {nodeAnalysis?.error
                   ? `${nodeAnalysis.error} — showing the last overview.`

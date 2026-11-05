@@ -52,18 +52,36 @@ Answer in JSON only:
 _lock = threading.Lock()
 _system: dict = {}
 _parts: dict = {}          # part id -> overview
-_spend = {"day": "", "calls": 0, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0, "capped": False}
+_spend: dict = {}  # today's accounting, see refresh_durable_spend
 _last_manual = 0.0
 _creds = None
 
-# Redact anything shaped like a credential before a log line leaves GlassHood (clause 8).
+# Clause 8: nothing credential-shaped leaves GlassHood. Every payload is sanitised as a whole,
+# recursively, before it is serialised: values under sensitive keys are dropped, and strings are
+# scrubbed of credential patterns (plain, key=value, and JSON "key": "value" forms).
+_SENSITIVE_KEY = re.compile(r"(?i)(pass(word|wd)?|secret|token|api[_-]?key|authori[sz]ation|credential|"
+                            r"private[_-]?key|cookie|session|signature|bearer)")
 _SECRETS = re.compile(
-    r"(?i)(bearer\s+[a-z0-9._\-]+|(?:api[_-]?key|token|secret|password|passwd|authorization)\s*[=:]\s*\S+"
-    r"|sk-[a-z0-9]{16,}|AIza[0-9A-Za-z_\-]{20,}|eyJ[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+)")
+    r"(?i)(bearer\s+[a-z0-9._~+/=\-]+"
+    r"|[\"']?(?:pass(?:word|wd)?|secret|token|api[_-]?key|authori[sz]ation|credential|private[_-]?key|cookie)"
+    r"[\"']?\s*[=:]\s*[\"']?[^\"'\s,;}&]+"
+    r"|sk-[a-z0-9_\-]{16,}|AIza[0-9A-Za-z_\-]{20,}|eyJ[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+"
+    r"|-----BEGIN [A-Z ]*PRIVATE KEY-----)")
 
 
 def redact(text: str) -> str:
     return _SECRETS.sub("[redacted]", text or "")
+
+
+def sanitize(obj):
+    """Recursively drop sensitive keys and scrub strings, keeping the structure."""
+    if isinstance(obj, dict):
+        return {k: ("[redacted]" if _SENSITIVE_KEY.search(str(k)) else sanitize(v)) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [sanitize(v) for v in obj]
+    if isinstance(obj, str):
+        return redact(obj)
+    return obj
 
 
 def _token() -> str:
@@ -86,37 +104,103 @@ def _headers() -> dict:
 
 
 # --- Spend (clause 6) ---
+# The daily count must survive restarts. Google itself counts every call and token per model in
+# Cloud Monitoring, which GlassHood may read; that is the durable part. Calls made since the last
+# read are counted locally. The total never decreases within a day, so Monitoring's few minutes
+# of delay cannot hide calls already made. Only GlassHood calls this model in the project, and
+# any other caller would only make the cap stricter. If today's usage cannot be read, no call is
+# made: the cap fails closed.
 
 def _today() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 
-def _reserve_call() -> bool:
-    """Count one call against today's cap; False when the cap is reached."""
+def _new_day() -> dict:
+    return {"day": _today(), "durable_calls": 0, "durable_in": 0, "durable_out": 0,
+            "local_calls": 0, "local_in": 0, "local_out": 0, "durable_read": False,
+            "read_error": None, "capped": False}
+
+
+def _monitoring_today() -> dict:
+    """Today's (UTC) calls and tokens for MODEL in PROJECT, from Cloud Monitoring."""
+    now = datetime.now(timezone.utc)
+    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    period = max(60, int((now - midnight).total_seconds()))
+    base = {"interval.startTime": midnight.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "interval.endTime": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "aggregation.alignmentPeriod": f"{period}s", "aggregation.perSeriesAligner": "ALIGN_SUM",
+            "aggregation.crossSeriesReducer": "REDUCE_SUM"}
+    url = f"https://monitoring.googleapis.com/v3/projects/{PROJECT}/timeSeries"
+    sel = f'resource.labels.model_user_id="{MODEL}"'
+
+    def total(metric, group=None):
+        params = {**base, "filter": f'metric.type="aiplatform.googleapis.com/publisher/online_serving/{metric}" AND {sel}'}
+        if group:
+            params["aggregation.groupByFields"] = group
+        r = httpx.get(url, params=params, headers=_headers(), timeout=30)
+        if r.status_code != 200:
+            raise RuntimeError(f"Cloud Monitoring HTTP {r.status_code}")
+        out = {}
+        for ts in r.json().get("timeSeries", []):
+            key = (ts.get("metric", {}).get("labels", {}) or {}).get("type", "all")
+            out[key] = out.get(key, 0) + sum(int(p["value"].get("int64Value", 0)) for p in ts.get("points", []))
+        return out
+    calls = total("model_invocation_count").get("all", 0)
+    tokens = total("token_count", "metric.label.type")
+    return {"calls": calls, "in": tokens.get("input", 0), "out": tokens.get("output", 0)}
+
+
+def refresh_durable_spend() -> None:
+    """Fold today's Monitoring totals in; never lowers what is already counted."""
+    try:
+        mon = _monitoring_today()
+        err = None
+    except Exception as e:
+        mon, err = None, f"today's model usage could not be read ({type(e).__name__})"
     with _lock:
-        if _spend["day"] != _today():
-            _spend.update(day=_today(), calls=0, input_tokens=0, output_tokens=0, cost_usd=0.0, capped=False)
-        if _spend["calls"] >= DAILY_CALL_CAP:
+        if _spend.get("day") != _today():
+            _spend.clear(); _spend.update(_new_day())
+        if mon is None:
+            _spend["read_error"] = err
+            return
+        _spend["durable_calls"] = max(mon["calls"], _spend["durable_calls"] + _spend["local_calls"])
+        _spend["durable_in"] = max(mon["in"], _spend["durable_in"] + _spend["local_in"])
+        _spend["durable_out"] = max(mon["out"], _spend["durable_out"] + _spend["local_out"])
+        _spend.update(local_calls=0, local_in=0, local_out=0, durable_read=True, read_error=None)
+
+
+def _reserve_call():
+    """Count one call against today's cap. Returns None when reserved, else the reason."""
+    with _lock:
+        if _spend.get("day") != _today():
+            _spend.clear(); _spend.update(_new_day())
+        if not _spend["durable_read"]:
+            return _spend.get("read_error") or "today's model usage has not been read yet"
+        if _spend["durable_calls"] + _spend["local_calls"] >= DAILY_CALL_CAP:
             _spend["capped"] = True
-            return False
-        _spend["calls"] += 1
-        return True
+            return f"daily cap of {DAILY_CALL_CAP} model calls reached"
+        _spend["local_calls"] += 1
+        return None
 
 
 def _record_usage(usage: dict) -> None:
     tin = int(usage.get("promptTokenCount") or 0)
     tout = int(usage.get("candidatesTokenCount") or 0) + int(usage.get("thoughtsTokenCount") or 0)
     with _lock:
-        _spend["input_tokens"] += tin
-        _spend["output_tokens"] += tout
-        _spend["cost_usd"] = round(_spend["input_tokens"] / 1e6 * PRICE_IN_PER_M
-                                   + _spend["output_tokens"] / 1e6 * PRICE_OUT_PER_M, 4)
+        _spend["local_in"] += tin
+        _spend["local_out"] += tout
 
 
 def get_spend() -> dict:
     with _lock:
-        return {**_spend, "daily_call_cap": DAILY_CALL_CAP, "model": MODEL,
-                "price_per_m_tokens_usd": {"input": PRICE_IN_PER_M, "output": PRICE_OUT_PER_M}}
+        sp = dict(_spend) if _spend.get("day") == _today() else _new_day()
+    tin, tout = sp["durable_in"] + sp["local_in"], sp["durable_out"] + sp["local_out"]
+    return {"day": sp["day"], "calls": sp["durable_calls"] + sp["local_calls"],
+            "input_tokens": tin, "output_tokens": tout,
+            "cost_usd": round(tin / 1e6 * PRICE_IN_PER_M + tout / 1e6 * PRICE_OUT_PER_M, 4),
+            "capped": sp["capped"], "usage_read": sp["durable_read"], "read_error": sp["read_error"],
+            "daily_call_cap": DAILY_CALL_CAP, "model": MODEL,
+            "price_per_m_tokens_usd": {"input": PRICE_IN_PER_M, "output": PRICE_OUT_PER_M}}
 
 
 class CapReached(Exception):
@@ -127,8 +211,9 @@ class CapReached(Exception):
 
 def _generate(system_prompt: str, user_text: str) -> dict:
     """One Vertex AI generateContent call; returns the parsed JSON answer."""
-    if not _reserve_call():
-        raise CapReached(f"daily cap of {DAILY_CALL_CAP} model calls reached")
+    refused = _reserve_call()
+    if refused:
+        raise CapReached(refused)
     host = "aiplatform.googleapis.com" if LOCATION == "global" else f"{LOCATION}-aiplatform.googleapis.com"
     url = (f"https://{host}/v1/projects/{PROJECT}/locations/{LOCATION}"
            f"/publishers/google/models/{MODEL}:generateContent")
@@ -156,6 +241,8 @@ def _parse(text: str) -> dict:
 
     def strings(items, n):
         return [str(i.get("description", i)) if isinstance(i, dict) else str(i) for i in (items or [])][:n]
+    if not isinstance(obj, dict) or not isinstance(obj.get("summary"), str) or not obj["summary"].strip():
+        raise ValueError("the model's answer had no summary")
     score = obj.get("score")
     return {
         "score": score if isinstance(score, (int, float)) and 1 <= score <= 10 else None,
@@ -169,11 +256,11 @@ def _parse(text: str) -> dict:
 
 def _entry_text(e: dict) -> str:
     if e.get("textPayload"):
-        msg = e["textPayload"]
+        msg = redact(str(e["textPayload"]))
     else:
-        jp = e.get("jsonPayload") or {}
-        msg = jp.get("message") or json.dumps(jp)[:LINE_CHARS]
-    return f"{e.get('timestamp', '')[:19]} {e.get('severity', 'DEFAULT')} {redact(str(msg))[:LINE_CHARS]}"
+        jp = sanitize(e.get("jsonPayload") or {})
+        msg = jp.get("message") if isinstance(jp.get("message"), str) else json.dumps(jp)
+    return f"{e.get('timestamp', '')[:19]} {e.get('severity', 'DEFAULT')} {str(msg)[:LINE_CHARS]}"
 
 
 def _log_lines(log_filter: str, warn_n: int, sample_n: int, project: str = "") -> list:
@@ -182,14 +269,13 @@ def _log_lines(log_filter: str, warn_n: int, sample_n: int, project: str = "") -
     base = f'timestamp>="{since}"' + (f" AND ({log_filter})" if log_filter else "")
     out = []
     for flt, n in ((f"{base} AND severity>=WARNING", warn_n), (f"{base} AND severity<WARNING", sample_n)):
-        try:
-            r = httpx.post("https://logging.googleapis.com/v2/entries:list", headers=_headers(), timeout=30,
-                           json={"resourceNames": [f"projects/{project or PROJECT}"], "filter": flt,
-                                 "orderBy": "timestamp desc", "pageSize": n})
-            if r.status_code == 200:
-                out += [_entry_text(e) for e in r.json().get("entries", [])]
-        except httpx.HTTPError as e:
-            logger.debug(f"log read failed: {e}")
+        # Errors (unreachable API, credential refresh) propagate to the overview's own error boundary.
+        r = httpx.post("https://logging.googleapis.com/v2/entries:list", headers=_headers(), timeout=30,
+                       json={"resourceNames": [f"projects/{project or PROJECT}"], "filter": flt,
+                             "orderBy": "timestamp desc", "pageSize": n})
+        if r.status_code != 200:
+            raise RuntimeError(f"Cloud Logging HTTP {r.status_code}")
+        out += [_entry_text(e) for e in r.json().get("entries", [])]
     return out
 
 
@@ -257,21 +343,21 @@ def _keep_last_good(previous: dict, error: str) -> dict:
             "timestamp": None, "model": MODEL, "stale": True, "error": error, "error_only": True}
 
 
-def run_system(topology: dict, alerts: list = None) -> None:
+def _failure(e: Exception) -> str:
+    return str(e) if isinstance(e, CapReached) else f"overview could not be written ({type(e).__name__}: {str(e)[:120]})"
+
+
+def run_system(topology: dict) -> None:
     global _system
-    parts = [rec for rec, _ in _walk_parts(topology)]
-    text = json.dumps({
-        "overall_status": topology.get("overall_status"),
-        "parts": parts,
-        "alerts": [a.get("message") for a in (alerts or topology.get("alerts") or [])][:30],
-        "recent_logs": _log_lines("", SYSTEM_WARN_LINES, SYSTEM_SAMPLE_LINES),
-    }, default=str)
     try:
-        result = _generate(SYSTEM_PROMPT, text)
+        parts = [rec for rec, _ in _walk_parts(topology)]
+        payload = sanitize({"overall_status": topology.get("overall_status"), "parts": parts,
+                            "recent_logs": _log_lines("", SYSTEM_WARN_LINES, SYSTEM_SAMPLE_LINES)})
+        result = _generate(SYSTEM_PROMPT, json.dumps(payload, default=str))
         with _lock:
             _system = _now_entry(result)
     except Exception as e:
-        why = str(e) if isinstance(e, CapReached) else f"overview could not be written ({str(e)[:120]})"
+        why = _failure(e)
         logger.warning(f"system overview failed: {why}")
         with _lock:
             _system = _keep_last_good(_system, why)
@@ -279,34 +365,41 @@ def run_system(topology: dict, alerts: list = None) -> None:
 
 def _run_part(rec: dict, log_filter: str, edges: list) -> None:
     pid = rec["id"]
-    links = [f"-> {e.get('target')}" for e in edges if e.get("source") == pid] + \
-            [f"<- {e.get('source')}" for e in edges if e.get("target") == pid]
-    text = json.dumps({"part": rec, "connections": links[:20],
-                       "recent_logs": _log_lines(log_filter, PART_WARN_LINES, PART_SAMPLE_LINES) if log_filter else []},
-                      default=str)
     try:
-        result = _generate(PART_PROMPT, text)
+        links = [f"-> {e.get('target')}" for e in edges if e.get("source") == pid] + \
+                [f"<- {e.get('source')}" for e in edges if e.get("target") == pid]
+        payload = sanitize({"part": rec, "connections": links[:20],
+                            "recent_logs": _log_lines(log_filter, PART_WARN_LINES, PART_SAMPLE_LINES) if log_filter else []})
+        result = _generate(PART_PROMPT, json.dumps(payload, default=str))
         with _lock:
             _parts[pid] = _now_entry(result)
     except Exception as e:
-        why = str(e) if isinstance(e, CapReached) else f"overview could not be written ({str(e)[:120]})"
+        why = _failure(e)
+        logger.warning(f"part overview failed for {pid}: {why}")
         with _lock:
             _parts[pid] = _keep_last_good(_parts.get(pid), why)
 
 
 def run_all(topology: dict) -> None:
+    refresh_durable_spend()
     run_system(topology)
     edges = topology.get("edges", [])
+    failed = 0
     with ThreadPoolExecutor(max_workers=4, thread_name_prefix="overview") as ex:
-        for rec, flt in _walk_parts(topology):
-            ex.submit(_run_part, rec, flt, edges)
-    logger.info(f"AI overviews written: system + {len(_parts)} parts; spend today {get_spend()}")
+        futures = [ex.submit(_run_part, rec, flt, edges) for rec, flt in _walk_parts(topology)]
+        for f in futures:
+            try:
+                f.result()
+            except Exception as e:  # _run_part records its own failures; this is a last resort
+                failed += 1
+                logger.error(f"part overview worker failed: {e}")
+    logger.info(f"AI overviews written: system + {len(futures) - failed} parts; spend today {get_spend()}")
 
 
 def _with_staleness(entry: dict) -> dict:
     out = dict(entry or {})
     ts = out.get("analyzed_at")
-    out["stale"] = (ts is None) or (time.time() - ts > INTERVAL_S + 600)
+    out["stale"] = (ts is None) or (time.time() - ts > INTERVAL_S)
     out["interval_s"] = INTERVAL_S
     return out
 
@@ -323,13 +416,22 @@ def get_part(part_id: str):
 
 
 def manual_refresh_allowed() -> int:
-    """Seconds until a person may ask again (0 = now). Clause 4."""
+    """Seconds until a person may ask again (0 = now). Display only — see reserve_manual_refresh."""
     return max(0, int(MANUAL_COOLDOWN_S - (time.time() - _last_manual)))
 
 
-def manual_refresh(topology: dict) -> None:
+def reserve_manual_refresh() -> int:
+    """Clause 4, enforced: atomically take the ten-minute slot. Returns 0 when taken, else the wait."""
     global _last_manual
-    _last_manual = time.time()
+    with _lock:
+        wait = max(0, int(MANUAL_COOLDOWN_S - (time.time() - _last_manual)))
+        if wait == 0:
+            _last_manual = time.time()
+        return wait
+
+
+def manual_refresh(topology: dict) -> None:
+    refresh_durable_spend()
     run_system(topology)
 
 

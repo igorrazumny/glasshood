@@ -18,5 +18,14 @@ export function overviewStamp(o, now = Date.now()) {
 
 export function spendLine(sp) {
   const base = `Today: ${sp.calls} model calls, about $${Number(sp.cost_usd || 0).toFixed(2)} (cap ${sp.daily_call_cap} calls)`
+  if (sp.usage_read === false && sp.read_error) return `${base} — ${sp.read_error}; no new overviews until it can be read`
   return sp.capped ? `${base} — daily cap reached, no more overviews today` : base
+}
+
+// Clause 7: an overview older than its schedule is stale — judged by its age now, not only by
+// the flag it carried when it was fetched.
+export function isStale(o, now = Date.now()) {
+  if (!o?.analyzed_at) return false
+  const interval = o.interval_s || 3 * 3600
+  return !!o.stale || (now / 1000 - o.analyzed_at) > interval
 }

@@ -1,8 +1,11 @@
-# REQ-GHA-024: brief AI overviews of the system and each part. Vertex AI and Cloud Logging
-# are faked; nothing here calls the network.
+# REQ-GHA-024: brief AI overviews of the system and each part. Vertex AI, Cloud Logging and
+# Cloud Monitoring are faked; nothing here calls the network.
 
 import json
+import re
+import threading
 import time
+from pathlib import Path
 
 import pytest
 
@@ -23,15 +26,20 @@ def _answer(obj, tin=1000, tout=100):
                        "usageMetadata": {"promptTokenCount": tin, "candidatesTokenCount": tout}})
 
 
+MON = {"calls": 0, "in": 0, "out": 0}
+
+
 @pytest.fixture(autouse=True)
 def fresh(monkeypatch):
     monkeypatch.setattr(ov, "_system", {})
     monkeypatch.setattr(ov, "_parts", {})
-    monkeypatch.setattr(ov, "_spend", {"day": "", "calls": 0, "input_tokens": 0, "output_tokens": 0,
-                                       "cost_usd": 0.0, "capped": False})
+    monkeypatch.setattr(ov, "_spend", {})
     monkeypatch.setattr(ov, "_last_manual", 0.0)
     monkeypatch.setattr(ov, "_headers", lambda: {"Authorization": "Bearer t"})
     monkeypatch.setattr(ov, "_manifest_info", lambda: ({}, {}))
+    MON.update(calls=0, **{"in": 0, "out": 0})
+    monkeypatch.setattr(ov, "_monitoring_today", lambda: dict(MON))
+    ov.refresh_durable_spend()
 
 
 TOPO = {"overall_status": "healthy", "edges": [{"source": "cv-ip", "target": "vm-a"}], "nodes": [
@@ -43,11 +51,12 @@ TOPO = {"overall_status": "healthy", "edges": [{"source": "cv-ip", "target": "vm
 ]}
 
 
-def _route(monkeypatch, model_answer, seen=None):
+def _route(monkeypatch, model_answer, seen=None, entries=None):
     def post(url, json=None, headers=None, timeout=None):
         if "entries:list" in url:
-            return _Resp(200, {"entries": [{"timestamp": "2026-11-06T00:00:00Z", "severity": "ERROR",
-                                            "textPayload": "boom password=hunter2 Bearer abc.def"}]})
+            return _Resp(200, {"entries": entries if entries is not None else [
+                {"timestamp": "2026-11-06T00:00:00Z", "severity": "ERROR",
+                 "textPayload": "boom password=hunter2 Bearer abc.def"}]})
         if seen is not None:
             seen.append(json)
         return model_answer() if callable(model_answer) else model_answer
@@ -78,6 +87,40 @@ def test_spend_is_recorded_and_the_daily_cap_stops_calls(monkeypatch):
     assert ov.get_system()["summary"] == "ok"  # the last good overview is kept
 
 
+def test_the_daily_cap_survives_a_restart(monkeypatch):
+    """B3: a fresh process on the same day starts from Google's own count, not from zero."""
+    _route(monkeypatch, _answer({"summary": "ok"}))
+    monkeypatch.setattr(ov, "DAILY_CALL_CAP", 2)
+    ov.run_system(TOPO)
+    ov.run_system(TOPO)
+    MON.update(calls=2, **{"in": 2000, "out": 200})      # what Monitoring now reports
+    monkeypatch.setattr(ov, "_spend", {})                 # the process restarts
+    ov.refresh_durable_spend()
+    ov.run_system(TOPO)
+    assert ov.get_spend()["calls"] == 2 and "daily cap" in ov.get_system()["error"]
+
+
+def test_a_monitoring_delay_never_lowers_the_count(monkeypatch):
+    _route(monkeypatch, _answer({"summary": "ok"}))
+    ov.run_system(TOPO)
+    ov.run_system(TOPO)
+    ov.refresh_durable_spend()                            # Monitoring still says 0
+    assert ov.get_spend()["calls"] == 2
+
+
+def test_unreadable_usage_fails_closed(monkeypatch):
+    _route(monkeypatch, _answer({"summary": "ok"}))
+
+    def boom():
+        raise RuntimeError("Cloud Monitoring HTTP 403")
+    monkeypatch.setattr(ov, "_spend", {})
+    monkeypatch.setattr(ov, "_monitoring_today", boom)
+    ov.refresh_durable_spend()
+    ov.run_system(TOPO)
+    assert "could not be read" in ov.get_system()["error"]
+    assert ov.get_spend()["calls"] == 0 and ov.get_spend()["usage_read"] is False
+
+
 def test_failure_keeps_last_good_and_says_why(monkeypatch):
     _route(monkeypatch, _answer({"summary": "first"}))
     ov.run_system(TOPO)
@@ -94,19 +137,65 @@ def test_failure_with_nothing_yet_reports_no_overview(monkeypatch):
     assert s["summary"] == "" and s["analyzed_at"] is None and "HTTP 500" in s["error"]
 
 
+def test_input_failures_are_reported_too(monkeypatch):
+    """B4: a credential refresh failing while reading logs is an error with a reason."""
+    monkeypatch.setattr(ov, "_manifest_info", lambda: ({"cv-mig": 'resource.type="gce_instance"'}, {}))
+    _route(monkeypatch, _answer({"summary": "first"}))
+    ov.run_all(TOPO)
+
+    class RefreshError(Exception):
+        pass
+
+    def boom(*a, **k):
+        raise RefreshError("token expired")
+    monkeypatch.setattr(ov, "_log_lines", boom)
+    ov.run_all(TOPO)
+    assert "RefreshError" in ov.get_system()["error"] and ov.get_system()["summary"] == "first"
+    assert ov.get_part("vm-a")["summary"] == "first" and "RefreshError" in ov.get_part("vm-a")["error"]
+
+
+def test_an_answer_without_a_summary_does_not_replace_the_last_good(monkeypatch):
+    """W2"""
+    _route(monkeypatch, _answer({"summary": "LAST GOOD"}))
+    ov.run_system(TOPO)
+    _route(monkeypatch, _answer({"score": 9}))
+    ov.run_system(TOPO)
+    s = ov.get_system()
+    assert s["summary"] == "LAST GOOD" and "no summary" in s["error"]
+
+
 def test_overview_older_than_its_schedule_is_stale(monkeypatch):
+    """W3: no grace period."""
     _route(monkeypatch, _answer({"summary": "x"}))
     ov.run_system(TOPO)
-    ov._system["analyzed_at"] = time.time() - ov.INTERVAL_S - 700
+    ov._system["analyzed_at"] = time.time() - ov.INTERVAL_S - 1
     assert ov.get_system()["stale"] is True
 
 
-def test_no_secret_shaped_text_leaves_in_log_lines(monkeypatch):
+CANARY_TOPO = {"overall_status": "healthy", "edges": [], "nodes": [
+    {"id": "n", "label": "n", "type": "x", "status": "healthy",
+     "metrics": {"_check_description": "token=CANARY_CHECK", "api_key": "CANARY_METRIC",
+                 "nested": {"Authorization": "Bearer CANARY_NESTED"}}}]}
+
+
+def test_no_credential_value_leaves_in_any_field(monkeypatch):
+    """B2: JSON logs, checks, metrics, nested fields — all sanitised; no alert text is sent."""
     seen = []
-    _route(monkeypatch, _answer({"summary": "x"}), seen)
-    ov.run_system(TOPO)
-    sent = seen[0]["contents"][0]["parts"][0]["text"]
-    assert "hunter2" not in sent and "abc.def" not in sent and "[redacted]" in sent
+    entries = [{"timestamp": "t", "severity": "ERROR", "jsonPayload": {"password": "CANARY_JSON_LOG", "x": 1}},
+               {"timestamp": "t", "severity": "ERROR", "jsonPayload": {"message": '{"secret": "CANARY_MSG"}'}},
+               {"timestamp": "t", "severity": "ERROR", "textPayload": "login password=hunter2 Bearer abc.def"}]
+    _route(monkeypatch, _answer({"summary": "x"}), seen, entries)
+    ov.run_system({**CANARY_TOPO, "alerts": [{"message": "CANARY_ALERT"}]})
+    ov.run_all(CANARY_TOPO)
+    sent = " ".join(b["contents"][0]["parts"][0]["text"] for b in seen)
+    for canary in ("CANARY_JSON_LOG", "CANARY_MSG", "CANARY_CHECK", "CANARY_METRIC", "CANARY_NESTED",
+                   "CANARY_ALERT", "hunter2", "abc.def"):
+        assert canary not in sent, canary
+    assert "[redacted]" in sent
+
+
+def test_sanitize_keeps_structure():
+    assert ov.sanitize({"a": [{"token": "x"}, "password: y"], "n": 3}) == {"a": [{"token": "[redacted]"}, "[redacted]"], "n": 3}
 
 
 def test_model_text_is_plain_data_bounded(monkeypatch):
@@ -118,11 +207,20 @@ def test_model_text_is_plain_data_bounded(monkeypatch):
     assert len(s["issues"]) == 5 and s["recommendations"] == ["r", "r", "r"]
 
 
-def test_manual_refresh_at_most_every_ten_minutes(monkeypatch):
-    _route(monkeypatch, _answer({"summary": "x"}))
-    assert ov.manual_refresh_allowed() == 0
-    ov.manual_refresh(TOPO)
-    assert 590 <= ov.manual_refresh_allowed() <= 600
+def test_manual_refresh_slot_is_taken_atomically(monkeypatch):
+    """W1: two simultaneous requests — exactly one gets the slot."""
+    results = []
+    barrier = threading.Barrier(8)
+
+    def go():
+        barrier.wait()
+        results.append(ov.reserve_manual_refresh())
+    threads = [threading.Thread(target=go) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert results.count(0) == 1 and all(590 <= r <= 600 for r in results if r)
 
 
 def test_parts_use_the_label_the_reader_sees(monkeypatch):
@@ -160,3 +258,16 @@ def test_routes_viewer_reads_operator_refreshes(monkeypatch):
         routes.refresh_analysis(Req("operator"))
     assert e.value.status_code == 429
     assert "spend" in routes.get_analysis_endpoint(Req("operator"))
+
+
+def test_every_overview_helper_a_component_uses_is_imported():
+    """B1 guard: a helper from utils/overview.js called in a component must be imported there."""
+    helpers = re.findall(r"export function (\w+)", Path("frontend/src/utils/overview.js").read_text())
+    for jsx in Path("frontend/src/components").glob("*.jsx"):
+        src = jsx.read_text()
+        imported = set()
+        for names in re.findall(r"import \{([^}]*)\} from '\.\./utils/overview(?:\.js)?'", src):
+            imported |= {n.strip() for n in names.split(",")}
+        for h in helpers:
+            if re.search(rf"\b{h}\(", src):
+                assert h in imported, f"{jsx.name} calls {h} without importing it"
