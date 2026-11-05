@@ -153,7 +153,21 @@ def test_cards_map_to_real_sections():
 
 
 def test_launch_cta_present():
-    assert re.search(r'<a href="https://glasshood.ai/demo" class="button"', _HTML)
+    assert re.search(r'<a href="https://app.glasshood.ai/demo" class="button"', _HTML)
+
+
+def test_the_page_shows_how_glasshood_is_reached_today():
+    # REQ-GHA-018 clause 2, amended 2026-11-05 (fifth): the React app and the waking page are served at
+    # app.glasshood.ai by an Azure Static Web App; the API runs on Container Apps behind its managed TLS
+    # ingress; links into the app go to app.glasshood.ai, and glasshood.ai is not named as the app's address.
+    detail = _HTML.split("arch-diagram--detail", 1)[1]
+    assert ">Static Web App</span>" in detail and "app.glasshood.ai &#183; React 18 SPA &#183; waking page" in detail
+    assert "Container Apps &#183; TLS &#183; API" in detail and "TLS &#183; glasshood.ai" not in _HTML
+    assert _HTML.count(">React 18 SPA<") == 0 and _HTML.count("React 18 SPA") == 1, "the React app sits on the Static Web App only"
+    assert "an Azure Static Web App for the React app at app.glasshood.ai" in _HTML
+    assert "reach GlassHood's API on Azure Container Apps through managed TLS ingress" in _HTML
+    for href in re.findall(r'href="(https://glasshood\.ai/[^"]*)"', _HTML):
+        assert href in ("https://glasshood.ai/", "https://glasshood.ai/architecture/", "https://glasshood.ai/contact/"), href
 
 
 def test_noindex_and_title():
