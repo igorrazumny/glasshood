@@ -377,3 +377,14 @@ def test_the_masthead_logo_and_its_word_are_as_tall_as_9robots_ai():
     assert (width, height) == (754, 132)
     assert abs(mark - _NINEROBOTS_MARK) < 0.01, f"the mark fills {mark:.3f} of the logo, 9robots.ai's {_NINEROBOTS_MARK:.3f}"
     assert abs(word - _NINEROBOTS_WORD) < 0.01, f"the word fills {word:.3f} of the logo, 9robots.ai's {_NINEROBOTS_WORD:.3f}"
+
+
+def test_the_orange_is_9robots_ai_s_orange():
+    # REQ-GHA-018 clause 14, amended 2026-11-05: orange text uses 9robots.ai's orange, #E75A1E, which is
+    # also the orange tile in GlassHood's logo; the blue stays 9robots.ai's blue, #0C41CD.
+    site, arch = _read(_PUB / "assets/site.css"), _read(_ARCH / "styles.css")
+    for css in (site, arch):
+        assert "--orange:#e75a1e" in css and "--blue:#0c41cd" in css
+        assert "amber" not in css.lower() and "#c87400" not in css and "#e89008" not in css
+    assert ".hero-title-first{color:var(--orange)}" in site
+    assert "--orange:#e75a1e" in _read(ROOT / "deploy/waking-page/index.html")

@@ -8,7 +8,7 @@
   --bg:#ffffff; --card:#f7f8fa; --text:#1a1a2e; --sub:#555555;
   --muted:#f0f1f4; --border:#e0e2e8; --max:1120px;
   /* The site's masthead and footer (REQ-GHA-018 clause 14): the same values as the site. */
-  --amber:#e89008; --amber-ink:#c87400; --nav-sub:#6b7280; --site-max:1120px; --masthead-h:96px;
+  --nav-sub:#6b7280; --site-max:1120px; --masthead-h:96px;
 }
 @media (max-width:900px){:root{--masthead-h:84px}}
 @media (max-width:768px){:root{--masthead-h:72px}}
@@ -197,7 +197,7 @@ footer{margin:48px 0 36px;padding-top:20px;border-top:1px solid var(--border);fo
 .nav-links{display:flex;align-items:center;gap:24px;margin-left:auto}
 .nav-links a{padding:6px 12px 4px;border-bottom:2px solid transparent;color:var(--nav-sub);
   font-size:16px;font-weight:500;white-space:nowrap;text-decoration:none;transition:color .15s ease}
-.nav-links a:hover{color:var(--amber-ink);text-decoration:none}
+.nav-links a:hover{color:var(--orange);text-decoration:none}
 .nav-links a[aria-current="page"]{color:var(--blue);border-bottom-color:var(--blue)}
 .nav-app{display:flex;align-items:center;gap:16px;margin-left:28px;flex-shrink:0}
 .nav-open{display:inline-block;padding:8px 18px;border:1px solid rgba(0,0,0,.12);border-radius:12px;
@@ -216,7 +216,7 @@ footer{margin:48px 0 36px;padding-top:20px;border-top:1px solid var(--border);fo
 .site-footer-brand p{margin:10px 0 0;font-size:14px;color:var(--nav-sub)}
 .site-footer-links{display:flex;flex-wrap:wrap;gap:8px 28px}
 .site-footer-link{font-size:14px;color:var(--nav-sub);text-decoration:none;transition:color .15s ease}
-.site-footer-link:hover{color:var(--amber-ink);text-decoration:none}
+.site-footer-link:hover{color:var(--orange);text-decoration:none}
 /* Below 768 px the logo and Open app share the first row and the page links take a
    second, so nothing is squeezed (the logo never shrinks); the app state sits under
    Open app. */
