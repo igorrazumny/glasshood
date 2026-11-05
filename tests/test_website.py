@@ -315,3 +315,80 @@ def test_contact_has_labels_and_marks_the_required_fields():
     assert "Required fields" in html and '<div class="form-row">' in html
     css = _read(_PUB / "assets/site.css")
     assert '.form-label-required::after{content:" *"' in css
+
+
+# The masthead logo is as tall as 9robots.ai's, and so is its word (REQ-GHA-018 clause 14, amended
+# 2026-11-05). 9robots.ai sizes its logo 43 px, and 39 px below 768 px (Tailwind's max-[768px] in
+# 9robots-site next/components/Nav.tsx). In its image, /img/9robots-logo.png (4535 x 982), the visible
+# pixels run from row 29 to 971 (the mark fills 943/982 of the height) and the word "9robots" from row
+# 147 to 806 (660/982). GlassHood's masthead logo uses the same sizes and an image cut to the same shares.
+_NAV_LOGO = ROOT / "architecture/img/glasshood-logo-nav.png"
+_NAV_IMG = '<img src="/architecture/img/glasshood-logo-nav.png" alt="GlassHood" width="754" height="132">'
+_NINEROBOTS_MARK, _NINEROBOTS_WORD = 943 / 982, 660 / 982
+
+
+def _png_rgba_rows(path):
+    """Width, height, bytes per pixel and decoded rows of an 8-bit, non-interlaced RGB(A) PNG."""
+    import struct
+    import zlib
+    data, pos, idat = path.read_bytes(), 8, b""
+    assert data[:8] == b"\x89PNG\r\n\x1a\n"
+    while pos < len(data):
+        length, kind = struct.unpack(">I4s", data[pos:pos + 8])
+        chunk = data[pos + 8:pos + 8 + length]
+        if kind == b"IHDR":
+            width, height, depth, ctype, _, _, interlace = struct.unpack(">IIBBBBB", chunk)
+            assert depth == 8 and ctype in (2, 6) and interlace == 0
+            bpp = 4 if ctype == 6 else 3
+        elif kind == b"IDAT":
+            idat += chunk
+        pos += 12 + length
+    raw, stride, prev, rows = zlib.decompress(idat), width * bpp, bytearray(width * bpp), []
+    for y in range(height):
+        kind, line = raw[y * (stride + 1)], bytearray(raw[y * (stride + 1) + 1:(y + 1) * (stride + 1)])
+        for i in range(stride):
+            a, b = (line[i - bpp] if i >= bpp else 0), prev[i]
+            c = prev[i - bpp] if i >= bpp else 0
+            if kind == 1: line[i] = (line[i] + a) & 255
+            elif kind == 2: line[i] = (line[i] + b) & 255
+            elif kind == 3: line[i] = (line[i] + (a + b) // 2) & 255
+            elif kind == 4:
+                p = a + b - c
+                pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
+                line[i] = (line[i] + (a if pa <= pb and pa <= pc else b if pb <= pc else c)) & 255
+        rows.append(bytes(line))
+        prev = line
+    return width, height, bpp, rows
+
+
+def _logo_shares(path):
+    """Width, height, and the shares of the height taken by the whole mark and by the word, where the
+    word is everything right of the widest empty column gap (the gap between icon and word)."""
+    width, height, bpp, rows = _png_rgba_rows(path)
+    seen = lambda row, x: ((row[x * bpp + 3] if bpp == 4 else 255) > 24 and sum(row[x * bpp:x * bpp + 3]) < 3 * 245)
+    cols = [any(seen(row, x) for row in rows) for x in range(width)]
+    gaps, start = [], None
+    for x, c in enumerate(cols + [True]):
+        if not c and start is None:
+            start = x
+        elif c and start is not None:
+            gaps.append((x - start, x)); start = None
+    word_from = max(g for g in gaps if g[1] < width)[1]
+    mark = [y for y, row in enumerate(rows) if any(seen(row, x) for x in range(width))]
+    word = [y for y, row in enumerate(rows) if any(seen(row, x) for x in range(word_from, width))]
+    return width, height, (mark[-1] - mark[0] + 1) / height, (word[-1] - word[0] + 1) / height
+
+
+@pytest.mark.parametrize("page", _NAV_PAGES + (_ARCH / "index.html",), ids=lambda p: str(p.relative_to(ROOT)))
+def test_the_masthead_shows_the_recut_logo_at_its_true_size(page):
+    assert _NAV_IMG in _nav(_read(page))
+
+
+def test_the_masthead_logo_and_its_word_are_as_tall_as_9robots_ai():
+    css = _shared_block(_read(_PUB / "assets/site.css"))
+    assert ".nav-logo img{display:block;height:43px;" in css
+    assert "@media (max-width:767px){.nav-logo img{height:39px}}" in css
+    width, height, mark, word = _logo_shares(_NAV_LOGO)
+    assert (width, height) == (754, 132)
+    assert abs(mark - _NINEROBOTS_MARK) < 0.01, f"the mark fills {mark:.3f} of the logo, 9robots.ai's {_NINEROBOTS_MARK:.3f}"
+    assert abs(word - _NINEROBOTS_WORD) < 0.01, f"the word fills {word:.3f} of the logo, 9robots.ai's {_NINEROBOTS_WORD:.3f}"
