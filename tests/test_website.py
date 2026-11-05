@@ -303,7 +303,8 @@ def test_the_architecture_page_carries_the_site_masthead_on_both_hosts():
 def test_home_has_the_two_colour_hero_and_cards_with_icons():
     home = _read(_PUB / "index.html")
     assert '<span class="hero-title-first">' in home and '<span class="hero-title-rest">' in home
-    assert '<div class="hero-wash" aria-hidden="true"></div>' in home
+    # No colour wash behind the hero (Igor, 2026-11-05: "fade out, we will remove for GlassHood").
+    assert "hero-wash" not in home and "hero-wash" not in _read(_PUB / "assets/site.css")
     assert home.count('<span class="feature-icon">') == 3
 
 
