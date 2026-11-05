@@ -77,16 +77,18 @@ class Topology:
 
     def update_overall_status(self):
         # Only consider active nodes — skip non-live statuses
-        skip = ("disconnected", "planned", "deployed", "offline", "disabled")
+        # REQ-GHA-023: "not checked" (an outside service GlassHood cannot check) says nothing
+        # about health, so it neither greens nor degrades the overall status.
+        skip = ("disconnected", "planned", "deployed", "offline", "disabled", "not checked")
         statuses = [n.status for n in self.nodes if n.status not in skip]
-        if any(s == "error" for s in statuses):
+        if not statuses:  # nothing checked (or nothing at all) proves nothing
+            self.overall_status = "unknown"
+        elif any(s == "error" for s in statuses):
             self.overall_status = "error"
         elif any(s == "degraded" for s in statuses):
             self.overall_status = "degraded"
         elif all(s == "healthy" for s in statuses):
             self.overall_status = "healthy"
-        elif not statuses:
-            self.overall_status = "unknown"
         else:
             self.overall_status = "degraded"
         self.last_updated = datetime.now(timezone.utc).isoformat()
