@@ -3,7 +3,7 @@
 // Run: node frontend/src/utils/canvasParts.test.js
 
 import assert from 'node:assert/strict'
-import { canvasNodes, attestationBadge, nearestSide, groupAttestationBadge, statsNodes, worstStatus, fitViewBox, anchorPoint, edgeStyle, boxSizes, isSpacer, connectionEdge } from './canvasParts.js'
+import { canvasNodes, attestationBadge, nearestSide, groupAttestationBadge, statsNodes, worstStatus, fitViewBox, anchorPoint, edgeStyle, boxSizes, isSpacer, connectionEdge, nestedChildIds } from './canvasParts.js'
 
 let failed = 0
 function test(name, fn) {
@@ -135,6 +135,19 @@ test('spacer cells and styled connections from the manifest', () => {
   assert.deepEqual(connectionEdge('a', 'b'), { source: 'a', target: 'b', label: '', status: 'healthy', style: 'default' })
   assert.deepEqual(connectionEdge('a', { to: '@vms', style: 'thin', label: 'runs as' }),
     { source: 'a', target: '@vms', label: 'runs as', status: 'healthy', style: 'thin' })
+})
+
+test('flow lines use the side middles even when the other end is far above or below', () => {
+  const boxes = { app: { hw: 54, hh: 14 } }
+  // firewall to the left and 150 above: still the app's left middle, never its top
+  assert.deepEqual(anchorPoint('app', { x: 1318, y: 382 }, { x: 1100, y: 230 }, boxes, true), { x: 1264, y: 382 })
+  // AI group to the right and far below: the app's right middle, never its bottom
+  assert.deepEqual(anchorPoint('app', { x: 1318, y: 382 }, { x: 1700, y: 900 }, boxes, true), { x: 1372, y: 382 })
+})
+
+test('nested boxes are known, so their lines are drawn above the VM box', () => {
+  const ids = nestedChildIds([{ id: 'vm', children: [{ id: 'c', children: [{ id: 'app' }] }] }, { id: 'ip' }])
+  assert.deepEqual([...ids].sort(), ['app', 'c'])
 })
 
 if (failed) { console.error(`${failed} failed`); process.exit(1) }

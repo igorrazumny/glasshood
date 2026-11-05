@@ -4,7 +4,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import TopologyNode, { nodeHeight, NODE_H, NODE_W, childHeight, CHILD_H, CHILD_GAP, CHILD_PAD } from './TopologyNode'
 import { computeManifestLayout, buildParentNodeRecord } from '../utils/manifestLayout'
-import { nearestSide, groupCenter, groupAttestationBadge, worstStatus, anchorPoint, boxSizes, edgeStyle, fitViewBox } from '../utils/canvasParts.js'
+import { nearestSide, groupCenter, groupAttestationBadge, worstStatus, anchorPoint, boxSizes, edgeStyle, fitViewBox, nestedChildIds } from '../utils/canvasParts.js'
 import { useNodePositions } from '../hooks/useNodePositions'
 
 // Dynamic live layout — HARDWARE ONLY
@@ -233,8 +233,10 @@ function EdgeLine({ edge, positions, boxes, index = 0 }) {
   const toC = positions[edge.target]
   if (!fromC || !toC) return null
   // REQ-GHA-023 clause 9: attach at the facing sides of the boxes, not their centres.
-  const from = anchorPoint(edge.source, fromC, toC, boxes)
-  const to = anchorPoint(edge.target, toC, fromC, boxes)
+  // Request/data flow always uses the left and right ports (in left, out right).
+  const flow = !edge.style || edge.style === 'default'
+  const from = anchorPoint(edge.source, fromC, toC, boxes, flow)
+  const to = anchorPoint(edge.target, toC, fromC, boxes, flow)
 
   const look = edgeStyle(edge)
   const isDeployEdge = edge.style === 'dashed'
@@ -643,13 +645,13 @@ export default function TopologyMap({ data, error, isDemo, hideCosts, onNodeSele
   // Build resolved positions: original positions + REAL child positions within parent box.
   // Children are rendered inside their parent — compute actual visual offset for edge endpoints.
   const resolvedPositions = { ...positions }
-  const _addChildPositions = (parentPos, parentTotalH, children) => {
+  const _addChildPositions = (parentPos, parentTotalH, children, overwrite = false) => {
     if (!parentPos || !children) return
     const topY = parentPos.y - parentTotalH / 2  // top of parent box
     let offsetY = NODE_H  // children start below node header
     for (const child of children) {
       const ch = childHeight(child)
-      if (child.id && !resolvedPositions[child.id]) {
+      if (child.id && (overwrite || !resolvedPositions[child.id])) {
         resolvedPositions[child.id] = {
           x: parentPos.x,
           y: topY + offsetY + ch / 2,
@@ -661,7 +663,7 @@ export default function TopologyMap({ data, error, isDemo, hideCosts, onNodeSele
         let nestedOffsetY = CHILD_H  // grandchildren start below child header
         for (const gc of child.children) {
           const gch = childHeight(gc)
-          if (gc.id && !resolvedPositions[gc.id]) {
+          if (gc.id && (overwrite || !resolvedPositions[gc.id])) {
             resolvedPositions[gc.id] = {
               x: parentPos.x,
               y: childTopY + nestedOffsetY + gch / 2,
@@ -765,6 +767,13 @@ export default function TopologyMap({ data, error, isDemo, hideCosts, onNodeSele
     }
   }
 
+  // REQ-GHA-023 clause 9: edges end on the boxes as drawn. The overlap pass above may have
+  // moved nodes, so take their final positions and place nested children from them again.
+  for (const [nid, p] of Object.entries(positions)) resolvedPositions[nid] = p
+  for (const node of nodes) {
+    if (node.children && positions[node.id]) _addChildPositions(positions[node.id], nodeHeight(node), node.children, true)
+  }
+
   // Resolve @group edges: compute boundary positions from live effectiveGroups
   // Source group: right-center. Target group: left-center.
   const groupBoundsMap = {}
@@ -794,6 +803,7 @@ export default function TopologyMap({ data, error, isDemo, hideCosts, onNodeSele
   }).filter(e => resolvedPositions[e.source] && resolvedPositions[e.target])
 
   const edgeBoxes = boxSizes(nodes, { nodeW: NODE_W, nodeHeight, childHeight, childPad: CHILD_PAD })
+  const nestedIds = nestedChildIds(nodes)
 
   // REQ-GHA-023 clause 9: open on the whole pipeline once it is laid out; later polls do not
   // re-snap the view (a rollout adding a VM keeps the reader's pan and zoom).
@@ -1046,7 +1056,7 @@ export default function TopologyMap({ data, error, isDemo, hideCosts, onNodeSele
           </g>
         ))}
 
-        {resolvedEdges.map((edge, i) => (
+        {resolvedEdges.map((edge, i) => (nestedIds.has(edge.source) || nestedIds.has(edge.target)) ? null : (
           <EdgeLine key={i} edge={edge} positions={resolvedPositions} boxes={edgeBoxes} index={i} />
         ))}
 
@@ -1076,6 +1086,12 @@ export default function TopologyMap({ data, error, isDemo, hideCosts, onNodeSele
             />
           )
         })}
+
+        {/* REQ-GHA-023 clause 9: lines into or out of an app nested in a VM are drawn on top,
+            so the arrow is seen reaching the app's side instead of vanishing under the VM box. */}
+        {resolvedEdges.map((edge, i) => (nestedIds.has(edge.source) || nestedIds.has(edge.target)) ? (
+          <EdgeLine key={`n${i}`} edge={edge} positions={resolvedPositions} boxes={edgeBoxes} index={i} />
+        ) : null)}
       </svg>
 
       {/* Zoom controls — bottom center */}

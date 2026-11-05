@@ -88,10 +88,20 @@ export function worstStatus(statuses) {
 // REQ-GHA-023 clause 9: an edge leaves and enters a box at the side facing the other end,
 // so a request runs into the app's left side and out of its right side.
 // boxes: id -> {hw, hh} half-sizes; a point with no box (a group side) is used as is.
-export function anchorPoint(id, center, other, boxes) {
+// horizontal: request/data flow — always the left or right side's middle, by direction.
+export function anchorPoint(id, center, other, boxes, horizontal = false) {
   const b = boxes?.[id]
   if (!b || !center || !other) return center
+  if (horizontal) return { x: other.x < center.x ? center.x - b.hw : center.x + b.hw, y: center.y }
   return nearestSide({ x: center.x - b.hw, y: center.y - b.hh, w: 2 * b.hw, h: 2 * b.hh }, other).point
+}
+
+// Ids of boxes drawn inside another box (container, app, embeddings).
+export function nestedChildIds(nodes) {
+  const ids = new Set()
+  const walk = (children) => { for (const c of children || []) { if (c.id) ids.add(c.id); walk(c.children) } }
+  for (const n of nodes || []) walk(n.children)
+  return ids
 }
 
 // Half-sizes of every drawn box: top-level nodes and the children nested inside them.
