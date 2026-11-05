@@ -68,3 +68,19 @@ export function statsNodes(topology, canvas) {
   const nodes = canvas || topology.nodes
   return nodes?.length ? nodes : null
 }
+
+// REQ-GHA-023 clause 3: a dynamic group's colour is the worst of its members and of its
+// parent (the instance group), so a failed endpoint attestation turns the group yellow while
+// a member's stronger error still wins. Statuses that carry no health are ignored.
+// Same ranking the canvas used before (unlisted statuses rank with unknown).
+const GROUP_PRIORITY = { healthy: 0, unknown: 1, disabled: 1, degraded: 2, error: 3 }
+const NO_HEALTH = new Set(['not monitored', 'not checked'])
+
+export function worstStatus(statuses) {
+  let worst = null
+  for (const s of statuses) {
+    if (!s || NO_HEALTH.has(s)) continue
+    if (worst === null || (GROUP_PRIORITY[s] ?? 1) > (GROUP_PRIORITY[worst] ?? 1)) worst = s
+  }
+  return worst
+}

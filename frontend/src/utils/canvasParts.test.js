@@ -3,7 +3,7 @@
 // Run: node frontend/src/utils/canvasParts.test.js
 
 import assert from 'node:assert/strict'
-import { canvasNodes, attestationBadge, nearestSide, groupAttestationBadge, statsNodes } from './canvasParts.js'
+import { canvasNodes, attestationBadge, nearestSide, groupAttestationBadge, statsNodes, worstStatus } from './canvasParts.js'
 
 let failed = 0
 function test(name, fn) {
@@ -90,6 +90,16 @@ test('canvas wins over topology once both exist; topology alone otherwise', () =
   assert.deepEqual(statsNodes(topo, [{ id: 'a' }]), [{ id: 'a' }])
   assert.deepEqual(statsNodes(topo, null), topo.nodes)
   assert.equal(statsNodes({ nodes: [] }, null), null)
+})
+
+test('failed endpoint attestation turns a group of healthy VMs yellow', () => {
+  assert.equal(worstStatus(['healthy', 'healthy', 'degraded']), 'degraded')  // two VMs + parent
+})
+
+test('a member error still beats a degraded parent; no-health statuses are ignored', () => {
+  assert.equal(worstStatus(['error', 'healthy', 'degraded']), 'error')
+  assert.equal(worstStatus(['not checked', 'healthy', null]), 'healthy')
+  assert.equal(worstStatus(['not monitored']), null)
 })
 
 if (failed) { console.error(`${failed} failed`); process.exit(1) }
