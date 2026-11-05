@@ -124,7 +124,7 @@ a:hover{text-decoration:underline}
 .pd-card{display:block;position:relative;overflow:hidden;color:inherit;cursor:pointer;
   transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
 .pd-card,.pd-card *{text-decoration:none!important}
-.pd-card:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.06);border-color:var(--orange)}
+.pd-card:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.06);border-color:var(--blue)}
 .pd-card:focus-visible{outline:2px solid var(--navy);outline-offset:2px}
 .pd-card .feature-icon{transition:transform .18s ease}
 .pd-card:hover .feature-icon{transform:scale(1.05)}
@@ -134,7 +134,7 @@ a:hover{text-decoration:underline}
 .pd-card-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
   opacity:0;transition:opacity .18s ease;pointer-events:none;border-radius:inherit}
 .pd-card:hover .pd-card-overlay{opacity:1}
-.pd-card-overlay-text{display:inline-flex;align-items:center;gap:8px;background:var(--orange);color:#fff;
+.pd-card-overlay-text{display:inline-flex;align-items:center;gap:8px;background:var(--blue);color:#fff;
   padding:10px 14px;border-radius:12px;font-size:17px;font-weight:500;box-shadow:0 4px 16px rgba(0,0,0,.12);
   white-space:nowrap}
 .pd-hidden-until-reveal{display:none}

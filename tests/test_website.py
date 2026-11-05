@@ -467,3 +467,16 @@ def test_home_cards_open_their_sections_as_on_the_architecture_page():
     # The behaviour is the architecture page's own script, unchanged: it reveals the sections and scrolls.
     js = _read(_ARCH / "app.js")
     assert "querySelector('.pd-page')" in js and "classList.add('revealed')" in js and "scrollIntoView" in js
+
+
+def test_the_top_cards_turn_glasshood_blue_when_pointed_at():
+    # REQ-GHA-018 clause 14, amended 2026-11-05 (fourth): on Home and on the architecture page a card that is
+    # pointed at uses GlassHood's blue, #0C41CD, for its border and its "Click to read the section" label,
+    # like the buttons.
+    for css in (_read(_PUB / "assets/site.css"), _read(_ARCH / "styles.css")):
+        assert "--blue:#0c41cd" in css
+        assert ".pd-card:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.06);border-color:var(--blue)}" in css
+        assert re.search(r"\.pd-card-overlay-text\{[^}]*background:var\(--blue\)", css)
+        rules = re.findall(r"([^{}]+)\{([^{}]*)\}", re.sub(r"/\*.*?\*/", "", css, flags=re.S))
+        card_rules = [body for sel, body in rules if "pd-card" in sel]
+        assert card_rules and not any("orange" in body for body in card_rules)
