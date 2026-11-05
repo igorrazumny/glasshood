@@ -297,3 +297,26 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Why:** Owner, 2026-11-04, after an outside review of the architecture pages asked for zero trust.
 - **Who builds:** Cypher; facts checked by Neo.
 - **Status:** confirmed by Igor 2026-11-04 (full text). The same day Igor also approved making the public site's wording true where GlassHood now also calls coldvault.ai's public endpoints anonymously: "toward the monitored system" becomes "toward the monitored cloud project" (an exception to REQ-GHA-018 clause 14's unchanged wording). Implemented 2026-11-04: PR #29 (4307a49), merged ahead of review on Igor's go; Sati's PROCEED for head 0ace63e followed with no findings; live from image wif41 (21:20Z). Live 2026-11-04: #29 merged ahead of review on Igor's instruction and deployed in wif41; Sati's PROCEED followed (above).
+
+## REQ-GHA-023: GlassHood draws ColdVault's full real architecture
+
+- **Goal:** The logged-in dashboard shows ColdVault as complex as it really is, so a technical visitor can map it onto their own estate.
+- **Why:** Owner, 2026-11-05: eight boxes look primitive and do not match the "12 nodes monitored" count; a client whose own network is far more complex cannot connect a three-box picture to their situation.
+- **Target state:**
+  1. **Everything real, all at once.** Every part listed here that is in use today is drawn on the canvas; nothing is collapsed or hidden by default.
+     - Entry: static IP 34.8.142.111; HTTPS rule (443) → HTTPS proxy → URL map; HTTP rule (80) → HTTP proxy → redirect to HTTPS; TLS certificate for coldvault.ai with its expiry; backend service and its health check; the firewall rules that admit the load balancer and admin SSH.
+     - Compute: the managed instance group with its autoscaler and current template version; each VM (machine type, AMD SEV-SNP, Secure Boot / vTPM / integrity monitoring); the container on each VM; the ColdVault app and its MCP endpoint.
+     - Data: Cloud SQL (Postgres 15, europe-west1) with the time of its last successful backup; Secret Manager (number of secrets, names only, never values); the storage bucket in use (coldvault-vault-data-prod); the image registry ColdVault deploys from.
+     - AI and outside services, as ColdVault's architect confirmed on 2026-11-05: Vault Mode — RedPill's TEE models (GLM-5.3 Flash, GLM-5.3, Kimi K2.6, DeepSeek V3.2), outside Google; embeddings on ColdVault's own Confidential VM. Partner Mode — Google Vertex AI (Gemini; Claude through Vertex), OpenAI, xAI, Alibaba DashScope. SMTP for the cost-spike alert email.
+     - Operations: Cloud Logging with its error metric; Cloud Monitoring with its alert policy and notification channel.
+     - Trust path: GlassHood's own read-only way in, from its Azure identity through the workload identity pool to its read-only Google account.
+  2. **Real connections.** Lines follow the real path of a request: visitor → IP → rules → proxies → backend → VMs → app → data / AI / outside services. Operations and the trust path connect to what they watch.
+  3. **Honest status.** Each part's status comes from a real check GlassHood is allowed to make. A part GlassHood cannot check is drawn as "outside service, not checked" or "not checked", never green. Confidential hardware is an attestation badge on each VM (via MCP), not a separate box.
+  4. **Live changes visible.** When ColdVault replaces or adds a VM, the canvas shows both VMs and their states during the change.
+  5. **Count matches canvas.** "Nodes monitored" and the per-status counts are counted from exactly the parts on the canvas. The retired H100 GPU entry is gone.
+  6. **Findings.** Configuration drift and leftovers GlassHood can see are listed as warnings, never drawn as working parts. As of 2026-11-05: Auth0 and Stripe idle while sign-in is off; Turbopuffer and Moonshot keys unused; the us-west2 Vertex endpoint unused; firewall rules allow-vllm-internal and coldvault-val-allow-lb unused; Cloud Run domain mappings to the missing service braintransplant-ai; 29 duplicate "ColdVault Error Spike" alert policies and "ColdVault Alerts" channels; the configured vLLM endpoint that no longer exists; bucket coldvault-model-weights kept but unused.
+  7. **Least privilege kept.** GlassHood gains no write access, reads no secret value, and holds no ColdVault key. Any new read-only role it needs is named in this requirement's status before it is granted.
+  8. **Nothing else changes.** Live demo, login, the MCP server and client (REQ-GHA-019/020), always-on, and cost stay as they are.
+- **Supersedes:** for ColdVault, REQ-GHA-021 clause 2 and the "plain" intent of clause 1. Clause 3 stays: the architecture site is not drawn.
+- **Who builds:** Neo.
+- **Status:** confirmed by Igor 2026-11-05 (full text). Not started.
