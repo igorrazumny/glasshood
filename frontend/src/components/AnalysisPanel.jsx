@@ -7,6 +7,7 @@ import { useState } from 'react'
 import { Brain, RefreshCw, AlertTriangle, CheckCircle, Server, Shield } from 'lucide-react'
 import { apiFetch } from '../utils/api'
 import { statsNodes } from '../utils/canvasParts.js'
+import { overviewStamp, spendLine } from '../utils/overview.js'
 
 function ScoreBadge({ score }) {
   if (score === null || score === undefined) return null
@@ -67,65 +68,73 @@ function TopologyStats({ topology, canvas }) {
 
 export default function AnalysisPanel({ data, topology, canvas }) {
   const [refreshing, setRefreshing] = useState(false)
+  const [refreshNote, setRefreshNote] = useState('')
 
   const handleRefresh = async () => {
     setRefreshing(true)
+    setRefreshNote('')
     try {
       await apiFetch('/api/analysis/refresh', { method: 'POST' })
     } catch (e) {
-      // Rate limited or error — ignore, cached data stays
+      setRefreshNote(e?.message || 'A fresh overview is not possible right now')
     } finally {
       setRefreshing(false)
     }
   }
 
   const analysis = data || {}
-  const hasData = analysis.score !== null && analysis.score !== undefined
+  const hasData = !!analysis.summary
+  // REQ-GHA-024: only an operator gets spend and the refresh control; a viewer only reads.
+  const spend = analysis.spend
 
   return (
-    <div className="h-full bg-card dark:bg-purple-800 border border-border dark:border-purple-700 rounded-lg p-4 flex flex-col gap-3 overflow-y-auto">
+    <div className="mb-2 bg-card dark:bg-purple-800 border border-border dark:border-purple-700 rounded-lg p-4 flex flex-col gap-3">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Brain size={16} className="text-accent-500 dark:text-accent-300" />
-          <span className="text-base font-semibold text-gray-900 dark:text-white">AI Analysis</span>
-          {analysis.stale && (
+          <span className="text-base font-semibold text-gray-900 dark:text-white">AI overview</span>
+          {analysis.stale && hasData && (
             <span className="text-xs bg-yellow-100 dark:bg-yellow-400/10 text-yellow-700 dark:text-yellow-400 px-1.5 py-0.5 rounded">stale</span>
           )}
         </div>
-        <button
-          onClick={handleRefresh}
-          disabled={refreshing}
-          className="text-gray-500 hover:text-gray-800 dark:text-purple-300 dark:hover:text-white transition-colors"
-          title="Refresh analysis"
-        >
-          <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
-        </button>
+        {spend && (
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing || analysis.refresh_in_s > 0}
+            className="text-gray-500 hover:text-gray-800 dark:text-purple-300 dark:hover:text-white transition-colors disabled:opacity-30"
+            title={analysis.refresh_in_s > 0 ? `Fresh overview possible in ${Math.ceil(analysis.refresh_in_s / 60)} min` : 'Write a fresh overview now'}
+          >
+            <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
+          </button>
+        )}
       </div>
 
-      <TopologyStats topology={topology} canvas={canvas} />
+      {/* REQ-GHA-024 clause 1: when it was written and by which model, right on top */}
+      <p className="text-xs text-gray-500 dark:text-purple-300 -mt-2">{overviewStamp(analysis)}</p>
+      {analysis.error && (
+        <p className="text-xs text-yellow-700 dark:text-yellow-300">{analysis.error}{hasData ? ' — showing the last overview.' : ''}</p>
+      )}
+      {refreshNote && <p className="text-xs text-gray-500 dark:text-purple-300">{refreshNote}</p>}
 
       {!hasData ? (
-        <p className="text-gray-500 dark:text-purple-300 text-sm">Waiting for first analysis...</p>
+        <p className="text-gray-500 dark:text-purple-300 text-sm">{analysis.error ? 'No overview yet.' : 'Writing the first overview…'}</p>
       ) : (
         <>
-          {/* Score */}
-          <div className="flex justify-center py-2">
+          {/* Summary first: how the system is doing, in plain words */}
+          <div className="flex items-start gap-3">
             <ScoreBadge score={analysis.score} />
+            <p className="text-gray-700 dark:text-purple-100 text-sm leading-relaxed">{analysis.summary}</p>
           </div>
 
-          {/* Summary */}
-          <p className="text-gray-700 dark:text-purple-100 text-sm leading-relaxed">{analysis.summary}</p>
-
-          {/* Issues */}
           {analysis.issues?.length > 0 && (
             <div>
-              <h3 className="text-xs font-semibold text-gray-500 dark:text-purple-300 uppercase mb-1">Issues</h3>
+              <h3 className="text-xs font-semibold text-gray-500 dark:text-purple-300 uppercase mb-1">Needs attention</h3>
               <ul className="space-y-1">
                 {analysis.issues.map((issue, i) => (
                   <li key={i} className="flex items-start gap-2 text-sm text-yellow-700 dark:text-yellow-300">
                     <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" />
-                    <span>{typeof issue === 'string' ? issue : issue?.description || JSON.stringify(issue)}</span>
+                    <span>{String(issue)}</span>
                   </li>
                 ))}
               </ul>
@@ -135,17 +144,16 @@ export default function AnalysisPanel({ data, topology, canvas }) {
           {analysis.issues?.length === 0 && (
             <div className="flex items-center gap-2 text-green-700 dark:text-green-400 text-sm">
               <CheckCircle size={12} />
-              <span>No issues detected</span>
+              <span>Nothing needs attention</span>
             </div>
           )}
 
-          {/* Recommendations */}
           {analysis.recommendations?.length > 0 && (
             <div>
-              <h3 className="text-xs font-semibold text-gray-500 dark:text-purple-300 uppercase mb-1">Recommendations</h3>
+              <h3 className="text-xs font-semibold text-gray-500 dark:text-purple-300 uppercase mb-1">Next steps</h3>
               <ul className="space-y-1">
                 {analysis.recommendations.map((rec, i) => (
-                  <li key={i} className="text-sm text-gray-600 dark:text-purple-200">{typeof rec === 'string' ? rec : rec?.description || JSON.stringify(rec)}</li>
+                  <li key={i} className="text-sm text-gray-600 dark:text-purple-200">{String(rec)}</li>
                 ))}
               </ul>
             </div>
@@ -153,6 +161,13 @@ export default function AnalysisPanel({ data, topology, canvas }) {
         </>
       )}
 
+      {spend && (
+        <p className="text-xs text-gray-500 dark:text-purple-300">
+          {spendLine(spend)}
+        </p>
+      )}
+
+      <TopologyStats topology={topology} canvas={canvas} />
     </div>
   )
 }

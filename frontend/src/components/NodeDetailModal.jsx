@@ -53,7 +53,6 @@ function _formatAge(seconds) {
 export default function NodeDetailModal({ node, onClose, isDemo, hideCosts }) {
   const [showLogs, setShowLogs] = useState(false)
   const [nodeAnalysis, setNodeAnalysis] = useState(null)
-  const [refreshing, setRefreshing] = useState(false)
   const [tick, setTick] = useState(0)
   // REQ-GHA-020: Recheck via MCP (on demand only; result kept in this modal, not stored)
   const [partner, setPartner] = useState(false)
@@ -79,31 +78,6 @@ export default function NodeDetailModal({ node, onClose, isDemo, hideCosts }) {
       .then(setNodeAnalysis)
       .catch(() => setNodeAnalysis(null))
   }, [node?.id, isDemo])
-
-  // Poll for updated analysis while stale or refreshing
-  useEffect(() => {
-    if (!node || isDemo || !nodeAnalysis?.stale) return
-    const interval = setInterval(() => {
-      apiFetch(`/api/analysis/node/${node.id}`)
-        .then(data => {
-          setNodeAnalysis(data)
-          if (!data.stale) {
-            setRefreshing(false)
-            clearInterval(interval)
-          }
-        })
-        .catch(() => {})
-    }, 10000) // Check every 10s
-    return () => clearInterval(interval)
-  }, [node?.id, isDemo, nodeAnalysis?.stale])
-
-  const handleRefresh = useCallback(() => {
-    if (!node || refreshing) return
-    setRefreshing(true)
-    apiFetch(`/api/analysis/node/${node.id}/refresh`, { method: 'POST' })
-      .catch(() => {})
-    // Polling useEffect above will pick up the fresh result
-  }, [node, refreshing])
 
   const handleRecheck = useCallback(() => {
     if (!node || rechecking) return
@@ -247,22 +221,16 @@ export default function NodeDetailModal({ node, onClose, isDemo, hideCosts }) {
                   </span>
                 )}
               </div>
-              <button
-                onClick={handleRefresh}
-                disabled={refreshing}
-                className="text-gray-500 hover:text-accent-600 dark:text-purple-300 dark:hover:text-accent-300 transition-colors disabled:opacity-30"
-                title="Refresh analysis"
-              >
-                <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-              </button>
+              {/* REQ-GHA-024: per-part overviews are written every 3 hours; no on-demand call */}
+              <span className="text-xs text-gray-500 dark:text-purple-300">{overviewStamp(nodeAnalysis)}</span>
             </div>
 
             {/* Stale/refreshing banner */}
             {(nodeAnalysis?.stale && nodeAnalysis?.analyzed_at) && (
               <div className="text-sm text-gray-600 dark:text-purple-200 bg-surface/50 dark:bg-purple-900/40 rounded px-2 py-1 mb-2">
-                {refreshing || nodeAnalysis?.stale
-                  ? 'Preparing updated analysis. Here is the latest review we have.'
-                  : null}
+                {nodeAnalysis?.error
+                  ? `${nodeAnalysis.error} — showing the last overview.`
+                  : 'This overview is older than its 3-hour schedule.'}
               </div>
             )}
 
@@ -300,8 +268,8 @@ export default function NodeDetailModal({ node, onClose, isDemo, hideCosts }) {
                 )}
               </div>
             ) : nodeAnalysis?.analyzed_at == null ? (
-              <p className="text-sm text-gray-500 dark:text-purple-300 animate-pulse">
-                Preparing first analysis — this may take a few minutes...
+              <p className="text-sm text-gray-500 dark:text-purple-300">
+                {nodeAnalysis?.error || 'No overview for this part yet.'}
               </p>
             ) : (
               <p className="text-sm text-gray-600 dark:text-purple-200">{nodeAnalysis?.summary || 'Analysis unavailable'}</p>
