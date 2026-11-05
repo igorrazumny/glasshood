@@ -2,9 +2,9 @@
 // Purpose: SVG topology visualization with zoom/pan, group boxes, and node selection
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
-import TopologyNode, { nodeHeight, NODE_H, childHeight, CHILD_H, CHILD_GAP } from './TopologyNode'
+import TopologyNode, { nodeHeight, NODE_H, NODE_W, childHeight, CHILD_H, CHILD_GAP, CHILD_PAD } from './TopologyNode'
 import { computeManifestLayout, buildParentNodeRecord } from '../utils/manifestLayout'
-import { nearestSide, groupCenter, groupAttestationBadge, worstStatus } from '../utils/canvasParts.js'
+import { nearestSide, groupCenter, groupAttestationBadge, worstStatus, anchorPoint, boxSizes, edgeStyle, fitViewBox } from '../utils/canvasParts.js'
 import { useNodePositions } from '../hooks/useNodePositions'
 
 // Dynamic live layout — HARDWARE ONLY
@@ -228,16 +228,21 @@ const STATUS_COLORS_HEX_REFERENCE = {
   planned: '#94a3b8',
 }
 
-function EdgeLine({ edge, positions, index = 0 }) {
-  const from = positions[edge.source]
-  const to = positions[edge.target]
-  if (!from || !to) return null
+function EdgeLine({ edge, positions, boxes, index = 0 }) {
+  const fromC = positions[edge.source]
+  const toC = positions[edge.target]
+  if (!fromC || !toC) return null
+  // REQ-GHA-023 clause 9: attach at the facing sides of the boxes, not their centres.
+  const from = anchorPoint(edge.source, fromC, toC, boxes)
+  const to = anchorPoint(edge.target, toC, fromC, boxes)
 
+  const look = edgeStyle(edge)
   const isDeployEdge = edge.style === 'dashed'
   // REQ-005 + REQ-009 Phase 4b: deploy-edge gray via CSS var so dark mode
   // can substitute a brighter slate.
-  const color = isDeployEdge ? 'var(--edge-deploy)' : (STATUS_COLORS[edge.status] || STATUS_COLORS.unknown)
-  const isDashed = isDeployEdge || edge.status === 'disconnected' || edge.status === 'error'
+  const color = (isDeployEdge || edge.style === 'thin') ? 'var(--edge-deploy)' : (STATUS_COLORS[edge.status] || STATUS_COLORS.unknown)
+  const broken = edge.status === 'disconnected' || edge.status === 'error'
+  const dash = broken ? '6 4' : look.dash
 
   const mx = (from.x + to.x) / 2
   const my = (from.y + to.y) / 2
@@ -252,17 +257,22 @@ function EdgeLine({ edge, positions, index = 0 }) {
 
   return (
     <g>
-      {/* Edge label as tooltip only — hover to see */}
       {edge.label && <title>{`${edge.source} → ${edge.target}: ${edge.label}`}</title>}
       <path
         id={pathId}
         d={pathD}
         fill="none"
         stroke={color}
-        strokeWidth={1.2}
-        strokeDasharray={isDashed ? '6 4' : 'none'}
-        opacity={isDashed ? 0.35 : 0.45}
+        strokeWidth={look.width}
+        strokeDasharray={dash}
+        opacity={broken ? 0.35 : look.opacity}
+        markerEnd={look.arrow ? 'url(#arrowhead)' : undefined}
       />
+      {look.showLabel && edge.label && (
+        <text x={(mx + cx) / 2} y={(my + cy) / 2 - 2} fill="var(--canvas-text-soft)" fontSize={6.5} textAnchor="middle">
+          {edge.label}
+        </text>
+      )}
     </g>
   )
 }
@@ -274,6 +284,15 @@ export default function TopologyMap({ data, error, isDemo, hideCosts, onNodeSele
   const [selected, setSelected] = useState(null)
   const defaultVB = isDemo ? DEMO_VB : LIVE_VB
   const [viewBox, setViewBox] = useState(defaultVB)
+  const fitAllRef = useRef(null)   // REQ-GHA-023: view that shows the whole pipeline
+  const fittedRef = useRef(false)
+  // Runs after each render (must stay above any early return); acts once, when the layout exists.
+  useEffect(() => {
+    if (fitAllRef.current && !fittedRef.current && focusProjectId === null) {
+      fittedRef.current = true
+      setViewBox(fitAllRef.current)
+    }
+  })
   const svgRef = useRef(null)
   const containerRef = useRef(null)
   const isPanning = useRef(false)
@@ -350,7 +369,7 @@ export default function TopologyMap({ data, error, isDemo, hideCosts, onNodeSele
   // Zoom to solution when selected from left panel
   useEffect(() => {
     if (focusProjectId === null) {
-      if (!isDemo) setViewBox(defaultVB)
+      if (!isDemo) setViewBox(fitAllRef.current || defaultVB)
       return
     }
     // Find bounds of all groups belonging to this solution's product
@@ -596,7 +615,7 @@ export default function TopologyMap({ data, error, isDemo, hideCosts, onNodeSele
     if (onNodeSelect) onNodeSelect(newSelected ? node : null)
   }
 
-  const resetView = () => { setViewBox(defaultVB) }
+  const resetView = () => { setViewBox((!isDemo && focusProjectId === null && fitAllRef.current) || defaultVB) }
 
   if (error && !data) {
     return (
@@ -773,6 +792,12 @@ export default function TopologyMap({ data, error, isDemo, hideCosts, onNodeSele
     if (tgtSide) resolvedPositions[tgtKey] = tgtSide.point
     return { ...e, source: srcKey, target: tgtKey }
   }).filter(e => resolvedPositions[e.source] && resolvedPositions[e.target])
+
+  const edgeBoxes = boxSizes(nodes, { nodeW: NODE_W, nodeHeight, childHeight, childPad: CHILD_PAD })
+
+  // REQ-GHA-023 clause 9: open on the whole pipeline once it is laid out; later polls do not
+  // re-snap the view (a rollout adding a VM keeps the reader's pan and zoom).
+  fitAllRef.current = isDemo ? null : fitViewBox(effectiveGroups)
 
   return (
     <div ref={containerRef} className="h-full bg-card dark:bg-purple-950 border border-border dark:border-purple-700 rounded-lg p-2 relative" style={{ touchAction: 'none', overscrollBehavior: 'contain' }}>
@@ -1022,7 +1047,7 @@ export default function TopologyMap({ data, error, isDemo, hideCosts, onNodeSele
         ))}
 
         {resolvedEdges.map((edge, i) => (
-          <EdgeLine key={i} edge={edge} positions={resolvedPositions} index={i} />
+          <EdgeLine key={i} edge={edge} positions={resolvedPositions} boxes={edgeBoxes} index={i} />
         ))}
 
         {nodes.map((node, idx) => {

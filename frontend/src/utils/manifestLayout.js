@@ -14,6 +14,7 @@ export function filterVMsForGroup(topologyNodes, groupParent) {
 }
 
 import { nodeHeight, childHeight, CHILD_H, CHILD_GAP } from '../components/TopologyNode'
+import { isSpacer, connectionEdge } from './canvasParts.js'
 
 const NODE_W = 140    // must match TopologyNode.NODE_W
 const NODE_H = 50     // must match TopologyNode.NODE_H
@@ -186,6 +187,9 @@ export function computeManifestLayout(topologyNodes, manifests) {
         accY += rowMaxH + NODE_GAP_Y
       }
       gm.nodeIds.forEach((id, i) => {
+        // REQ-GHA-023 clause 9: an id starting with "_" is an empty grid cell, so parts can
+        // line up with the step they belong to (a certificate above its proxy).
+        if (isSpacer(id)) return
         const col = i % gm.cols
         const row = Math.floor(i / gm.cols)
         positions[id] = {
@@ -300,17 +304,13 @@ export function computeManifestLayout(topologyNodes, manifests) {
       })
     }
 
-    // Collect connects_to edges from static manifest nodes (REQ-702)
+    // Collect connects_to edges from static manifest nodes (REQ-702).
+    // REQ-GHA-023 clause 9: an entry may be {to, style, label} — 'thin' for configuration,
+    // probes and observation, 'dashed' for deployment; a plain id is request/data flow.
     for (const node of (manifest.nodes || [])) {
       if (node.connects_to && Array.isArray(node.connects_to)) {
-        for (const target of node.connects_to) {
-          manifestEdges.push({
-            source: node.id,
-            target,
-            label: '',
-            status: 'healthy',
-            style: 'default',
-          })
+        for (const c of node.connects_to) {
+          manifestEdges.push(connectionEdge(node.id, c))
         }
       }
     }

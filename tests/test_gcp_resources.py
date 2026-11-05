@@ -275,3 +275,14 @@ def test_embeddings_child_stays_not_checked_through_inheritance():
     inherit_parent_status(kids, "healthy")
     emb = next(c for c in kids[0]["children"] if c["id"].endswith("-embeddings"))
     assert emb["status"] == "not checked"
+
+
+def test_not_checked_parts_do_not_degrade_the_overall_status():
+    from src.models.topology import Node, Topology
+    t = Topology(nodes=[Node(id="a", label="a", type="lb", status="healthy"),
+                        Node(id="o", label="OpenAI", type="provider", status="not checked")], edges=[])
+    t.update_overall_status()
+    assert t.overall_status == "healthy"
+    t.nodes.append(Node(id="b", label="b", type="lb", status="degraded"))
+    t.update_overall_status()
+    assert t.overall_status == "degraded"

@@ -84,3 +84,65 @@ export function worstStatus(statuses) {
   }
   return worst
 }
+
+// REQ-GHA-023 clause 9: an edge leaves and enters a box at the side facing the other end,
+// so a request runs into the app's left side and out of its right side.
+// boxes: id -> {hw, hh} half-sizes; a point with no box (a group side) is used as is.
+export function anchorPoint(id, center, other, boxes) {
+  const b = boxes?.[id]
+  if (!b || !center || !other) return center
+  return nearestSide({ x: center.x - b.hw, y: center.y - b.hh, w: 2 * b.hw, h: 2 * b.hh }, other).point
+}
+
+// Half-sizes of every drawn box: top-level nodes and the children nested inside them.
+export function boxSizes(nodes, { nodeW, nodeHeight, childHeight, childPad }) {
+  const boxes = {}
+  const walk = (children, hw) => {
+    for (const c of children || []) {
+      if (c.id) boxes[c.id] = { hw, hh: childHeight(c) / 2 }
+      walk(c.children, hw - childPad)
+    }
+  }
+  for (const n of nodes || []) {
+    if (!n.id) continue
+    boxes[n.id] = { hw: nodeW / 2, hh: nodeHeight(n) / 2 }
+    walk(n.children, nodeW / 2 - childPad)
+  }
+  return boxes
+}
+
+// Clause 9 line styles: flow (solid, arrow), thin (configuration, probes, observation), dashed (deployment).
+export function edgeStyle(edge) {
+  if (edge.style === 'thin') return { width: 0.8, dash: '2 3', arrow: false, showLabel: true, opacity: 0.55 }
+  if (edge.style === 'dashed') return { width: 1, dash: '6 4', arrow: true, showLabel: true, opacity: 0.45 }
+  return { width: 1.4, dash: 'none', arrow: true, showLabel: false, opacity: 0.6 }
+}
+
+// REQ-GHA-023 clause 9: the opening view shows the whole pipeline — a viewBox around all groups.
+export function fitViewBox(groups, pad = 60) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (const g of groups || []) {
+    minX = Math.min(minX, g.x); minY = Math.min(minY, g.y)
+    maxX = Math.max(maxX, g.x + g.w); maxY = Math.max(maxY, g.y + g.h)
+  }
+  if (minX === Infinity) return null
+  return { x: minX - pad, y: minY - pad - 30, w: (maxX - minX) + pad * 2, h: (maxY - minY) + pad * 2 + 30 }
+}
+
+// REQ-GHA-023 clause 9: an id starting with "_" in a group's node list is an empty grid cell.
+export function isSpacer(id) {
+  return typeof id === 'string' && id.startsWith('_')
+}
+
+// A connects_to entry: a plain id is request/data flow; {to, style, label} sets the line style.
+export function connectionEdge(source, c) {
+  const obj = typeof c === 'string' ? { to: c } : (c || {})
+  return {
+    source,
+    target: obj.to,
+    label: obj.label || '',
+    status: 'healthy',
+    style: obj.style || 'default',
+  }
+}
+
