@@ -95,3 +95,14 @@ def test_every_visible_string_is_in_the_wording_block():
     used = set(re.findall(r'data-text="(\w+)"', _HTML)) | set(re.findall(r"TEXT\.(\w+)", _SCRIPT))
     assert used <= keys, used - keys
     assert "GlassHood" in text and "TestRobin" not in _HTML
+
+
+def test_the_message_says_starting_up_to_3_minutes_and_never_why():
+    # REQ-GHA-018 clause 6, amended 2026-11-05: GlassHood is starting, this can take up to 3 minutes,
+    # the visitor is taken in automatically; the page never says why the app was not running.
+    text = _SCRIPT.split("var TEXT = {", 1)[1].split("};", 1)[0]
+    values = " ".join(re.findall(r':\s*"([^"]*)"', text))
+    assert 'wakingTitle: "GlassHood is starting"' in text
+    assert "can take up to 3 minutes" in values and "taken in automatically" in values
+    for why in ("on demand", "sleep", "not in use", "idle", "unused"):
+        assert why not in values.lower(), why

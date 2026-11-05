@@ -9,7 +9,7 @@
 <!--
   GlassHood waking page (REQ-GHA-018 clause 6). Shown on app.glasshood.ai to a visitor who
   arrives while the app is not awake: the app sends them here with ?next=<path>. The page
-  starts the wake, shows the expected wait, and goes to <path> when the app is awake. After
+  starts the wake, says it can take up to 3 minutes, and goes to <path> when the app is awake. After
   3 minutes it says the wake failed and how to ask for help.
   One self-contained file: inline CSS, JS, fonts and logo; no build step. The only
   third-party requests are Google reCAPTCHA's, made only when the page posts a wake.
@@ -87,7 +87,7 @@ h1{margin:0;max-width:820px;font-size:34px;line-height:1.2;font-weight:700;color
 <main>
   <section id="waking">
     <h1 data-text="wakingTitle"></h1>
-    <p class="lead"><span data-text="wakingLead"></span> <span id="expected"></span></p>
+    <p class="lead" data-text="wakingLead"></p>
     <div class="bar indeterminate" id="bar" role="progressbar" aria-labelledby="status" aria-valuemin="0" aria-valuemax="100"><span></span></div>
     <p class="status" id="status" role="status" aria-live="polite"></p>
     <p class="note">This page is protected by reCAPTCHA and the Google
@@ -107,16 +107,16 @@ h1{margin:0;max-width:820px;font-size:34px;line-height:1.2;font-weight:700;color
 (function () {
   "use strict";
 
-  // WORDING: placeholders until Igor writes the final text (REQ-GHA-018 clause 6).
-  // Every visible string is here; {wait} and {elapsed} are filled in by the page.
+  // WORDING (REQ-GHA-018 clause 6, amended 2026-11-05): GlassHood is starting, it can take up to
+  // 3 minutes, the visitor is taken in automatically; never why the app was not running.
+  // Every visible string is here; {elapsed} is filled in by the page.
   var TEXT = {
     title: "GlassHood is starting",
-    wakingTitle: "GlassHood is starting up",
-    wakingLead: "GlassHood runs on demand. Opening it starts it, and you will be taken in automatically when it is ready.",
-    expected: "This usually takes {wait}.",
+    wakingTitle: "GlassHood is starting",
+    wakingLead: "This can take up to 3 minutes. You will be taken in automatically when it is ready.",
     starting: "Starting… {elapsed}",
     waking: "Starting… {elapsed}",
-    goingToSleep: "GlassHood is just going to sleep. It will start again right after that. {elapsed}",
+    goingToSleep: "Restarting… {elapsed}",
     ready: "Ready. Taking you in…",
     failedTitle: "GlassHood did not start",
     failedLead: "Starting is taking longer than it should. Please try again, or ask us for help.",
@@ -266,12 +266,6 @@ h1{margin:0;max-width:820px;font-size:34px;line-height:1.2;font-weight:700;color
     var s = Math.max(0, Math.floor(ms / 1000));
     return Math.floor(s / 60) + ":" + ("0" + (s % 60)).slice(-2);
   }
-  function waitText(seconds) {
-    if (seconds < 45) return "less than a minute";
-    if (seconds < 75) return "about a minute";
-    if (seconds < 105) return "about a minute and a half";
-    return "about " + Math.round(seconds / 60) + " minutes";
-  }
 
   var bar = el("bar");
   var timer = null;
@@ -311,7 +305,6 @@ h1{margin:0;max-width:820px;font-size:34px;line-height:1.2;font-weight:700;color
   function render(state, info) {
     var elapsed = clock(now() - attempt.start);
     var expected = info && typeof info.expected_seconds === "number" && info.expected_seconds > 0 ? info.expected_seconds : null;
-    el("expected").textContent = expected ? fill(TEXT.expected, { wait: waitText(expected) }) : "";
     if (state === "waking" && expected) {
       var since = info && typeof info.since === "string" ? Date.parse(info.since) : NaN;
       var from = since && since <= now() + 5000 && since > now() - 3600000 ? since : attempt.start;
