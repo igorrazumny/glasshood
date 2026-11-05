@@ -326,6 +326,7 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
      - Below, operations in business words: Error counter → Alert rule (error spike) → Alert e-mail; GlassHood's read-only access in a small observer area whose lines are labelled "observes".
      - Solid arrows for request and data flow; thin labelled lines for configuration, probes and observation.
      - Every part stays its own clickable box with its own status and logs; the count still equals the boxes drawn.
+     - Inside the entry box (added by Igor 2026-11-06): the HTTPS steps stand in a column in request order (static IP, HTTPS rule, TLS proxy, URL map, backend), with the HTTP redirect lane in a column beside it and attachments (certificate, health check) to the right of the step they belong to. Request lines run from the bottom middle of one box to the top middle of the next, or side middle to side middle between columns, straight or at right angles, never at a slant. No two boxes overlap.
      - Out of scope (a later requirement): a connection's own health — whether data actually crossed it.
 - **Supersedes:** for ColdVault, REQ-GHA-021 clause 2 and the "plain" intent of clause 1. Clause 3 stays: the architecture site is not drawn.
 - **Who builds:** Neo.

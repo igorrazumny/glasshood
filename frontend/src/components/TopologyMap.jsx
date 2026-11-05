@@ -4,7 +4,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import TopologyNode, { nodeHeight, NODE_H, NODE_W, childHeight, CHILD_H, CHILD_GAP, CHILD_PAD } from './TopologyNode'
 import { computeManifestLayout, buildParentNodeRecord } from '../utils/manifestLayout'
-import { nearestSide, groupCenter, groupAttestationBadge, worstStatus, anchorPoint, boxSizes, edgeStyle, fitViewBox, nestedChildIds } from '../utils/canvasParts.js'
+import { nearestSide, groupCenter, groupAttestationBadge, worstStatus, anchorPoint, boxSizes, edgeStyle, fitViewBox, nestedChildIds, flowAnchors, elbowPath } from '../utils/canvasParts.js'
 import { useNodePositions } from '../hooks/useNodePositions'
 
 // Dynamic live layout — HARDWARE ONLY
@@ -228,34 +228,33 @@ const STATUS_COLORS_HEX_REFERENCE = {
   planned: '#94a3b8',
 }
 
-function EdgeLine({ edge, positions, boxes, index = 0 }) {
+function EdgeLine({ edge, positions, boxes, nested, index = 0 }) {
   const fromC = positions[edge.source]
   const toC = positions[edge.target]
   if (!fromC || !toC) return null
-  // REQ-GHA-023 clause 9: attach at the facing sides of the boxes, not their centres.
-  // Request/data flow always uses the left and right ports (in left, out right).
-  const flow = !edge.style || edge.style === 'default'
-  const from = anchorPoint(edge.source, fromC, toC, boxes, flow)
-  const to = anchorPoint(edge.target, toC, fromC, boxes, flow)
-
   const look = edgeStyle(edge)
+  // REQ-GHA-023 clause 9: request/data flow and dashed lines run at right angles between side or
+  // top/bottom middles; configuration, probe and observation lines are straight between facing sides.
+  const flow = !edge.style || edge.style === 'default'
+  const routed = flow || edge.style === 'dashed'   // dashed (deploy, redirect) also runs at right angles
+  let from, to, pathD
+  if (routed) {
+    const a = flowAnchors(edge.source, edge.target, fromC, toC, boxes, nested, edge.axis)
+    from = a.from; to = a.to
+    pathD = elbowPath(from, to, a.axis)
+  } else {
+    from = anchorPoint(edge.source, fromC, toC, boxes)
+    to = anchorPoint(edge.target, toC, fromC, boxes)
+    pathD = `M ${from.x} ${from.y} L ${to.x} ${to.y}`
+  }
+
   const isDeployEdge = edge.style === 'dashed'
   // REQ-005 + REQ-009 Phase 4b: deploy-edge gray via CSS var so dark mode
   // can substitute a brighter slate.
   const color = (isDeployEdge || edge.style === 'thin') ? 'var(--edge-deploy)' : (STATUS_COLORS[edge.status] || STATUS_COLORS.unknown)
   const broken = edge.status === 'disconnected' || edge.status === 'error'
   const dash = broken ? '6 4' : look.dash
-
-  const mx = (from.x + to.x) / 2
-  const my = (from.y + to.y) / 2
-  const dx = to.x - from.x
-  const dy = to.y - from.y
-  const curve = 0.06 + (index % 5) * 0.02
-  const cx = mx - dy * curve
-  const cy = my + dx * curve
-
-  const pathId = `edge-${edge.source}-${edge.target}`
-  const pathD = `M ${from.x} ${from.y} Q ${cx} ${cy} ${to.x} ${to.y}`
+  const pathId = `edge-${edge.source}-${edge.target}-${index}`
 
   return (
     <g>
@@ -271,7 +270,7 @@ function EdgeLine({ edge, positions, boxes, index = 0 }) {
         markerEnd={look.arrow ? 'url(#arrowhead)' : undefined}
       />
       {look.showLabel && edge.label && (
-        <text x={(mx + cx) / 2} y={(my + cy) / 2 - 2} fill="var(--canvas-text-soft)" fontSize={6.5} textAnchor="middle">
+        <text x={(from.x + to.x) / 2} y={(from.y + to.y) / 2 - 3} fill="var(--canvas-text-soft)" fontSize={6.5} textAnchor="middle">
           {edge.label}
         </text>
       )}
@@ -1057,7 +1056,7 @@ export default function TopologyMap({ data, error, isDemo, hideCosts, onNodeSele
         ))}
 
         {resolvedEdges.map((edge, i) => (nestedIds.has(edge.source) || nestedIds.has(edge.target)) ? null : (
-          <EdgeLine key={i} edge={edge} positions={resolvedPositions} boxes={edgeBoxes} index={i} />
+          <EdgeLine key={i} edge={edge} positions={resolvedPositions} boxes={edgeBoxes} nested={nestedIds} index={i} />
         ))}
 
         {nodes.map((node, idx) => {
@@ -1090,7 +1089,7 @@ export default function TopologyMap({ data, error, isDemo, hideCosts, onNodeSele
         {/* REQ-GHA-023 clause 9: lines into or out of an app nested in a VM are drawn on top,
             so the arrow is seen reaching the app's side instead of vanishing under the VM box. */}
         {resolvedEdges.map((edge, i) => (nestedIds.has(edge.source) || nestedIds.has(edge.target)) ? (
-          <EdgeLine key={`n${i}`} edge={edge} positions={resolvedPositions} boxes={edgeBoxes} index={i} />
+          <EdgeLine key={`n${i}`} edge={edge} positions={resolvedPositions} boxes={edgeBoxes} nested={nestedIds} index={i} />
         ) : null)}
       </svg>
 

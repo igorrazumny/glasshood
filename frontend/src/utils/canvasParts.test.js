@@ -3,7 +3,7 @@
 // Run: node frontend/src/utils/canvasParts.test.js
 
 import assert from 'node:assert/strict'
-import { canvasNodes, attestationBadge, nearestSide, groupAttestationBadge, statsNodes, worstStatus, fitViewBox, anchorPoint, edgeStyle, boxSizes, isSpacer, connectionEdge, nestedChildIds } from './canvasParts.js'
+import { canvasNodes, attestationBadge, nearestSide, groupAttestationBadge, statsNodes, worstStatus, fitViewBox, anchorPoint, edgeStyle, boxSizes, isSpacer, connectionEdge, nestedChildIds, flowAnchors, elbowPath } from './canvasParts.js'
 
 let failed = 0
 function test(name, fn) {
@@ -148,6 +148,36 @@ test('flow lines use the side middles even when the other end is far above or be
 test('nested boxes are known, so their lines are drawn above the VM box', () => {
   const ids = nestedChildIds([{ id: 'vm', children: [{ id: 'c', children: [{ id: 'app' }] }] }, { id: 'ip' }])
   assert.deepEqual([...ids].sort(), ['app', 'c'])
+})
+
+test('a step below joins bottom-middle to top-middle; a step beside joins side middles', () => {
+  const boxes = { ip: { hw: 70, hh: 25 }, rule: { hw: 70, hh: 25 }, vis: { hw: 70, hh: 25 } }
+  const down = flowAnchors('ip', 'rule', { x: 500, y: 100 }, { x: 500, y: 180 }, boxes)
+  assert.deepEqual(down, { from: { x: 500, y: 125 }, to: { x: 500, y: 155 }, axis: 'v' })
+  const beside = flowAnchors('vis', 'ip', { x: 200, y: 100 }, { x: 500, y: 100 }, boxes)
+  assert.deepEqual(beside, { from: { x: 270, y: 100 }, to: { x: 430, y: 100 }, axis: 'h' })
+})
+
+test('an axis hint steers a branch; a nested app is always entered from the side', () => {
+  const boxes = { ip: { hw: 70, hh: 25 }, http: { hw: 70, hh: 25 }, app: { hw: 54, hh: 14 } }
+  const branch = flowAnchors('ip', 'http', { x: 500, y: 100 }, { x: 300, y: 180 }, boxes, null, 'v')
+  assert.deepEqual(branch.from, { x: 500, y: 125 })
+  assert.deepEqual(branch.to, { x: 300, y: 155 })
+  const app = flowAnchors('fw', 'app', { x: 900, y: 500 }, { x: 1000, y: 200 }, boxes, new Set(['app']), 'v')
+  assert.equal(app.axis, 'h')
+  assert.deepEqual(app.to, { x: 946, y: 200 })
+})
+
+test('lines are straight when aligned, right-angled otherwise, never slanted', () => {
+  assert.equal(elbowPath({ x: 0, y: 10 }, { x: 100, y: 10 }, 'h'), 'M 0 10 L 100 10')
+  assert.equal(elbowPath({ x: 0, y: 10 }, { x: 100, y: 50 }, 'h'), 'M 0 10 H 50 V 50 H 100')
+  assert.equal(elbowPath({ x: 5, y: 0 }, { x: 5, y: 80 }, 'v'), 'M 5 0 L 5 80')
+  assert.equal(elbowPath({ x: 5, y: 0 }, { x: 65, y: 80 }, 'v'), 'M 5 0 V 40 H 65 V 80')
+})
+
+test('a connection may carry an axis hint; anything else is ignored', () => {
+  assert.equal(connectionEdge('a', { to: 'b', axis: 'v' }).axis, 'v')
+  assert.equal(connectionEdge('a', { to: 'b', axis: 'diagonal' }).axis, undefined)
 })
 
 if (failed) { console.error(`${failed} failed`); process.exit(1) }
