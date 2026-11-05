@@ -319,4 +319,4 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
   8. **Nothing else changes.** Live demo, login, the MCP server and client (REQ-GHA-019/020), always-on, and cost stay as they are.
 - **Supersedes:** for ColdVault, REQ-GHA-021 clause 2 and the "plain" intent of clause 1. Clause 3 stays: the architecture site is not drawn.
 - **Who builds:** Neo.
-- **Status:** confirmed by Igor 2026-11-05 (full text). Not started.
+- **Status:** confirmed by Igor 2026-11-05 (full text); clause 3 amended by Igor the same evening after review. Implemented 2026-11-05: PR #47 (neo-shadow1 PROCEED for head ca76be8 after two rounds), merged 33fc0c5, live in image wif42 (revision 0000042, always on) with ColdVault manifest v4 (sha256 1bfe9dd4…). Live first poll 22:30Z: 34 parts polled; every Compute, Cloud Asset, Secret Manager and MCP call returned 200 under GlassHood's federated read-only account, so no new role was needed (clause 7). Awaiting verification by the reviewer, including a look at the live canvas.
