@@ -4,6 +4,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import TopologyNode, { nodeHeight, NODE_H, childHeight, CHILD_H, CHILD_GAP } from './TopologyNode'
 import { computeManifestLayout, buildParentNodeRecord } from '../utils/manifestLayout'
+import { nearestSide, groupCenter } from '../utils/canvasParts.js'
 import { useNodePositions } from '../hooks/useNodePositions'
 
 // Dynamic live layout — HARDWARE ONLY
@@ -707,7 +708,7 @@ export default function TopologyMap({ data, error, isDemo, hideCosts, onNodeSele
       maxY = Math.max(maxY, p.y + halfH)
       // Aggregate worst status
       const s = node?.status
-      if (s && s !== 'not monitored') {
+      if (s && s !== 'not monitored' && s !== 'not checked') {
         if (groupHealth === null ||
             (statusPriority[s] ?? 1) > (statusPriority[groupHealth] ?? 1)) {
           groupHealth = s
@@ -766,14 +767,16 @@ export default function TopologyMap({ data, error, isDemo, hideCosts, onNodeSele
     const resolvedTarget = tgtGroup
       ? `__grp_${e.target.slice(1)}_L`
       : e.target
-    // Create temporary positions for group boundary points (in resolvedPositions, not base positions)
-    if (srcGroup) {
-      resolvedPositions[resolvedSource] = { x: srcGroup.x + srcGroup.w, y: srcGroup.y + srcGroup.h / 2 }
-    }
-    if (tgtGroup) {
-      resolvedPositions[resolvedTarget] = { x: tgtGroup.x, y: tgtGroup.y + tgtGroup.h / 2 }
-    }
-    return { ...e, source: resolvedSource, target: resolvedTarget }
+    // Create temporary positions for group boundary points (in resolvedPositions, not base positions).
+    // REQ-GHA-023: a group's edge meets the side facing the other end, so many edges into one
+    // group spread over its sides instead of converging on one point.
+    const srcSide = srcGroup && nearestSide(srcGroup, tgtGroup ? groupCenter(tgtGroup) : resolvedPositions[e.target])
+    const tgtSide = tgtGroup && nearestSide(tgtGroup, srcGroup ? groupCenter(srcGroup) : resolvedPositions[e.source])
+    const srcKey = srcGroup ? `${resolvedSource}_${srcSide?.side}` : resolvedSource
+    const tgtKey = tgtGroup ? `${resolvedTarget}_${tgtSide?.side}` : resolvedTarget
+    if (srcSide) resolvedPositions[srcKey] = srcSide.point
+    if (tgtSide) resolvedPositions[tgtKey] = tgtSide.point
+    return { ...e, source: srcKey, target: tgtKey }
   }).filter(e => resolvedPositions[e.source] && resolvedPositions[e.target])
 
   return (

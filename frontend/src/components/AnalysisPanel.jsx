@@ -20,10 +20,11 @@ function ScoreBadge({ score }) {
   )
 }
 
-function TopologyStats({ topology }) {
-  if (!topology?.nodes?.length) return null
+function TopologyStats({ topology, canvas }) {
+  // REQ-GHA-023 clause 5: count what the canvas draws when it is drawn from manifests.
+  const nodes = canvas || topology?.nodes
+  if (!nodes?.length) return null
 
-  const nodes = topology.nodes
   const total = nodes.length
   const byStatus = {}
   for (const n of nodes) {
@@ -63,7 +64,7 @@ function TopologyStats({ topology }) {
   )
 }
 
-export default function AnalysisPanel({ data, topology }) {
+export default function AnalysisPanel({ data, topology, canvas }) {
   const [refreshing, setRefreshing] = useState(false)
 
   const handleRefresh = async () => {
@@ -101,7 +102,7 @@ export default function AnalysisPanel({ data, topology }) {
         </button>
       </div>
 
-      <TopologyStats topology={topology} />
+      <TopologyStats topology={topology} canvas={canvas} />
 
       {!hasData ? (
         <p className="text-gray-500 dark:text-purple-300 text-sm">Waiting for first analysis...</p>
