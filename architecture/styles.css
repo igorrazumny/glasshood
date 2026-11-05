@@ -196,9 +196,9 @@ footer{margin:48px 0 36px;padding-top:20px;border-top:1px solid var(--border);fo
   display:flex;align-items:center}
 .nav-logo{display:block;flex-shrink:0}
 /* The logo is as tall as 9robots.ai's: 43 px, and 39 px below 768 px. Its image is cut so the
-   icon and the word have 9robots.ai's proportions and fill the same share of the height. */
-.nav-logo img{display:block;height:43px;width:auto;opacity:.6;transition:opacity .2s ease}
-.nav-logo:hover img{opacity:1}
+   icon and the word have 9robots.ai's proportions and fill the same share of the height. It is
+   always shown at full strength, here and in the footer: never faded, not changed when pointed at. */
+.nav-logo img{display:block;height:43px;width:auto}
 @media (max-width:767px){.nav-logo img{height:39px}}
 .nav-links{display:flex;align-items:center;gap:24px;margin-left:auto}
 .nav-links a{padding:6px 12px 4px;border-bottom:2px solid transparent;color:var(--nav-sub);
@@ -218,13 +218,13 @@ footer{margin:48px 0 36px;padding-top:20px;border-top:1px solid var(--border);fo
   font-size:16px;line-height:1.6;color:var(--sub)}
 .site-footer-row{max-width:var(--site-max);margin:0 auto;padding:40px 24px;display:flex;
   align-items:center;justify-content:space-between;gap:24px}
-.site-footer-brand img{display:block;height:28px;width:auto;opacity:.6}
+.site-footer-brand img{display:block;height:28px;width:auto}
 .site-footer-brand p{margin:10px 0 0;font-size:14px;color:var(--nav-sub)}
 .site-footer-links{display:flex;flex-wrap:wrap;gap:8px 28px}
 .site-footer-link{font-size:14px;color:var(--nav-sub);text-decoration:none;transition:color .15s ease}
 .site-footer-link:hover{color:var(--orange);text-decoration:none}
-/* Below 768 px the logo and Open app share the first row and the page links take a
-   second, so nothing is squeezed (the logo never shrinks); Open app keeps 24 px from the logo.
+/* Below 768 px the logo and Log in share the first row and the page links take a
+   second, so nothing is squeezed (the logo never shrinks); Log in keeps 24 px from the logo.
    From 768 px one row holds everything with at least 32 px between the logo and the links. */
 @media (max-width:767px){
   .nav-in{height:auto;flex-wrap:wrap;align-items:flex-start;row-gap:10px;padding-top:14px;padding-bottom:8px}
@@ -234,9 +234,9 @@ footer{margin:48px 0 36px;padding-top:20px;border-top:1px solid var(--border);fo
   .nav-app{flex-direction:column-reverse;align-items:flex-end;gap:4px;margin-left:auto}
   .site-footer-row{flex-direction:column;align-items:flex-start}
 }
-/* On phones up to 480 px Open app is a little smaller and keeps at least 12 px from the logo, so
-   the logo, as tall as 9robots.ai's, and Open app share the first row from 373 px up; narrower
-   phones give Open app a row of its own. */
+/* On phones up to 480 px Log in is a little smaller and keeps at least 12 px from the logo, so
+   the logo, as tall as 9robots.ai's, and Log in share the first row from 348 px up; narrower
+   phones give Log in a row of its own. */
 @media (max-width:480px){
   .nav-logo{margin-right:12px}
   .nav-open{padding:6px 12px;font-size:15px}
