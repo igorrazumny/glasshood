@@ -36,12 +36,12 @@
       <a href="/contact/">Contact</a>
     </div>
     <div class="nav-app">
-      <a class="nav-open" href="https://app.glasshood.ai">Open app</a>
+      <a class="nav-open" href="https://app.glasshood.ai">Log in</a>
     </div>
   </div>
 </nav>
 
-<main>
+<main class="pd-page">
   <section class="hero">
     <div class="wrap hero-body">
       <h1 class="hero-title"><span class="hero-title-first">Cross-cloud AI-infrastructure monitoring</span> <span class="hero-title-rest">for regulated systems.</span></h1>
@@ -60,25 +60,57 @@
   <!-- The explainer goes here once it exists (REQ-GHA-018 clause 1). -->
 
   <section class="wrap features" aria-label="What GlassHood does">
-    <div class="feature">
+    <a href="#read-only" class="feature pd-card" data-target="read-only">
       <span class="feature-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></span>
       <h2 class="feature-title">Read-only by design</h2>
       <p class="feature-text">GlassHood installs nothing in the system it watches. Every call toward the
         monitored cloud project is list, get or describe, made with a short-lived, viewer-only federated token.</p>
-    </div>
-    <div class="feature">
+      <span class="pd-card-overlay" aria-hidden="true"><span class="pd-card-overlay-text">Click to read the section &rarr;</span></span>
+    </a>
+    <a href="#live-topology" class="feature pd-card" data-target="live-topology">
       <span class="feature-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4"/><path d="m15.4 6.5-6.8 4"/></svg></span>
       <h2 class="feature-title">Live topology against declared design</h2>
       <p class="feature-text">Live discovery is merged with declarative YAML manifests into one graph, rebuilt
         every cycle, so the gap between what was designed and what is actually running is visible.</p>
-    </div>
-    <div class="feature">
+      <span class="pd-card-overlay" aria-hidden="true"><span class="pd-card-overlay-text">Click to read the section &rarr;</span></span>
+    </a>
+    <a href="#compliance" class="feature pd-card" data-target="compliance">
       <span class="feature-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m9 15 2 2 4-4"/></svg></span>
       <h2 class="feature-title">Compliance as a byproduct of observation</h2>
       <p class="feature-text">Evidence is derived from what the engine observed, not self-attestation &mdash; aligned to
         Annex 11 / ALCOA+ / Part 11.</p>
-    </div>
+      <span class="pd-card-overlay" aria-hidden="true"><span class="pd-card-overlay-text">Click to read the section &rarr;</span></span>
+    </a>
   </section>
+
+  <!-- Opened by the cards above (/architecture/app.js, as on the architecture page). The text restates
+       the architecture page's matching sections (REQ-GHA-018 clause 14, amended 2026-11-05). -->
+  <div class="pd-hidden-until-reveal">
+    <section class="wrap home-detail" id="read-only">
+      <h2>Read-only by design</h2>
+      <p>GlassHood installs nothing in the system it watches. Toward the monitored cloud project, every call is list,
+        get or describe; nothing creates, changes or deletes anything there. Read-only is enforced twice: by that
+        call surface, and by the identity itself, a short-lived, viewer-only federated token with no stored keys.
+        Even a full compromise of the engine cannot write to the monitored cloud project, and there is no stored
+        cloud key to steal.</p>
+    </section>
+    <section class="wrap home-detail" id="live-topology">
+      <h2>Live topology against declared design</h2>
+      <p>Auto-discovery alone misses nodes it cannot enumerate and carries no intended state; a declarative manifest
+        alone goes stale the moment it is written. GlassHood merges both: live discovery is overlaid with declarative
+        YAML manifests into a single graph, rebuilt with fresh metrics every cycle. Because observed reality and
+        declared intent sit in one model, the gap between what was designed and what is actually running is visible,
+        and change between cycles is tracked.</p>
+    </section>
+    <section class="wrap home-detail" id="compliance">
+      <h2>Compliance as a byproduct of observation</h2>
+      <p>Compliance is not a pre-baked attestation. Reports are generated on demand from what the engine actually
+        observed (rule alerts, CVE findings and anomalies), with a per-subsystem ALCOA+ audit trail: the evidence is
+        the observation. The reports are aligned to EU GMP Annex 11, ALCOA+ and 21 CFR Part 11 and support human
+        review. They are unsigned and are not an independent validation or certification; a qualified person
+        reviews and adopts every artifact.</p>
+    </section>
+  </div>
 </main>
 
 <footer class="footer">
@@ -91,9 +123,10 @@
       <a href="/" class="site-footer-link">Home</a>
       <a href="/architecture/" class="site-footer-link">Architecture</a>
       <a href="/contact/" class="site-footer-link">Contact</a>
-      <a href="https://app.glasshood.ai" class="site-footer-link">Open app</a>
+      <a href="https://app.glasshood.ai" class="site-footer-link">Log in</a>
     </nav>
   </div>
 </footer>
+<script src="/architecture/app.js"></script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 """REQ-GHA-018 clauses 1-3: structural guards for the public site (website/).
 
 Static, dependency-free assertions on the files the site serves, mirroring the
-TestRobin site's guard suite: the four surfaces, Open app to app.glasshood.ai, the
+TestRobin site's guard suite: the four surfaces, Log in to app.glasshood.ai, the
 app's state read from the wake controller and never from the app, a form-only contact
 on the shared mail function, no email address anywhere, per-page metadata, the older
 demo addresses forwarded, and the architecture page served from one set of files at
@@ -35,7 +35,7 @@ def test_every_page_has_the_four_surfaces(page):
     nav = _nav(_read(page))
     for href in ('href="/"', 'href="/architecture/"', 'href="/contact/"', 'href="https://app.glasshood.ai"'):
         assert href in nav, f"{page.name}: nav misses {href}"
-    assert ">Open app<" in nav
+    assert ">Log in<" in nav
     for word in ("register", "sign up", "signup"):
         assert word not in nav.lower(), "no registration surface (clause 1)"
 
@@ -267,7 +267,7 @@ def test_the_architecture_page_has_the_same_masthead_and_footer_styles():
 def test_every_page_ends_with_the_footer(page):
     html = _read(page)
     footer = html.split('<footer class="footer">', 1)[1].split("</footer>", 1)[0]
-    for label in (">Home<", ">Architecture<", ">Contact<", ">Open app<"):
+    for label in (">Home<", ">Architecture<", ">Contact<", ">Log in<"):
         assert label in footer, label
     assert html.index("</main>" if "</main>" in html else '<div class="container">') < html.index('<footer class="footer">')
     for legal in ("©", "&copy;", "copyright", "rights reserved", "gmbh"):
@@ -399,3 +399,71 @@ def test_the_architecture_page_uses_the_site_s_own_lato():
         assert f"src:url(/architecture/fonts/lato-{weight}.woff2) format('woff2')" in css
         assert (_ARCH / f"fonts/lato-{weight}.woff2").read_bytes() == (_PUB / f"assets/fonts/lato-{weight}.woff2").read_bytes()
     assert json.loads(_read(_W / "architecture/staticwebapp.config.json"))["mimeTypes"][".woff2"] == "font/woff2"
+
+
+def test_the_app_entry_is_labelled_log_in_on_every_page():
+    # REQ-GHA-018 clause 1, amended 2026-11-05 (third): "Log in", in the masthead and in the footer of
+    # every public page; it still leads to app.glasshood.ai.
+    for page in _NAV_PAGES + (_ARCH / "index.html",):
+        html = _read(page)
+        footer = html.split('<footer class="footer">', 1)[1].split("</footer>", 1)[0]
+        assert '<a class="nav-open" href="https://app.glasshood.ai">Log in</a>' in _nav(html), page.name
+        assert '<a href="https://app.glasshood.ai" class="site-footer-link">Log in</a>' in footer, page.name
+        assert "Open app" not in html, page.name
+
+
+def test_the_logo_is_always_shown_at_full_strength():
+    # REQ-GHA-018 clause 14, amended 2026-11-05 (second): the logo in the masthead and in the footer is
+    # never faded, and pointing at it does not change it.
+    for css in (_read(_PUB / "assets/site.css"), _read(_ARCH / "styles.css")):
+        rules = re.findall(r"([^{}]+)\{([^{}]*)\}", re.sub(r"/\*.*?\*/", "", css, flags=re.S))
+        logo_rules = [(sel.strip(), body) for sel, body in rules if "nav-logo" in sel or "site-footer-brand" in sel]
+        assert logo_rules
+        for sel, body in logo_rules:
+            assert "opacity" not in body and "filter" not in body, sel
+            assert not (":hover" in sel and " img" in sel), sel
+
+
+_HOME_SECTIONS = {
+    "read-only": ("Read-only by design",
+        "GlassHood installs nothing in the system it watches. Toward the monitored cloud project, every call is "
+        "list, get or describe; nothing creates, changes or deletes anything there. Read-only is enforced twice: "
+        "by that call surface, and by the identity itself, a short-lived, viewer-only federated token with no "
+        "stored keys. Even a full compromise of the engine cannot write to the monitored cloud project, and there "
+        "is no stored cloud key to steal."),
+    "live-topology": ("Live topology against declared design",
+        "Auto-discovery alone misses nodes it cannot enumerate and carries no intended state; a declarative "
+        "manifest alone goes stale the moment it is written. GlassHood merges both: live discovery is overlaid "
+        "with declarative YAML manifests into a single graph, rebuilt with fresh metrics every cycle. Because "
+        "observed reality and declared intent sit in one model, the gap between what was designed and what is "
+        "actually running is visible, and change between cycles is tracked."),
+    "compliance": ("Compliance as a byproduct of observation",
+        "Compliance is not a pre-baked attestation. Reports are generated on demand from what the engine actually "
+        "observed (rule alerts, CVE findings and anomalies), with a per-subsystem ALCOA+ audit trail: the evidence "
+        "is the observation. The reports are aligned to EU GMP Annex 11, ALCOA+ and 21 CFR Part 11 and support "
+        "human review. They are unsigned and are not an independent validation or certification; a qualified "
+        "person reviews and adopts every artifact."),
+}
+
+
+def test_home_cards_open_their_sections_as_on_the_architecture_page():
+    # REQ-GHA-018 clause 14, amended 2026-11-05 (third): each card can be clicked as a whole and shows a
+    # section further down on Home about its topic, in the wording Igor approved on 2026-11-05.
+    home = _read(_PUB / "index.html")
+    assert '<main class="pd-page">' in home and home.count('class="feature pd-card"') == 3
+    hidden = home.split('<div class="pd-hidden-until-reveal">', 1)[1].split("</main>", 1)[0]
+    for cid, (title, text) in _HOME_SECTIONS.items():
+        assert f'<a href="#{cid}" class="feature pd-card" data-target="{cid}">' in home, cid
+        section = re.search(rf'<section class="wrap home-detail" id="{cid}">(.*?)</section>', hidden, re.S)
+        assert section, cid
+        assert f"<h2>{title}</h2>" in section.group(1), cid
+        assert " ".join(re.search(r"<p>(.*?)</p>", section.group(1), re.S).group(1).split()) == text, cid
+    assert home.count("Click to read the section &rarr;") == 3
+    assert home.rstrip().endswith('<script src="/architecture/app.js"></script>\n</body>\n</html>')
+    css = _read(_PUB / "assets/site.css")
+    assert ".pd-hidden-until-reveal{display:none}" in css
+    assert ".pd-page.revealed .pd-hidden-until-reveal{display:block;" in css
+    assert 'content:"Click to read the section →"' in css
+    # The behaviour is the architecture page's own script, unchanged: it reveals the sections and scrolls.
+    js = _read(_ARCH / "app.js")
+    assert "querySelector('.pd-page')" in js and "classList.add('revealed')" in js and "scrollIntoView" in js

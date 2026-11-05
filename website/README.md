@@ -1,7 +1,7 @@
 # glasshood.ai — the public site
 
 The static site in front of the GlassHood app (REQ-GHA-018): Home, Architecture, Contact and
-"Open app", which leads to app.glasshood.ai. Plain HTML, CSS and JavaScript; no build tools.
+"Log in", which leads to app.glasshood.ai. Plain HTML, CSS and JavaScript; no build tools.
 
 | Path | What it is |
 |---|---|
