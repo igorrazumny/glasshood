@@ -3,6 +3,12 @@
    (scope-line, impl-grid, code, can-cannot, detail-block, page-title) follow the
    same type scale: body text 19px, headings 22px, logo 64px, text column
    max-width 800–880px. */
+/* Lato from the same two files the site serves (website/FONTS.txt), so the masthead renders the same
+   on every page and the page loads nothing from outside its own address. */
+@font-face{font-family:'Lato';font-style:normal;font-weight:400;font-display:swap;
+  src:url(/architecture/fonts/lato-400.woff2) format('woff2')}
+@font-face{font-family:'Lato';font-style:normal;font-weight:700;font-display:swap;
+  src:url(/architecture/fonts/lato-700.woff2) format('woff2')}
 :root{
   --blue:#0c41cd; --navy:#000055; --orange:#e75a1e;
   --bg:#ffffff; --card:#f7f8fa; --text:#1a1a2e; --sub:#555555;
@@ -218,8 +224,8 @@ footer{margin:48px 0 36px;padding-top:20px;border-top:1px solid var(--border);fo
 .site-footer-link{font-size:14px;color:var(--nav-sub);text-decoration:none;transition:color .15s ease}
 .site-footer-link:hover{color:var(--orange);text-decoration:none}
 /* Below 768 px the logo and Open app share the first row and the page links take a
-   second, so nothing is squeezed (the logo never shrinks); the app state sits under
-   Open app. */
+   second, so nothing is squeezed (the logo never shrinks); Open app keeps 24 px from the logo.
+   From 768 px one row holds everything with at least 32 px between the logo and the links. */
 @media (max-width:767px){
   .nav-in{height:auto;flex-wrap:wrap;align-items:flex-start;row-gap:10px;padding-top:14px;padding-bottom:8px}
   .nav-logo{margin-right:24px}
@@ -227,5 +233,12 @@ footer{margin:48px 0 36px;padding-top:20px;border-top:1px solid var(--border);fo
   .nav-links a{padding:6px 10px 4px}
   .nav-app{flex-direction:column-reverse;align-items:flex-end;gap:4px;margin-left:auto}
   .site-footer-row{flex-direction:column;align-items:flex-start}
+}
+/* On phones up to 480 px Open app is a little smaller and keeps at least 12 px from the logo, so
+   the logo, as tall as 9robots.ai's, and Open app share the first row from 373 px up; narrower
+   phones give Open app a row of its own. */
+@media (max-width:480px){
+  .nav-logo{margin-right:12px}
+  .nav-open{padding:6px 12px;font-size:15px}
 }
 /* ==== masthead and footer: end ==== */

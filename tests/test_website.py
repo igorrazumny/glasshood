@@ -388,3 +388,14 @@ def test_the_orange_is_9robots_ai_s_orange():
         assert "amber" not in css.lower() and "#c87400" not in css and "#e89008" not in css
     assert ".hero-title-first{color:var(--orange)}" in site
     assert "--orange:#e75a1e" in _read(ROOT / "deploy/waking-page/index.html")
+
+
+def test_the_architecture_page_uses_the_site_s_own_lato():
+    # The masthead looks the same on every page (REQ-GHA-018 clause 14, amended 2026-11-05): the
+    # architecture page renders it with the same font files as the site, not with Google Fonts.
+    html, css = _read(_ARCH / "index.html"), _read(_ARCH / "styles.css")
+    assert "fonts.googleapis.com" not in html and "fonts.gstatic.com" not in html
+    for weight in ("400", "700"):
+        assert f"src:url(/architecture/fonts/lato-{weight}.woff2) format('woff2')" in css
+        assert (_ARCH / f"fonts/lato-{weight}.woff2").read_bytes() == (_PUB / f"assets/fonts/lato-{weight}.woff2").read_bytes()
+    assert json.loads(_read(_W / "architecture/staticwebapp.config.json"))["mimeTypes"][".woff2"] == "font/woff2"

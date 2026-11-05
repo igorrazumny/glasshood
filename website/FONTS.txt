@@ -1,4 +1,5 @@
 Lato - copyright (c) 2010-2014 by tyPoland Lukasz Dziedzic (team@latofonts.com).
 Licensed under the SIL Open Font License, Version 1.1: https://scripts.sil.org/OFL
 public/assets/fonts/ holds the latin woff2 subsets of weights 400 and 700, served by the site.
+../architecture/fonts/ holds the same two files for the architecture page, on both of its addresses.
 This notice stays outside public/, so the site itself shows no email address.

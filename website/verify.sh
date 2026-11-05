@@ -63,7 +63,7 @@ get "$SITE/" >/dev/null && grep -qi '^x-content-type-options: *nosniff' "$TMP/he
 
 A="$OUT/architecture"
 serves "$ARCH/" "$A/index.html"
-for f in architecture/app.js architecture/styles.css architecture/img/glasshood-logo.png; do
+for f in architecture/app.js architecture/styles.css architecture/img/glasshood-logo.png architecture/img/glasshood-logo-nav.png architecture/fonts/lato-400.woff2 architecture/fonts/lato-700.woff2; do
   serves "$ARCH/$f" "$A/$f"
 done
 for f in "" architecture/app.js architecture/styles.css; do revalidates "$ARCH/$f"; done
