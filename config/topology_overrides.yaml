@@ -5,22 +5,8 @@
 # No active profile — planned infrastructure removed (H200s not purchased)
 active_profile: none
 
-nodes:
-  # --- GPU hardware (reserved instance — real, might be up or down) ---
-  - id: gpu_h100_spot
-    label: "H100 CC Reserved (8x)"
-    type: gpu
-    icon: cpu
-    status: auto
-    project: platform
-    env: prod
-    metrics:
-      model: "NVIDIA H100 80GB CC"
-      count: 8
-      instance_type: a3-highgpu-1g
-      zone: us-central1-a
-      spot: false
-      health_url: ""  # Set when deployed: http://<vllm-ip>:8000/health
+# REQ-GHA-023: the retired H100 GPU entry is gone; nothing that is not running is listed.
+nodes: []
 
 edges: []
 

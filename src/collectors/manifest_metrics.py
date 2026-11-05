@@ -244,6 +244,27 @@ def _probe_gcp_vm_status(project: str, zone: str, instance_name: str) -> dict:
         return {"ok": False, "status": "ERROR", "machine": ""}
 
 
+def _vm_details(instance_url: str, token: str) -> dict:
+    """REQ-GHA-023: machine type and confidential / shielded settings of one VM (read-only)."""
+    try:
+        import httpx
+        r = httpx.get(instance_url, headers={"Authorization": f"Bearer {token}"}, timeout=10)
+        if r.status_code != 200:
+            return {}
+        d = r.json()
+        sh = d.get("shieldedInstanceConfig") or {}
+        return {
+            "machine_type": d.get("machineType", "").rsplit("/", 1)[-1],
+            "confidential": (d.get("confidentialInstanceConfig") or {}).get("confidentialInstanceType", "none"),
+            "secure_boot": bool(sh.get("enableSecureBoot")),
+            "vtpm": bool(sh.get("enableVtpm")),
+            "integrity_monitoring": bool(sh.get("enableIntegrityMonitoring")),
+        }
+    except Exception as e:
+        logger.debug(f"VM details failed for {instance_url}: {e}")
+        return {}
+
+
 def _discover_mig_vms(project: str, zone: str, instance_group: str) -> list:
     """Discover VMs in a MIG via GCP Compute API."""
     cache_key = f"{project}/{zone}/{instance_group}"
@@ -272,7 +293,9 @@ def _discover_mig_vms(project: str, zone: str, instance_group: str) -> list:
             health = health_list[0].get("detailedHealthState", "UNKNOWN") if health_list else "UNKNOWN"
             # Extract numeric instance ID from the instance URL
             instance_id = str(inst.get("id", ""))
+            details = _vm_details(instance_url, creds.token) if instance_url else {}
             vms.append({
+                "details": details,
                 "id": f"vm-{vm_name}",
                 "label": f"VM: {vm_short}",
                 "status": "healthy" if health == "HEALTHY" else ("degraded" if vm_status == "RUNNING" else "error"),
@@ -316,6 +339,49 @@ def _probe_gcp_secret(project: str, secret_name: str) -> bool:
     except Exception as e:
         logger.debug(f"SM probe failed for {secret_name}: {e}")
         return False
+
+
+def _resource_probes() -> dict:
+    from src.collectors import gcp_resources as g
+    return {
+        "gcp_compute": lambda c: g.probe_compute(c.get("project", ""), c.get("path", ""), c.get("fields")),
+        "gcp_backend_health": lambda c: g.probe_backend_health(c.get("project", ""), c.get("backend_service", "")),
+        "gcp_asset": lambda c: g.probe_asset(c.get("project", ""), c.get("asset_type", ""),
+                                             c.get("name", ""), c.get("expect", "one")),
+        "gcp_secret_count": lambda c: g.probe_secret_count(c.get("project", "")),
+        "gcp_sql_backup": lambda c: g.probe_sql_backup(c.get("project", ""), c.get("max_age_h", 36)),
+    }
+
+
+_RESOURCE_PROBES = _resource_probes()
+
+
+def _attest_vms(parent_id: str, cfg: dict) -> None:
+    """REQ-GHA-023 clause 3: the MCP attestation, shown where it is true.
+    The answer names a chip, not a VM. With one VM behind the endpoint it can only be that
+    VM, so the VM carries the badge. With several, GlassHood cannot tell which VM answered:
+    no VM gets the badge, and the result is shown on the instance group at endpoint level."""
+    from src.collectors.coldvault_mcp import check_attestation
+    result = check_attestation(cfg.get("url", ""), cfg.get("timeout_s", 30))
+    with _lock:
+        vms = [d for d in _metrics_cache.values() if d.get("_parent") == parent_id]
+        group = _metrics_cache.get(parent_id)
+        if group is not None:
+            group["metrics"]["endpoint_attested"] = 1 if result["ok"] else 0
+            group["metrics"]["attestation"] = result["desc"]
+            if not result["ok"] and group["status"] == "healthy":
+                group["status"] = "degraded"
+        for data in vms:
+            if len(vms) == 1:
+                data["metrics"]["attested"] = 1 if result["ok"] else 0
+                data["metrics"]["attestation"] = result["desc"]
+                if not result["ok"] and data["status"] == "healthy":
+                    data["status"] = "degraded"
+            else:
+                data["metrics"].pop("attested", None)
+                data["metrics"]["attestation"] = (
+                    f"{len(vms)} VMs behind the endpoint: the attestation answer names a chip, not a VM, "
+                    "so GlassHood cannot tell which VM answered. Endpoint-level result is on the instance group.")
 
 
 def _poll_node(node_config: dict) -> dict:
@@ -393,6 +459,13 @@ def _poll_node(node_config: dict) -> dict:
                 },
                 "check_description": result.get("desc", ""),
             }
+        if probe_type in _RESOURCE_PROBES:
+            # REQ-GHA-023: a real part of the monitored project, read with read-only roles.
+            return {"node_id": node_id, **_RESOURCE_PROBES[probe_type](probe_config)}
+        if probe_type == "external":
+            # REQ-GHA-023 clause 3: GlassHood cannot check this service; never shown green.
+            return {"node_id": node_id, "status": "not checked", "metrics": {},
+                    "check_description": probe_config.get("note") or "Outside service — not checked by GlassHood"}
         if probe_type == "mcp_attestation":
             # REQ-GHA-020: ColdVault's MCP verify_attestation with a fresh nonce; no model is called.
             from src.collectors.coldvault_mcp import check_attestation
@@ -511,6 +584,8 @@ def poll_all_manifest_nodes(manifests_dir: str = "config/manifests") -> None:
     nodes_to_poll = []
     discover_configs = []  # (parent_node_id, discover_config)
     children_templates = {}  # parent_node_id → children_template list
+    attestations = []  # (parent_node_id, attestation config) — REQ-GHA-023
+    findings = []  # (project_id, findings list) — REQ-GHA-023 clause 6
     for f in manifests_path.glob("*.yaml"):
         if f.name.startswith("_"):
             continue
@@ -520,6 +595,8 @@ def poll_all_manifest_nodes(manifests_dir: str = "config/manifests") -> None:
             if not data:
                 continue
             for env in data.get("environments", []):
+                if env.get("findings"):
+                    findings.append((data.get("project_id", ""), env["findings"]))
                 for node in env.get("nodes", []):
                     mon = node.get("monitoring", {})
                     if mon.get("metrics") or mon.get("probe") or mon.get("logs"):
@@ -528,6 +605,8 @@ def poll_all_manifest_nodes(manifests_dir: str = "config/manifests") -> None:
                         discover_configs.append((node["id"], mon["discover"]))
                     if node.get("children_template"):
                         children_templates[node["id"]] = node["children_template"]
+                    if mon.get("attestation"):
+                        attestations.append((node["id"], mon["attestation"]))
         except Exception as e:
             logger.warning(f"Failed to read manifest {f}: {e}")
 
@@ -572,14 +651,25 @@ def poll_all_manifest_nodes(manifests_dir: str = "config/manifests") -> None:
                 for vm in vms:
                     _metrics_cache[vm["id"]] = {
                         "status": vm["status"],
-                        "metrics": {"vm_status": vm["vm_status"], "health": vm["health_state"]},
-                        "check_description": f"VM {vm['label']} — {vm['vm_status']} / {vm['health_state']}",
+                        "metrics": {"vm_status": vm["vm_status"], "health": vm["health_state"],
+                                    **vm.get("details", {})},
+                        "check_description": f"VM {vm['label']} — {vm['vm_status']} / {vm['health_state']}" + (
+                            " · {machine_type}, {confidential}, Secure Boot {secure_boot}, vTPM {vtpm}, "
+                            "integrity monitoring {integrity_monitoring}".format(**vm["details"])
+                            if vm.get("details") else ""),
                         "last_poll": now,
                         "poll_interval_s": _POLL_INTERVAL,
                         "_parent": parent_id,
                         "_label": vm["label"],
                         "_type": "vm",
                     }
+
+    for parent_id, cfg in attestations:
+        _attest_vms(parent_id, cfg)
+
+    from src.collectors import gcp_resources
+    gcp_resources.set_findings([f for project, items in findings
+                                for f in gcp_resources.evaluate_findings(project, items)])
 
     # Store children templates for topology assembly
     with _lock:

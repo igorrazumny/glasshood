@@ -6,6 +6,7 @@
 import { useState } from 'react'
 import { Brain, RefreshCw, AlertTriangle, CheckCircle, Server, Shield } from 'lucide-react'
 import { apiFetch } from '../utils/api'
+import { statsNodes } from '../utils/canvasParts.js'
 
 function ScoreBadge({ score }) {
   if (score === null || score === undefined) return null
@@ -20,10 +21,11 @@ function ScoreBadge({ score }) {
   )
 }
 
-function TopologyStats({ topology }) {
-  if (!topology?.nodes?.length) return null
+function TopologyStats({ topology, canvas }) {
+  // REQ-GHA-023 clause 5: count what the canvas draws (statsNodes waits for the topology).
+  const nodes = statsNodes(topology, canvas)
+  if (!nodes) return null
 
-  const nodes = topology.nodes
   const total = nodes.length
   const byStatus = {}
   for (const n of nodes) {
@@ -63,7 +65,7 @@ function TopologyStats({ topology }) {
   )
 }
 
-export default function AnalysisPanel({ data, topology }) {
+export default function AnalysisPanel({ data, topology, canvas }) {
   const [refreshing, setRefreshing] = useState(false)
 
   const handleRefresh = async () => {
@@ -101,7 +103,7 @@ export default function AnalysisPanel({ data, topology }) {
         </button>
       </div>
 
-      <TopologyStats topology={topology} />
+      <TopologyStats topology={topology} canvas={canvas} />
 
       {!hasData ? (
         <p className="text-gray-500 dark:text-purple-300 text-sm">Waiting for first analysis...</p>

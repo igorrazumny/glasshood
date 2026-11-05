@@ -319,6 +319,16 @@ def _build_topology() -> dict:
     correlated = correlate(alerts, anomaly_list)
     all_alerts = alerts + correlated
 
+    # REQ-GHA-023 clause 6: drift and leftovers are warnings, never parts on the canvas.
+    from src.collectors.gcp_resources import get_findings
+    from src.models.alert import Alert
+    for f in get_findings():
+        all_alerts.append(Alert(
+            rule_id=f"finding:{f['id']}", severity="warning",
+            message=f"Finding: {f['text']}" + (f" (source: {f['source']})" if f.get("source") else ""),
+            triggered_at=datetime.fromtimestamp(f["checked_at"], timezone.utc).isoformat(),
+        ))
+
     # Propagate alert severity to project nodes (green → yellow/red based on alerts)
     if all_alerts:
         node_project = {n.id: n.project for n in nodes if n.project}

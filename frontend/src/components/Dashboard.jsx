@@ -2,7 +2,7 @@
 // Purpose: Main layout — header, topology, analysis, metrics bar
 // Supports live mode (authenticated, polling) and demo mode (static data, no auth)
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import StatusHeader from './StatusHeader'
 import ProjectTree from './ProjectTree'
 import RightSidebar from './RightSidebar'
@@ -17,6 +17,8 @@ import AlertDetailModal from './AlertDetailModal'
 import AnomalyDetailModal from './AnomalyDetailModal'
 import VerificationReportModal from './VerificationReportModal'
 import { usePolling } from '../hooks/usePolling'
+import { computeManifestLayout } from '../utils/manifestLayout'
+import { canvasNodes } from '../utils/canvasParts.js'
 import { clearToken, apiFetch, apiUrl } from '../utils/api'
 
 function useDemoData() {
@@ -74,6 +76,12 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
 
   // Extract projects from manifest files (not org-discovery)
   const manifestData = Array.isArray(manifests?.data) ? manifests.data : []
+  // REQ-GHA-023 clause 5: "nodes monitored" counts exactly what the canvas draws.
+  const canvas = useMemo(() => (
+    !isDemo && manifestData.length > 0 && topology.data
+      ? canvasNodes(computeManifestLayout(topology.data?.nodes, manifestData), topology.data?.nodes)
+      : null
+  ), [isDemo, manifestData, topology.data])
   const manifestProjects = manifestData.filter(m => m && typeof m === 'object').map(m => ({
     id: `manifest-${m.product || 'unknown'}-${m.environment || 'unknown'}`,
     label: m.solution || m.display_name || m.product || 'Unknown',
@@ -190,7 +198,7 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
         <AlertPanel alerts={filteredAlerts} onSelect={setSelectedAlert} />
         <AnomalyBadge anomalies={filteredAnomalies} onSelect={setSelectedAnomaly} />
         <SecurityPanel isDemo={isDemo} />
-        <AnalysisPanel data={analysis.data} topology={topology.data} isDemo={isDemo} />
+        <AnalysisPanel data={analysis.data} topology={topology.data} canvas={canvas} isDemo={isDemo} />
       </RightSidebar>
 
       <div className="flex-1 overflow-hidden transition-all duration-300"

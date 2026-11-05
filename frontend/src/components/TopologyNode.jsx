@@ -8,6 +8,8 @@
 // canvas. STATUS_COLORS mirrors the TopologyMap palette so border colors,
 // status dots, and the global STATUS_COLORS in TopologyMap stay in lockstep.
 
+import { attestationBadge } from '../utils/canvasParts.js'
+
 export const NODE_W = 140
 export const NODE_H = 50
 export const CHILD_PAD = 8       // padding inside parent for children
@@ -20,6 +22,7 @@ export const CHILD_GAP = 4       // gap between children
 // retained as PHASE_1_FALLBACK_HEX below are used only by the structural
 // guard tests in test_theme_tokens.py to ensure the cross-file
 // STATUS_COLORS invariant still holds — runtime now consults the CSS vars.
+
 const STATUS_COLORS = {
   healthy: 'var(--status-healthy)',
   deployed: 'var(--status-healthy)',
@@ -32,6 +35,7 @@ const STATUS_COLORS = {
   planned: 'var(--status-inactive)',
   dynamic: 'var(--status-inactive)',
   'not monitored': 'var(--status-inactive)',
+  'not checked': 'var(--status-inactive)',  // REQ-GHA-023: outside service GlassHood cannot check
 }
 
 // Cross-file invariant guard: the structural tests expect these hex values
@@ -51,6 +55,7 @@ const STATUS_COLORS_HEX_REFERENCE = {
   planned: '#94a3b8',
   dynamic: '#94a3b8',
   'not monitored': '#94a3b8',
+  'not checked': '#94a3b8',
 }
 
 // REQ-008: when status is healthy/deployed, the node border is a quiet slate.
@@ -318,7 +323,7 @@ export default function TopologyNode({ node, x, y, selected, onClick, onMouseDow
       <text x={24} y={line2 ? 41 : 37} fill={brandSolid ? BRAND_PRIMARY_SUBTEXT : color} fontSize={7}>
         {node.type === 'project'
           ? `${node.metrics?.node_count ?? 0} resources`
-          : node.status}
+          : node.status + attestationBadge(node)}
       </text>
 
       {/* Cost (bottom-right of header area, subtle). */}
