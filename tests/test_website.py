@@ -122,38 +122,23 @@ def test_both_hosts_revalidate_everything_and_send_security_headers():
         assert "immutable" not in json.dumps(cfg)
 
 
-# --- the app's state (clause 1) ---
-
-_STATE = _ARCH / "app-state.js"
-_STATES = ("asleep", "waking", "awake", "going-to-sleep")
-
-
-def test_the_state_is_read_from_the_controller_only_and_never_wakes_the_app():
-    src = _read(_STATE)
-    assert "CONTROLLER + '/status'" in src
-    assert "app.glasshood.ai" not in src, "loading a public page never contacts the app"
-    assert "POST" not in src and "method" not in src, "the public pages only read the state"
-    assert "credentials" not in src, "no cookies sent to the controller"
-    assert "typeof state === 'string'" in src, "only a string state is accepted"
-    assert "if (!CONTROLLER" in src, "nothing is requested while the controller's address is unset"
-    assert "var CONTROLLER = 'https://func-glasshood-wake.azurewebsites.net/api';" in src, \
-        "the state comes from the deployed wake controller (its base address, no trailing slash)"
-    labels = dict(re.findall(r"""['"]?([a-z-]+)['"]?:\s*'([^']+)'""", src.split("LABELS", 1)[1].split("}", 1)[0]))
-    assert set(labels) == set(_STATES), labels
+# --- the app's state (clause 1, amended 2026-11-05): the public pages do not show it ---
 
 
 @pytest.mark.parametrize("page", _NAV_PAGES + (_ARCH / "index.html",), ids=lambda p: str(p.relative_to(ROOT)))
-def test_every_public_page_shows_the_state(page):
+def test_no_public_page_shows_the_app_state(page):
     html = _read(page)
-    assert re.search(r'<span class="app-state" data-app-state role="status" hidden>', html)
-    assert "/architecture/app-state.js" in html
+    assert "app-state" not in html and "data-app-state" not in html
 
 
-def test_the_state_sits_with_open_app_and_with_launch_live_demo():
-    for page in _NAV_PAGES:
-        app = _read(page).split('<div class="nav-app">', 1)[1].split("</div>", 1)[0]
-        assert app.index("data-app-state") < app.index('href="https://app.glasshood.ai"')
-    assert re.search(r"Launch live demo</a><span class=\"app-state\" data-app-state", _read(_ARCH / "index.html"))
+def test_loading_the_public_pages_contacts_neither_the_app_nor_its_wake_controller():
+    assert not (_ARCH / "app-state.js").exists()
+    served = [p for p in list(_PUB.rglob("*")) + list(_ARCH.rglob("*")) + list((_W / "architecture").rglob("*"))
+              if p.is_file() and p.suffix in {".html", ".css", ".js", ".json"}]
+    for p in served:
+        assert "func-glasshood-wake" not in _read(p), p
+    for script in [p for p in served if p.suffix == ".js"]:
+        assert "app.glasshood.ai" not in _read(script), script
 
 
 # --- one set of architecture files at both addresses (clause 2) ---
@@ -303,7 +288,8 @@ def test_the_architecture_page_carries_the_site_masthead_on_both_hosts():
 def test_home_has_the_two_colour_hero_and_cards_with_icons():
     home = _read(_PUB / "index.html")
     assert '<span class="hero-title-first">' in home and '<span class="hero-title-rest">' in home
-    assert '<div class="hero-wash" aria-hidden="true"></div>' in home
+    # No colour wash behind the hero (Igor, 2026-11-05: "fade out, we will remove for GlassHood").
+    assert "hero-wash" not in home and "hero-wash" not in _read(_PUB / "assets/site.css")
     assert home.count('<span class="feature-icon">') == 3
 
 
@@ -314,3 +300,102 @@ def test_contact_has_labels_and_marks_the_required_fields():
     assert "Required fields" in html and '<div class="form-row">' in html
     css = _read(_PUB / "assets/site.css")
     assert '.form-label-required::after{content:" *"' in css
+
+
+# The masthead logo is as tall as 9robots.ai's, and so is its word (REQ-GHA-018 clause 14, amended
+# 2026-11-05). 9robots.ai sizes its logo 43 px, and 39 px below 768 px (Tailwind's max-[768px] in
+# 9robots-site next/components/Nav.tsx). In its image, /img/9robots-logo.png (4535 x 982), the visible
+# pixels run from row 29 to 971 (the mark fills 943/982 of the height) and the word "9robots" from row
+# 147 to 806 (660/982). GlassHood's masthead logo uses the same sizes and an image cut to the same shares.
+_NAV_LOGO = ROOT / "architecture/img/glasshood-logo-nav.png"
+_NAV_IMG = '<img src="/architecture/img/glasshood-logo-nav.png" alt="GlassHood" width="754" height="132">'
+_NINEROBOTS_MARK, _NINEROBOTS_WORD = 943 / 982, 660 / 982
+
+
+def _png_rgba_rows(path):
+    """Width, height, bytes per pixel and decoded rows of an 8-bit, non-interlaced RGB(A) PNG."""
+    import struct
+    import zlib
+    data, pos, idat = path.read_bytes(), 8, b""
+    assert data[:8] == b"\x89PNG\r\n\x1a\n"
+    while pos < len(data):
+        length, kind = struct.unpack(">I4s", data[pos:pos + 8])
+        chunk = data[pos + 8:pos + 8 + length]
+        if kind == b"IHDR":
+            width, height, depth, ctype, _, _, interlace = struct.unpack(">IIBBBBB", chunk)
+            assert depth == 8 and ctype in (2, 6) and interlace == 0
+            bpp = 4 if ctype == 6 else 3
+        elif kind == b"IDAT":
+            idat += chunk
+        pos += 12 + length
+    raw, stride, prev, rows = zlib.decompress(idat), width * bpp, bytearray(width * bpp), []
+    for y in range(height):
+        kind, line = raw[y * (stride + 1)], bytearray(raw[y * (stride + 1) + 1:(y + 1) * (stride + 1)])
+        for i in range(stride):
+            a, b = (line[i - bpp] if i >= bpp else 0), prev[i]
+            c = prev[i - bpp] if i >= bpp else 0
+            if kind == 1: line[i] = (line[i] + a) & 255
+            elif kind == 2: line[i] = (line[i] + b) & 255
+            elif kind == 3: line[i] = (line[i] + (a + b) // 2) & 255
+            elif kind == 4:
+                p = a + b - c
+                pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
+                line[i] = (line[i] + (a if pa <= pb and pa <= pc else b if pb <= pc else c)) & 255
+        rows.append(bytes(line))
+        prev = line
+    return width, height, bpp, rows
+
+
+def _logo_shares(path):
+    """Width, height, and the shares of the height taken by the whole mark and by the word, where the
+    word is everything right of the widest empty column gap (the gap between icon and word)."""
+    width, height, bpp, rows = _png_rgba_rows(path)
+    seen = lambda row, x: ((row[x * bpp + 3] if bpp == 4 else 255) > 24 and sum(row[x * bpp:x * bpp + 3]) < 3 * 245)
+    cols = [any(seen(row, x) for row in rows) for x in range(width)]
+    gaps, start = [], None
+    for x, c in enumerate(cols + [True]):
+        if not c and start is None:
+            start = x
+        elif c and start is not None:
+            gaps.append((x - start, x)); start = None
+    word_from = max(g for g in gaps if g[1] < width)[1]
+    mark = [y for y, row in enumerate(rows) if any(seen(row, x) for x in range(width))]
+    word = [y for y, row in enumerate(rows) if any(seen(row, x) for x in range(word_from, width))]
+    return width, height, (mark[-1] - mark[0] + 1) / height, (word[-1] - word[0] + 1) / height
+
+
+@pytest.mark.parametrize("page", _NAV_PAGES + (_ARCH / "index.html",), ids=lambda p: str(p.relative_to(ROOT)))
+def test_the_masthead_shows_the_recut_logo_at_its_true_size(page):
+    assert _NAV_IMG in _nav(_read(page))
+
+
+def test_the_masthead_logo_and_its_word_are_as_tall_as_9robots_ai():
+    css = _shared_block(_read(_PUB / "assets/site.css"))
+    assert ".nav-logo img{display:block;height:43px;" in css
+    assert "@media (max-width:767px){.nav-logo img{height:39px}}" in css
+    width, height, mark, word = _logo_shares(_NAV_LOGO)
+    assert (width, height) == (754, 132)
+    assert abs(mark - _NINEROBOTS_MARK) < 0.01, f"the mark fills {mark:.3f} of the logo, 9robots.ai's {_NINEROBOTS_MARK:.3f}"
+    assert abs(word - _NINEROBOTS_WORD) < 0.01, f"the word fills {word:.3f} of the logo, 9robots.ai's {_NINEROBOTS_WORD:.3f}"
+
+
+def test_the_orange_is_9robots_ai_s_orange():
+    # REQ-GHA-018 clause 14, amended 2026-11-05: orange text uses 9robots.ai's orange, #E75A1E, which is
+    # also the orange tile in GlassHood's logo; the blue stays 9robots.ai's blue, #0C41CD.
+    site, arch = _read(_PUB / "assets/site.css"), _read(_ARCH / "styles.css")
+    for css in (site, arch):
+        assert "--orange:#e75a1e" in css and "--blue:#0c41cd" in css
+        assert "amber" not in css.lower() and "#c87400" not in css and "#e89008" not in css
+    assert ".hero-title-first{color:var(--orange)}" in site
+    assert "--orange:#e75a1e" in _read(ROOT / "deploy/waking-page/index.html")
+
+
+def test_the_architecture_page_uses_the_site_s_own_lato():
+    # The masthead looks the same on every page (REQ-GHA-018 clause 14, amended 2026-11-05): the
+    # architecture page renders it with the same font files as the site, not with Google Fonts.
+    html, css = _read(_ARCH / "index.html"), _read(_ARCH / "styles.css")
+    assert "fonts.googleapis.com" not in html and "fonts.gstatic.com" not in html
+    for weight in ("400", "700"):
+        assert f"src:url(/architecture/fonts/lato-{weight}.woff2) format('woff2')" in css
+        assert (_ARCH / f"fonts/lato-{weight}.woff2").read_bytes() == (_PUB / f"assets/fonts/lato-{weight}.woff2").read_bytes()
+    assert json.loads(_read(_W / "architecture/staticwebapp.config.json"))["mimeTypes"][".woff2"] == "font/woff2"

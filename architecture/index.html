@@ -8,15 +8,13 @@
   <title>Architecture - GlassHood</title>
   <meta name="description" content="GlassHood is a cross-cloud monitoring engine for regulated systems — live topology reconciled against declared design, with compliance evidence derived from what it observes.">
   <link rel="icon" href="/architecture/img/glasshood-icon.png">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Lato:wght@100;300;400;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/architecture/styles.css?v=27">
+  <link rel="preload" href="/architecture/fonts/lato-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/architecture/styles.css?v=28">
 </head>
 <body>
 <nav class="nav" aria-label="Main">
   <div class="nav-in">
-    <a href="https://glasshood.ai/" class="nav-logo" aria-label="GlassHood — home"><img src="/architecture/img/glasshood-logo.png" alt="GlassHood" width="1203" height="417"></a>
+    <a href="https://glasshood.ai/" class="nav-logo" aria-label="GlassHood — home"><img src="/architecture/img/glasshood-logo-nav.png" alt="GlassHood" width="754" height="132"></a>
     <div class="nav-links">
       <a href="https://glasshood.ai/">Home</a>
       <a href="https://glasshood.ai/architecture/" aria-current="page">Architecture</a>
@@ -167,7 +165,7 @@
 
     <!-- Launch live demo button (below the hero cards) -->
     <div class="arch-cta">
-      <a href="https://glasshood.ai/demo" class="button" target="_blank" rel="noopener noreferrer">Launch live demo</a><span class="app-state" data-app-state role="status" hidden><span class="app-state-dot" aria-hidden="true"></span><span class="app-state-label"></span></span>
+      <a href="https://glasshood.ai/demo" class="button" target="_blank" rel="noopener noreferrer">Launch live demo</a>
     </div>
 
     <!-- Detail sections (revealed on card click) -->
@@ -403,6 +401,5 @@
   </div>
 </footer>
 <script src="/architecture/app.js"></script>
-<script src="/architecture/app-state.js"></script>
 </body>
 </html>
