@@ -6,6 +6,7 @@
 import { useState } from 'react'
 import { Brain, RefreshCw, AlertTriangle, CheckCircle, Server, Shield } from 'lucide-react'
 import { apiFetch } from '../utils/api'
+import { statsNodes } from '../utils/canvasParts.js'
 
 function ScoreBadge({ score }) {
   if (score === null || score === undefined) return null
@@ -21,9 +22,9 @@ function ScoreBadge({ score }) {
 }
 
 function TopologyStats({ topology, canvas }) {
-  // REQ-GHA-023 clause 5: count what the canvas draws when it is drawn from manifests.
-  const nodes = canvas || topology?.nodes
-  if (!nodes?.length) return null
+  // REQ-GHA-023 clause 5: count what the canvas draws (statsNodes waits for the topology).
+  const nodes = statsNodes(topology, canvas)
+  if (!nodes) return null
 
   const total = nodes.length
   const byStatus = {}

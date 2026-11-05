@@ -357,20 +357,31 @@ _RESOURCE_PROBES = _resource_probes()
 
 
 def _attest_vms(parent_id: str, cfg: dict) -> None:
-    """REQ-GHA-023 clause 3: the MCP attestation is a badge on each of the MIG's VMs.
-    A VM whose hardware is not attested is no better than degraded."""
+    """REQ-GHA-023 clause 3: the MCP attestation, shown where it is true.
+    The answer names a chip, not a VM. With one VM behind the endpoint it can only be that
+    VM, so the VM carries the badge. With several, GlassHood cannot tell which VM answered:
+    no VM gets the badge, and the result is shown on the instance group at endpoint level."""
     from src.collectors.coldvault_mcp import check_attestation
     result = check_attestation(cfg.get("url", ""), cfg.get("timeout_s", 30))
     with _lock:
-        n_vms = sum(1 for d in _metrics_cache.values() if d.get("_parent") == parent_id)
-        for data in _metrics_cache.values():
-            if data.get("_parent") != parent_id:
-                continue
-            data["metrics"]["attested"] = 1 if result["ok"] else 0
-            data["metrics"]["attestation"] = result["desc"] + (
-                " With several VMs, the answer comes from whichever VM the load balancer chose." if n_vms > 1 else "")
-            if not result["ok"] and data["status"] == "healthy":
-                data["status"] = "degraded"
+        vms = [d for d in _metrics_cache.values() if d.get("_parent") == parent_id]
+        group = _metrics_cache.get(parent_id)
+        if group is not None:
+            group["metrics"]["endpoint_attested"] = 1 if result["ok"] else 0
+            group["metrics"]["attestation"] = result["desc"]
+            if not result["ok"] and group["status"] == "healthy":
+                group["status"] = "degraded"
+        for data in vms:
+            if len(vms) == 1:
+                data["metrics"]["attested"] = 1 if result["ok"] else 0
+                data["metrics"]["attestation"] = result["desc"]
+                if not result["ok"] and data["status"] == "healthy":
+                    data["status"] = "degraded"
+            else:
+                data["metrics"].pop("attested", None)
+                data["metrics"]["attestation"] = (
+                    f"{len(vms)} VMs behind the endpoint: the attestation answer names a chip, not a VM, "
+                    "so GlassHood cannot tell which VM answered. Endpoint-level result is on the instance group.")
 
 
 def _poll_node(node_config: dict) -> dict:

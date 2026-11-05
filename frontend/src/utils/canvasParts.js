@@ -48,3 +48,23 @@ export function nearestSide(g, p) {
   const side = Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'top' : 'bottom')
   return { side, point: sides[side] }
 }
+
+// REQ-GHA-023 clause 3: with several VMs the attestation cannot be tied to one VM; the
+// instance group then carries the endpoint-level result instead.
+export function groupAttestationBadge(parentId, topologyNodes) {
+  const nodes = topologyNodes || []
+  const parent = nodes.find(n => n.id === parentId)
+  const a = parent?.metrics?.endpoint_attested
+  if (a === undefined || a === null) return ''
+  const vms = nodes.filter(n => n.metrics?._parent === parentId).length
+  if (vms <= 1) return ''
+  return a ? ' · endpoint SEV-SNP attested ✓ (VM not identified)' : ' · endpoint not attested'
+}
+
+// REQ-GHA-023 clause 5: the nodes the System Overview counts — the canvas when drawn from
+// manifests, else the topology. Nothing until the topology has arrived (manifests may come first).
+export function statsNodes(topology, canvas) {
+  if (!topology) return null
+  const nodes = canvas || topology.nodes
+  return nodes?.length ? nodes : null
+}

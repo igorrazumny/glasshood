@@ -163,7 +163,7 @@ def test_poll_node_dispatches_resource_and_external_probes(monkeypatch):
     assert r["status"] == "not checked" and r["check_description"] == "OpenAI, Partner Mode"
 
 
-def test_attestation_is_a_badge_on_each_vm(monkeypatch):
+def test_with_one_vm_the_vm_carries_the_badge(monkeypatch):
     import src.collectors.coldvault_mcp as cv
     monkeypatch.setattr(mm, "_metrics_cache", {
         "vm-a": {"status": "healthy", "metrics": {}, "_parent": "mig"},
@@ -171,9 +171,9 @@ def test_attestation_is_a_badge_on_each_vm(monkeypatch):
         "other": {"status": "healthy", "metrics": {}},
     })
     monkeypatch.setattr(cv, "check_attestation", lambda url, t: {"ok": True, "desc": "verified", "metrics": {}})
+    del mm._metrics_cache["vm-b"]  # one VM behind the endpoint: the answer can only be from it
     mm._attest_vms("mig", {"url": "u"})
     assert mm._metrics_cache["vm-a"]["metrics"]["attested"] == 1
-    assert "whichever VM" in mm._metrics_cache["vm-b"]["metrics"]["attestation"]
     assert "attested" not in mm._metrics_cache["other"]["metrics"]
     monkeypatch.setattr(cv, "check_attestation", lambda url, t: {"ok": False, "desc": "not bound", "metrics": {}})
     mm._attest_vms("mig", {"url": "u"})
@@ -226,3 +226,52 @@ def test_asset_search_queries_the_quoted_display_name(api):
     routes["searchAllResources"] = _Resp(200, {"results": [{"displayName": "ColdVault Error Spike"}]})
     g.probe_asset("p", "monitoring.googleapis.com/AlertPolicy", name="ColdVault Error Spike")
     assert seen[-1][1]["query"] == 'displayName:"ColdVault Error Spike"'
+
+
+def test_unissued_certificate_is_not_healthy(api):
+    api[0]["sslCertificates"] = _Resp(200, {"managed": {"status": "PROVISIONING"}})
+    r = g.probe_compute("p", "global/sslCertificates/c")
+    assert r["status"] == "error" and "PROVISIONING" in r["check_description"]
+
+
+def test_backend_group_that_cannot_be_read_is_never_green(monkeypatch, api):
+    api[0]["backendServices/bs"] = _Resp(200, {"backends": [{"group": "g1"}, {"group": "g2"}]})
+    answers = iter([_Resp(200, {"healthStatus": [{"healthState": "HEALTHY"}]}), _Resp(503)])
+    monkeypatch.setattr(g.httpx, "post", lambda *a, **k: next(answers))
+    r = g.probe_backend_health("p", "bs")
+    assert r["status"] == "degraded" and r["metrics"]["unread_groups"] == 1
+    assert "could not be read" in r["check_description"]
+
+
+def test_with_several_vms_no_vm_gets_the_badge(monkeypatch):
+    import src.collectors.coldvault_mcp as cv
+    monkeypatch.setattr(mm, "_metrics_cache", {
+        "mig": {"status": "healthy", "metrics": {}},
+        "vm-a": {"status": "healthy", "metrics": {"attested": 1}, "_parent": "mig"},
+        "vm-b": {"status": "healthy", "metrics": {}, "_parent": "mig"},
+    })
+    monkeypatch.setattr(cv, "check_attestation", lambda url, t: {"ok": True, "desc": "verified", "metrics": {}})
+    mm._attest_vms("mig", {"url": "u"})
+    assert "attested" not in mm._metrics_cache["vm-a"]["metrics"]
+    assert "attested" not in mm._metrics_cache["vm-b"]["metrics"]
+    assert "cannot tell which VM" in mm._metrics_cache["vm-b"]["metrics"]["attestation"]
+    assert mm._metrics_cache["mig"]["metrics"]["endpoint_attested"] == 1
+    monkeypatch.setattr(cv, "check_attestation", lambda url, t: {"ok": False, "desc": "not bound", "metrics": {}})
+    mm._attest_vms("mig", {"url": "u"})
+    assert mm._metrics_cache["mig"]["status"] == "degraded"
+    assert mm._metrics_cache["vm-a"]["status"] == "healthy"  # not blamed without evidence
+
+
+def test_embeddings_child_stays_not_checked_through_inheritance():
+    import os
+    import yaml
+    from src.api.routes.topology import inherit_parent_status
+    path = os.path.expanduser("~/AgentCoding/neo/glasshood-deploy/coldvault.yaml.v4")
+    if not os.path.exists(path):
+        pytest.skip("deployment manifest not on this machine")
+    env = yaml.safe_load(open(path))["environments"][0]
+    tmpl = next(n for n in env["nodes"] if n["id"] == "cv-mig")["children_template"]
+    kids = mm.resolve_children_template(tmpl, "v", "1")
+    inherit_parent_status(kids, "healthy")
+    emb = next(c for c in kids[0]["children"] if c["id"].endswith("-embeddings"))
+    assert emb["status"] == "not checked"

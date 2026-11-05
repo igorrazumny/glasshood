@@ -3,7 +3,7 @@
 // Run: node frontend/src/utils/canvasParts.test.js
 
 import assert from 'node:assert/strict'
-import { canvasNodes, attestationBadge, nearestSide } from './canvasParts.js'
+import { canvasNodes, attestationBadge, nearestSide, groupAttestationBadge, statsNodes } from './canvasParts.js'
 
 let failed = 0
 function test(name, fn) {
@@ -69,6 +69,27 @@ test('edges meet the side of a group facing the other end', () => {
 
 test('without the other end, the left side as before', () => {
   assert.equal(nearestSide(box, undefined).side, 'left')
+})
+
+test('group carries the endpoint result only when several VMs share the endpoint', () => {
+  const mig = { id: 'mig', metrics: { endpoint_attested: 1 } }
+  const vm = (id) => ({ id, metrics: { _parent: 'mig' } })
+  assert.equal(groupAttestationBadge('mig', [mig, vm('a')]), '')
+  assert.equal(groupAttestationBadge('mig', [mig, vm('a'), vm('b')]), ' · endpoint SEV-SNP attested ✓ (VM not identified)')
+  assert.equal(groupAttestationBadge('mig', [{ id: 'mig', metrics: { endpoint_attested: 0 } }, vm('a'), vm('b')]), ' · endpoint not attested')
+  assert.equal(groupAttestationBadge('mig', [{ id: 'mig', metrics: {} }, vm('a'), vm('b')]), '')
+})
+
+test('manifests before topology: nothing to count yet, no crash', () => {
+  assert.equal(statsNodes(null, [{ id: 'cv-ip', status: 'not monitored' }]), null)
+  assert.equal(statsNodes(undefined, null), null)
+})
+
+test('canvas wins over topology once both exist; topology alone otherwise', () => {
+  const topo = { nodes: [{ id: 'a' }, { id: 'b' }] }
+  assert.deepEqual(statsNodes(topo, [{ id: 'a' }]), [{ id: 'a' }])
+  assert.deepEqual(statsNodes(topo, null), topo.nodes)
+  assert.equal(statsNodes({ nodes: [] }, null), null)
 })
 
 if (failed) { console.error(`${failed} failed`); process.exit(1) }

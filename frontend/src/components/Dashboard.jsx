@@ -78,7 +78,7 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
   const manifestData = Array.isArray(manifests?.data) ? manifests.data : []
   // REQ-GHA-023 clause 5: "nodes monitored" counts exactly what the canvas draws.
   const canvas = useMemo(() => (
-    !isDemo && manifestData.length > 0
+    !isDemo && manifestData.length > 0 && topology.data
       ? canvasNodes(computeManifestLayout(topology.data?.nodes, manifestData), topology.data?.nodes)
       : null
   ), [isDemo, manifestData, topology.data])

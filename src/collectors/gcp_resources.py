@@ -91,14 +91,15 @@ def probe_compute(project: str, path: str, fields=None) -> dict:
         if state not in _GOOD_STATES:
             status = "error"
         notes.append(state)
+    # A managed certificate is in service only when ACTIVE, with or without an expiry yet.
+    managed = (data.get("managed") or {}).get("status")
+    if managed and managed != "ACTIVE":
+        status = "error"
+        notes.append(f"managed {managed}")
     expire = data.get("expireTime")
     if expire:
         days = round(_days_until(expire), 1)
         metrics["days_to_expiry"] = days
-        managed = (data.get("managed") or {}).get("status")
-        if managed and managed != "ACTIVE":
-            status = "error"
-            notes.append(f"managed {managed}")
         status = "error" if days < 7 else ("degraded" if days < 30 and status == "healthy" else status)
         notes.append(f"expires {expire[:10]} ({days:g} days)")
     detail = ", ".join(f"{k} {v}" for k, v in metrics.items() if v not in (None, "") and k not in ("state", "days_to_expiry"))
@@ -113,19 +114,25 @@ def probe_backend_health(project: str, backend_service: str) -> dict:
         bs = _get(base)
         if bs.status_code != 200:
             return _result("error", f"{backend_service} — Compute API HTTP {bs.status_code}")
-        states = []
+        states, unread = [], 0
         for b in bs.json().get("backends", []):
             r = httpx.post(f"{base}/getHealth", json={"group": b["group"]}, timeout=_TIMEOUT,
                            headers=_headers())
             if r.status_code == 200:
                 states += [h.get("healthState") for h in r.json().get("healthStatus", [])]
+            else:
+                unread += 1  # a group that could not be read is never counted as healthy
     except httpx.HTTPError as e:
         return _result("error", f"Compute API unreachable ({type(e).__name__})")
     healthy = sum(1 for s in states if s == "HEALTHY")
-    status = "healthy" if states and healthy == len(states) else ("degraded" if healthy else "error")
-    return _result(status, f"{backend_service} — {healthy} of {len(states)} backends HEALTHY "
-                           "(the load balancer's own health check)",
-                   healthy_backends=healthy, backends=len(states))
+    if states and healthy == len(states) and not unread:
+        status = "healthy"
+    else:
+        status = "degraded" if healthy else "error"
+    desc = f"{backend_service} — {healthy} of {len(states)} backends HEALTHY (the load balancer's own health check)"
+    if unread:
+        desc += f"; {unread} backend group(s) could not be read"
+    return _result(status, desc, healthy_backends=healthy, backends=len(states), unread_groups=unread)
 
 
 def _why(e: Exception) -> str:

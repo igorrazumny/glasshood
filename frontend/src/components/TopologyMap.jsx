@@ -4,7 +4,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import TopologyNode, { nodeHeight, NODE_H, childHeight, CHILD_H, CHILD_GAP } from './TopologyNode'
 import { computeManifestLayout, buildParentNodeRecord } from '../utils/manifestLayout'
-import { nearestSide, groupCenter } from '../utils/canvasParts.js'
+import { nearestSide, groupCenter, groupAttestationBadge } from '../utils/canvasParts.js'
 import { useNodePositions } from '../hooks/useNodePositions'
 
 // Dynamic live layout — HARDWARE ONLY
@@ -1014,7 +1014,7 @@ export default function TopologyMap({ data, error, isDemo, hideCosts, onNodeSele
                 : g.planned ? PLANNED_COLOR
                 : (g.vmGroup || g.encrypted) ? CV_ACCENT
                 : 'var(--canvas-text-strong)'}
-              fontSize={10} fontWeight={600}>{g.label}</text>
+              fontSize={10} fontWeight={600}>{g.label}{g.parent ? groupAttestationBadge(g.parent, data?.nodes) : ''}</text>
             {!hideCosts && g.cost_yearly_usd > 0 && (
               <text x={g.x + g.w - 8} y={g.y + 16} textAnchor="end"
                 fill="var(--canvas-text-soft)" fontSize={8} fontFamily="monospace">
