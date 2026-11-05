@@ -60,7 +60,7 @@ a.button:focus-visible{outline:2px solid var(--navy);outline-offset:2px}
 .pd-card{position:relative;overflow:hidden;display:flex;gap:18px;padding:24px;background:#fff;
   border:1px solid var(--border);border-radius:12px;color:inherit;cursor:pointer;
   transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
-.pd-card:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.06);border-color:var(--orange)}
+.pd-card:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.06);border-color:var(--blue)}
 .pd-card-icon{flex:0 0 auto;width:52px;height:52px;border-radius:12px;background:rgba(0,0,85,.06);
   color:var(--blue);display:flex;align-items:center;justify-content:center;transition:transform .18s ease}
 .pd-card:hover .pd-card-icon{transform:scale(1.05)}
@@ -73,7 +73,7 @@ a.button:focus-visible{outline:2px solid var(--navy);outline-offset:2px}
 .pd-card-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
   opacity:0;transition:opacity .18s ease;pointer-events:none;border-radius:inherit}
 .pd-card:hover .pd-card-overlay{opacity:1}
-.pd-card-overlay-text{display:inline-flex;align-items:center;gap:8px;background:var(--orange);color:#fff;
+.pd-card-overlay-text{display:inline-flex;align-items:center;gap:8px;background:var(--blue);color:#fff;
   padding:10px 14px;border-radius:12px;font-size:19px;font-weight:500;box-shadow:0 4px 16px rgba(0,0,0,.12);white-space:nowrap}
 
 /* Quiet live-view line */
