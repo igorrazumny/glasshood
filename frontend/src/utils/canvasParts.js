@@ -147,12 +147,44 @@ export function isSpacer(id) {
 // A connects_to entry: a plain id is request/data flow; {to, style, label} sets the line style.
 export function connectionEdge(source, c) {
   const obj = typeof c === 'string' ? { to: c } : (c || {})
-  return {
+  const edge = {
     source,
     target: obj.to,
     label: obj.label || '',
     status: 'healthy',
     style: obj.style || 'default',
   }
+  // axis: 'v' leaves the bottom/top middle, 'h' the side middle (clause 9: steer a line
+  // around a neighbour, e.g. a branch below the static IP, a step past an attachment).
+  if (obj.axis === 'v' || obj.axis === 'h') edge.axis = obj.axis
+  return edge
 }
 
+
+// REQ-GHA-023 clause 9: request lines run straight or at right angles. The axis follows the
+// larger offset between the boxes (a step below joins bottom-middle to top-middle; a step
+// beside joins side middles); a box nested in a VM is always entered and left from the side.
+export function flowAnchors(src, tgt, fromC, toC, boxes, nested, prefer) {
+  const forceH = nested?.has(src) || nested?.has(tgt)
+  const dx = toC.x - fromC.x, dy = toC.y - fromC.y
+  const axis = forceH ? 'h' : (prefer || (Math.abs(dx) >= Math.abs(dy) ? 'h' : 'v'))
+  const port = (id, c, other) => {
+    const b = boxes?.[id]
+    if (!b) return c
+    if (axis === 'h') return { x: other.x < c.x ? c.x - b.hw : c.x + b.hw, y: c.y }
+    return { x: c.x, y: other.y < c.y ? c.y - b.hh : c.y + b.hh }
+  }
+  return { from: port(src, fromC, toC), to: port(tgt, toC, fromC), axis }
+}
+
+// A right-angled path: along the axis to the midpoint, across, then along again.
+export function elbowPath(from, to, axis) {
+  if (axis === 'h') {
+    if (Math.abs(from.y - to.y) < 0.5) return `M ${from.x} ${from.y} L ${to.x} ${to.y}`
+    const mx = (from.x + to.x) / 2
+    return `M ${from.x} ${from.y} H ${mx} V ${to.y} H ${to.x}`
+  }
+  if (Math.abs(from.x - to.x) < 0.5) return `M ${from.x} ${from.y} L ${to.x} ${to.y}`
+  const my = (from.y + to.y) / 2
+  return `M ${from.x} ${from.y} V ${my} H ${to.x} V ${to.y}`
+}
