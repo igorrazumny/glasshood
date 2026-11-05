@@ -199,3 +199,10 @@ def test_glasshood_is_an_mcp_client_of_coldvault_next_to_its_own_mcp_server():
                    "Recheck via MCP", "never call <code>ask</code>", "no key"):
         assert needle in section, needle
     assert ">MCP server</span>" in _HTML, "its own MCP server stays in the detail diagram"
+
+
+def test_the_implementation_rows_stack_on_phones():
+    # Sati's warning on #44: at 320 px the Host line's "app.glasshood.ai" widened the page by 22 px. On phones
+    # each label sits above its value, so no row is wider than the screen.
+    css = (_ARCH / "styles.css").read_text(encoding="utf-8")
+    assert "@media(max-width:480px){.impl-item{flex-direction:column;gap:2px}.impl-item>strong{flex:none}}" in css
