@@ -198,8 +198,11 @@ footer{margin:48px 0 36px;padding-top:20px;border-top:1px solid var(--border);fo
 .nav-in{max-width:var(--site-max);margin:0 auto;padding:0 24px;height:var(--masthead-h);
   display:flex;align-items:center}
 .nav-logo{display:block;flex-shrink:0}
-.nav-logo img{display:block;height:40px;width:auto;opacity:.6;transition:opacity .2s ease}
+/* The logo is as tall as 9robots.ai's: 43 px, and 39 px below 768 px. Its image is
+   trimmed so the mark fills the same share of the height as 9robots.ai's logo does. */
+.nav-logo img{display:block;height:43px;width:auto;opacity:.6;transition:opacity .2s ease}
 .nav-logo:hover img{opacity:1}
+@media (max-width:767px){.nav-logo img{height:39px}}
 .nav-links{display:flex;align-items:center;gap:24px;margin-left:auto}
 .nav-links a{padding:6px 12px 4px;border-bottom:2px solid transparent;color:var(--nav-sub);
   font-size:16px;font-weight:500;white-space:nowrap;text-decoration:none;transition:color .15s ease}
@@ -223,11 +226,13 @@ footer{margin:48px 0 36px;padding-top:20px;border-top:1px solid var(--border);fo
 .site-footer-links{display:flex;flex-wrap:wrap;gap:8px 28px}
 .site-footer-link{font-size:14px;color:var(--nav-sub);text-decoration:none;transition:color .15s ease}
 .site-footer-link:hover{color:var(--amber-ink);text-decoration:none}
-/* Below 768 px the logo and Open app share the first row and the page links take a
-   second, so nothing is squeezed (the logo never shrinks); the app state sits under
-   Open app. */
-@media (max-width:767px){
+/* Below 840 px the logo and Open app share the first row and the page links take a
+   second, so nothing is squeezed (the logo never shrinks): with the app's longest state
+   next to Open app, one row needs 837 px. Open app keeps 24 px from the logo: on the
+   narrowest phones it takes a row of its own instead. The app state sits under Open app. */
+@media (max-width:839px){
   .nav-in{height:auto;flex-wrap:wrap;align-items:flex-start;row-gap:10px;padding-top:14px;padding-bottom:8px}
+  .nav-logo{margin-right:24px}
   .nav-links{order:3;width:100%;gap:4px;margin-left:-10px}
   .nav-links a{padding:6px 10px 4px}
   .nav-app{flex-direction:column-reverse;align-items:flex-end;gap:4px;margin-left:auto}

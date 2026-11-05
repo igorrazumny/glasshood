@@ -314,3 +314,73 @@ def test_contact_has_labels_and_marks_the_required_fields():
     assert "Required fields" in html and '<div class="form-row">' in html
     css = _read(_PUB / "assets/site.css")
     assert '.form-label-required::after{content:" *"' in css
+
+
+# The masthead logo is as tall as 9robots.ai's (Igor, 2026-11-05). 9robots.ai sizes its logo
+# 43 px, and 39 px below 768 px (Tailwind's max-[768px] in 9robots-site
+# next/components/Nav.tsx), and its image, /img/9robots-logo.png (4535 x 982), has visible
+# pixels on rows 29 to 971: the mark fills 943/982 of the logo's height. GlassHood's masthead
+# logo uses the same sizes and an image trimmed to the same share, so both marks show at the
+# same height on every screen.
+_NAV_LOGO = ROOT / "architecture/img/glasshood-logo-nav.png"
+_NAV_IMG = '<img src="/architecture/img/glasshood-logo-nav.png" alt="GlassHood" width="579" height="132">'
+_NINEROBOTS_MARK_SHARE = 943 / 982
+
+
+def _png_rgba_rows(path):
+    """Width, height and decoded rows of an 8-bit, non-interlaced RGB or RGBA PNG."""
+    import struct
+    import zlib
+    data, pos, idat = path.read_bytes(), 8, b""
+    assert data[:8] == b"\x89PNG\r\n\x1a\n"
+    while pos < len(data):
+        length, kind = struct.unpack(">I4s", data[pos:pos + 8])
+        chunk = data[pos + 8:pos + 8 + length]
+        if kind == b"IHDR":
+            width, height, depth, ctype, _, _, interlace = struct.unpack(">IIBBBBB", chunk)
+            assert depth == 8 and ctype in (2, 6) and interlace == 0
+            bpp = 4 if ctype == 6 else 3
+        elif kind == b"IDAT":
+            idat += chunk
+        pos += 12 + length
+    raw, stride, prev, rows = zlib.decompress(idat), width * bpp, bytearray(width * bpp), []
+    for y in range(height):
+        kind, line = raw[y * (stride + 1)], bytearray(raw[y * (stride + 1) + 1:(y + 1) * (stride + 1)])
+        for i in range(stride):
+            a, b = (line[i - bpp] if i >= bpp else 0), prev[i]
+            c = prev[i - bpp] if i >= bpp else 0
+            if kind == 1: line[i] = (line[i] + a) & 255
+            elif kind == 2: line[i] = (line[i] + b) & 255
+            elif kind == 3: line[i] = (line[i] + (a + b) // 2) & 255
+            elif kind == 4:
+                p = a + b - c
+                pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
+                line[i] = (line[i] + (a if pa <= pb and pa <= pc else b if pb <= pc else c)) & 255
+        rows.append(bytes(line))
+        prev = line
+    return width, height, bpp, rows
+
+
+def _mark_share(path):
+    """The share of the image's height between its first and last visible row."""
+    width, height, bpp, rows = _png_rgba_rows(path)
+    visible = [y for y, row in enumerate(rows)
+               if any((row[x * bpp + 3] if bpp == 4 else 255) > 24 and sum(row[x * bpp:x * bpp + 3]) < 3 * 245
+                      for x in range(width))]
+    return width, height, (visible[-1] - visible[0] + 1) / height
+
+
+@pytest.mark.parametrize("page", _NAV_PAGES + (_ARCH / "index.html",), ids=lambda p: str(p.relative_to(ROOT)))
+def test_the_masthead_shows_the_trimmed_logo_at_its_true_size(page):
+    assert _NAV_IMG in _nav(_read(page))
+
+
+def test_the_masthead_logo_is_as_tall_as_9robots_ai():
+    css = _shared_block(_read(_PUB / "assets/site.css"))
+    assert ".nav-logo img{display:block;height:43px;" in css
+    assert "@media (max-width:767px){.nav-logo img{height:39px}}" in css
+    # The taller logo needs the row: below 840 px the page links move to a second row.
+    assert "@media (max-width:839px){ .nav-in{height:auto;flex-wrap:wrap;" in css
+    width, height, share = _mark_share(_NAV_LOGO)
+    assert (width, height) == (579, 132)
+    assert abs(share - _NINEROBOTS_MARK_SHARE) < 0.01, f"the mark fills {share:.3f} of the logo, 9robots.ai's {_NINEROBOTS_MARK_SHARE:.3f}"
