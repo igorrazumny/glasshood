@@ -121,6 +121,8 @@ pre.code{background:#f4f6fa;border-left:3px solid var(--blue);border-radius:4px;
 @media(min-width:680px){.impl-grid{grid-template-columns:1fr 1fr}}
 .impl-item{display:flex;gap:16px;padding:14px 18px;background:rgba(0,0,0,.025);border-radius:6px;font-size:19px;line-height:1.55}
 .impl-item>strong{flex:0 0 130px;color:var(--navy)}
+/* On phones the label sits above its value, so a long name such as app.glasshood.ai never widens the page. */
+@media(max-width:480px){.impl-item{flex-direction:column;gap:2px}.impl-item>strong{flex:none}}
 
 /* Collapsible "detail" block (identity mechanism) */
 details.detail-block{margin:10px 0;max-width:none}
