@@ -14,9 +14,6 @@ The static site in front of the GlassHood app (REQ-GHA-018): Home, Architecture,
 `/demo`, `/view`, `?demo` and `?view`, the older addresses of the live demo, go to
 app.glasshood.ai/demo.
 
-The app's state (asleep, waking up, awake, going to sleep) is read from the wake controller by
-`../architecture/app-state.js`; nothing is shown until its address is set there.
-
 Deploys run from `.github/workflows/website.yml` on a push to main that touches the site or the
 architecture page: build, upload to the two Azure Static Web Apps, verify. The pages and
 their wording are a first draft.

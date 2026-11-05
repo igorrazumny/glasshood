@@ -122,38 +122,23 @@ def test_both_hosts_revalidate_everything_and_send_security_headers():
         assert "immutable" not in json.dumps(cfg)
 
 
-# --- the app's state (clause 1) ---
-
-_STATE = _ARCH / "app-state.js"
-_STATES = ("asleep", "waking", "awake", "going-to-sleep")
-
-
-def test_the_state_is_read_from_the_controller_only_and_never_wakes_the_app():
-    src = _read(_STATE)
-    assert "CONTROLLER + '/status'" in src
-    assert "app.glasshood.ai" not in src, "loading a public page never contacts the app"
-    assert "POST" not in src and "method" not in src, "the public pages only read the state"
-    assert "credentials" not in src, "no cookies sent to the controller"
-    assert "typeof state === 'string'" in src, "only a string state is accepted"
-    assert "if (!CONTROLLER" in src, "nothing is requested while the controller's address is unset"
-    assert "var CONTROLLER = 'https://func-glasshood-wake.azurewebsites.net/api';" in src, \
-        "the state comes from the deployed wake controller (its base address, no trailing slash)"
-    labels = dict(re.findall(r"""['"]?([a-z-]+)['"]?:\s*'([^']+)'""", src.split("LABELS", 1)[1].split("}", 1)[0]))
-    assert set(labels) == set(_STATES), labels
+# --- the app's state (clause 1, amended 2026-11-05): the public pages do not show it ---
 
 
 @pytest.mark.parametrize("page", _NAV_PAGES + (_ARCH / "index.html",), ids=lambda p: str(p.relative_to(ROOT)))
-def test_every_public_page_shows_the_state(page):
+def test_no_public_page_shows_the_app_state(page):
     html = _read(page)
-    assert re.search(r'<span class="app-state" data-app-state role="status" hidden>', html)
-    assert "/architecture/app-state.js" in html
+    assert "app-state" not in html and "data-app-state" not in html
 
 
-def test_the_state_sits_with_open_app_and_with_launch_live_demo():
-    for page in _NAV_PAGES:
-        app = _read(page).split('<div class="nav-app">', 1)[1].split("</div>", 1)[0]
-        assert app.index("data-app-state") < app.index('href="https://app.glasshood.ai"')
-    assert re.search(r"Launch live demo</a><span class=\"app-state\" data-app-state", _read(_ARCH / "index.html"))
+def test_loading_the_public_pages_contacts_neither_the_app_nor_its_wake_controller():
+    assert not (_ARCH / "app-state.js").exists()
+    served = [p for p in list(_PUB.rglob("*")) + list(_ARCH.rglob("*")) + list((_W / "architecture").rglob("*"))
+              if p.is_file() and p.suffix in {".html", ".css", ".js", ".json"}]
+    for p in served:
+        assert "func-glasshood-wake" not in _read(p), p
+    for script in [p for p in served if p.suffix == ".js"]:
+        assert "app.glasshood.ai" not in _read(script), script
 
 
 # --- one set of architecture files at both addresses (clause 2) ---

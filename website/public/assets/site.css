@@ -80,13 +80,6 @@ a:hover{text-decoration:underline}
 }
 /* ==== masthead and footer: end ==== */
 
-/* ---- The app's state (REQ-GHA-018 clause 1), filled in by /architecture/app-state.js */
-.app-state{display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:13px;color:var(--sub)}
-.app-state[hidden]{display:none}
-.app-state-dot{width:8px;height:8px;border-radius:50%;background:#9aa3b2}
-.app-state[data-state="waking"] .app-state-dot,
-.app-state[data-state="going-to-sleep"] .app-state-dot{background:var(--amber)}
-.app-state[data-state="awake"] .app-state-dot{background:#1f9d55}
 
 /* ---- Page body */
 .wrap{max-width:var(--max);margin:0 auto;padding:0 24px;width:100%}

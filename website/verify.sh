@@ -53,20 +53,20 @@ S="$OUT/site"
 serves "$SITE/" "$S/index.html"
 serves "$SITE/contact/" "$S/contact/index.html"
 serves "$SITE/architecture/" "$S/architecture/index.html"
-for f in assets/site.css assets/contact.js architecture/app-state.js architecture/app.js architecture/styles.css robots.txt sitemap.xml; do
+for f in assets/site.css assets/contact.js architecture/app.js architecture/styles.css robots.txt sitemap.xml; do
   serves "$SITE/$f" "$S/$f"
 done
-for f in architecture/ architecture/app.js architecture/app-state.js architecture/styles.css; do revalidates "$SITE/$f"; done
+for f in architecture/ architecture/app.js architecture/styles.css; do revalidates "$SITE/$f"; done
 for p in /demo /demo/ /view; do forwards "$SITE$p" "https://app.glasshood.ai/demo"; done
 missing "$SITE/no-such-page/"
 get "$SITE/" >/dev/null && grep -qi '^x-content-type-options: *nosniff' "$TMP/head" || fail "$SITE/: no X-Content-Type-Options"
 
 A="$OUT/architecture"
 serves "$ARCH/" "$A/index.html"
-for f in architecture/app.js architecture/app-state.js architecture/styles.css architecture/img/glasshood-logo.png; do
+for f in architecture/app.js architecture/styles.css architecture/img/glasshood-logo.png; do
   serves "$ARCH/$f" "$A/$f"
 done
-for f in "" architecture/app.js architecture/app-state.js architecture/styles.css; do revalidates "$ARCH/$f"; done
+for f in "" architecture/app.js architecture/styles.css; do revalidates "$ARCH/$f"; done
 missing "$ARCH/no-such-page/"
 
 if [ "$FAILED" -ne 0 ]; then echo "Verification FAILED for $SITE and $ARCH" >&2; exit 1; fi
