@@ -75,11 +75,13 @@ export default function NodeDetailModal({ node, onClose, isDemo, hideCosts }) {
   // REQ-GHA-024: read this part's overview from the cache, and again every minute while the
   // modal is open, so a newly written overview appears. Reading never triggers the model.
   const [now, setNow] = useState(Date.now())
+  const [readError, setReadError] = useState('')
   useEffect(() => {
     if (!node || isDemo) return
     const load = () => apiFetch(`/api/analysis/node/${node.id}`)
-      .then(setNodeAnalysis)
-      .catch(() => setNodeAnalysis(null))
+      .then(a => { setNodeAnalysis(a); setReadError('') })
+      // A failed read keeps the overview already shown and says why (clause 7).
+      .catch(e => setReadError(`Could not reload this overview (${e?.message || 'network error'})`))
     load()
     const t = setInterval(() => { setNow(Date.now()); load() }, 60000)
     return () => clearInterval(t)
@@ -229,7 +231,7 @@ export default function NodeDetailModal({ node, onClose, isDemo, hideCosts }) {
                 )}
               </div>
               {/* REQ-GHA-024: per-part overviews are written every 3 hours; no on-demand call */}
-              <span className="text-xs text-gray-500 dark:text-purple-300">{overviewStamp(nodeAnalysis, now)}</span>
+              <span className="text-xs text-gray-500 dark:text-purple-300">{overviewStamp(nodeAnalysis, now)}{readError ? ` · ${readError}` : ''}</span>
             </div>
 
             {/* Stale/refreshing banner */}

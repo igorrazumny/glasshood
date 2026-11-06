@@ -191,11 +191,47 @@ def test_no_credential_value_leaves_in_any_field(monkeypatch):
     for canary in ("CANARY_JSON_LOG", "CANARY_MSG", "CANARY_CHECK", "CANARY_METRIC", "CANARY_NESTED",
                    "CANARY_ALERT", "hunter2", "abc.def"):
         assert canary not in sent, canary
-    assert "[redacted]" in sent
+    assert "[redacted" in sent
 
 
 def test_sanitize_keeps_structure():
-    assert ov.sanitize({"a": [{"token": "x"}, "password: y"], "n": 3}) == {"a": [{"token": "[redacted]"}, "[redacted]"], "n": 3}
+    assert ov.sanitize({"a": [{"token": "x"}, "password: y"], "n": 3}) == \
+        {"a": [{"token": "[redacted]"}, "[redacted line]"], "n": 3}
+
+
+def test_free_text_credentials_go_whole(monkeypatch):
+    """B2: the whole credential value or block leaves, not only its marker."""
+    seen = []
+    pem = "-----BEGIN PRIVATE KEY-----\nCANARY_PEM_BODY\n-----END PRIVATE KEY-----"
+    entries = [
+        {"timestamp": "t", "severity": "ERROR", "textPayload": "Authorization: Basic Q0FOQVJZX0JBU0lDOnB3"},
+        {"timestamp": "t", "severity": "ERROR", "textPayload": f"loaded key {pem} ok"},
+        {"timestamp": "t", "severity": "ERROR", "textPayload": 'config password = "CANARY quoted with spaces"'},
+        {"timestamp": "t", "severity": "ERROR", "textPayload": "first line fine\nsecret: CANARY_MULTILINE tail"},
+        {"timestamp": "t", "severity": "ERROR", "jsonPayload": {"message": "ctx\\nAuthorization: Basic CANARY_ESCAPED"}},
+    ]
+    _route(monkeypatch, _answer({"summary": "x"}), seen, entries)
+    ov.run_system(TOPO)
+    sent = seen[0]["contents"][0]["parts"][0]["text"]
+    for canary in ("Q0FOQVJZX0JBU0lDOnB3", "CANARY_PEM_BODY", "END PRIVATE KEY", "CANARY quoted",
+                   "CANARY_MULTILINE", "CANARY_ESCAPED"):
+        assert canary not in sent, canary
+    assert "first line fine" in sent  # only the credential line goes
+
+
+def test_a_failed_read_after_a_good_one_stops_calls(monkeypatch):
+    """B3: availability is invalidated on every failed read."""
+    _route(monkeypatch, _answer({"summary": "ok"}))
+    ov.run_system(TOPO)
+    calls = ov.get_spend()["calls"]
+
+    def boom():
+        raise RuntimeError("Cloud Monitoring HTTP 503")
+    monkeypatch.setattr(ov, "_monitoring_today", boom)
+    ov.refresh_durable_spend()
+    ov.run_system(TOPO)
+    assert ov.get_spend()["calls"] == calls and ov.get_spend()["usage_read"] is False
+    assert "could not be read" in ov.get_system()["error"]
 
 
 def test_model_text_is_plain_data_bounded(monkeypatch):

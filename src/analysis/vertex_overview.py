@@ -69,8 +69,14 @@ _SECRETS = re.compile(
     r"|-----BEGIN [A-Z ]*PRIVATE KEY-----)")
 
 
+_PEM_BLOCK = re.compile(r"-----BEGIN [A-Z0-9 ]*-----.*?(-----END [A-Z0-9 ]*-----|$)", re.S)
+
+
 def redact(text: str) -> str:
-    return _SECRETS.sub("[redacted]", text or "")
+    """Remove credentials from free text. A key block goes whole; any line that carries a
+    credential marker is dropped entirely, since its value cannot be told from the rest reliably."""
+    text = _PEM_BLOCK.sub("[redacted block]", text or "")
+    return "\n".join("[redacted line]" if _SECRETS.search(line) else line for line in text.split("\n"))
 
 
 def sanitize(obj):
@@ -161,7 +167,9 @@ def refresh_durable_spend() -> None:
         if _spend.get("day") != _today():
             _spend.clear(); _spend.update(_new_day())
         if mon is None:
+            # Fail closed on every failed read, not only on a fresh process.
             _spend["read_error"] = err
+            _spend["durable_read"] = False
             return
         _spend["durable_calls"] = max(mon["calls"], _spend["durable_calls"] + _spend["local_calls"])
         _spend["durable_in"] = max(mon["in"], _spend["durable_in"] + _spend["local_in"])
