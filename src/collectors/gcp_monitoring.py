@@ -26,6 +26,54 @@ _stats: dict = {
 _LB_METRICS = ("lb_latency_ms", "lb_request_count_1h")
 
 
+def _bucket_bounds(kind: str, params: dict, n: int) -> list[tuple]:
+    """(lower, upper) of each of n buckets of a Cloud Monitoring distribution: an
+    underflow bucket, the finite buckets, then an overflow bucket."""
+    inf = float("inf")
+    if kind == "explicit_buckets":
+        b = list(params["bounds"])
+        edges = [-inf] + b + [inf]
+    else:
+        finite = int(params["num_finite_buckets"])
+        if kind == "linear_buckets":
+            edges = [params["offset"] + params["width"] * i for i in range(finite + 1)]
+        else:  # exponential_buckets
+            edges = [params["scale"] * params["growth_factor"] ** i for i in range(finite + 1)]
+        edges = [-inf] + edges + [inf]
+    return [(edges[i], edges[i + 1]) for i in range(min(n, len(edges) - 1))]
+
+
+def _options(bucket_options) -> tuple:
+    kind = type(bucket_options).pb(bucket_options).WhichOneof("options")
+    o = getattr(bucket_options, kind)
+    if kind == "explicit_buckets":
+        return kind, {"bounds": list(o.bounds)}
+    if kind == "linear_buckets":
+        return kind, {"num_finite_buckets": o.num_finite_buckets, "width": o.width, "offset": o.offset}
+    return kind, {"num_finite_buckets": o.num_finite_buckets, "growth_factor": o.growth_factor,
+                  "scale": o.scale}
+
+
+def median_from_buckets(counts: dict) -> float | None:
+    """Median of a merged distribution {(lower, upper): count}, interpolated inside the
+    bucket that holds the middle request (REQ-GHA-028 clause 3: typical response time,
+    so one long chat answer does not move it)."""
+    total = sum(counts.values())
+    if total <= 0:
+        return None
+    target, seen = total / 2, 0
+    for (lower, upper), c in sorted(counts.items()):
+        if c <= 0:
+            continue
+        if seen + c >= target:
+            lo = max(lower, 0.0)
+            if upper == float("inf"):
+                return lo
+            return lo + (upper - lo) * (target - seen) / c
+        seen += c
+    return None
+
+
 def _series(client, request_cls, project: str, metric_type: str, scope: str, interval):
     return client.list_time_series(request=request_cls(
         name=f"projects/{project}",
@@ -67,17 +115,24 @@ async def poll_once():
 
             if lb:
                 stats["parts"].update({m: lb["part"] for m in _LB_METRICS})
-                # LB backend latency
+                # LB backend latency: the median request of the hour, from the
+                # per-minute distributions merged bucket by bucket (REQ-GHA-028)
                 try:
-                    latencies = []
+                    merged: dict = {}
                     for ts in _series(client, ListTimeSeriesRequest, lb["project"],
                                       "loadbalancing.googleapis.com/https/backend_latencies",
                                       lb["filter"], interval):
                         for point in ts.points:
-                            if point.value.distribution_value.count > 0:
-                                latencies.append(point.value.distribution_value.mean)
-                    if latencies:
-                        stats["lb_latency_ms"] = round(sum(latencies) / len(latencies), 1)
+                            dist = point.value.distribution_value
+                            if dist.count <= 0 or not dist.bucket_counts:
+                                continue
+                            kind, params = _options(dist.bucket_options)
+                            bounds = _bucket_bounds(kind, params, len(dist.bucket_counts))
+                            for b, c in zip(bounds, dist.bucket_counts):
+                                merged[b] = merged.get(b, 0) + int(c)
+                    median = median_from_buckets(merged)
+                    if median is not None:
+                        stats["lb_latency_ms"] = round(median, 1)
                 except Exception as e:
                     logger.debug(f"LB latency query failed: {e}")
 

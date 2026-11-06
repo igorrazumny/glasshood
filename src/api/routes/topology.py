@@ -320,6 +320,8 @@ def _build_topology() -> dict:
         "monitoring": monitoring_stats,
         "logging": logging_stats,
         "security": security_stats,
+        # REQ-GHA-028: ColdVault's own readings; the landscape file's alarms name the part
+        "coldvault": coldvault.alarm_data(),
         "anomaly": {**anomaly_stats, "anomalies": anomaly_list, "parts": anomaly_parts,
                     "read": bool(ANOMALY_DETECTION_ENABLED)},
     }, labels=part_labels)

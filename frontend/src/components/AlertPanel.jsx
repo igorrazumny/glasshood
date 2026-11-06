@@ -2,10 +2,11 @@
 // Purpose: Display active Layer 1 rule engine alerts
 // REQ-GHA-027: only alarms whose condition holds now, each once, in plain words;
 // recently resolved alarms and rules without data are listed underneath.
+// REQ-GHA-028: alarms not yet trusted carry an "example" or "observation" tag.
 
 import { useState } from 'react'
 import { AlertTriangle, AlertOctagon, Info, CheckCircle } from 'lucide-react'
-import { alarmTitle, alarmWhen, resolvedWhen, notCheckedNames } from '../utils/alarms'
+import { alarmTitle, alarmWhen, resolvedWhen, notCheckedNames, alarmKindLabel, sortAlarms } from '../utils/alarms'
 
 // REQ-009: severity styles get dark: variants. Light uses bg-100 + text-700
 // for readable contrast on white card; dark keeps the /10 alpha + light text.
@@ -30,9 +31,8 @@ export default function AlertPanel({ alerts, resolved, rules, onSelect }) {
   if (!alerts?.length && !resolved?.length && !notChecked.length) return null
   alerts = alerts || []
 
-  // Sort: critical first, then warning, then info
-  const order = { critical: 0, warning: 1, info: 2 }
-  const sorted = [...alerts].sort((a, b) => (order[a.severity] ?? 3) - (order[b.severity] ?? 3))
+  // Critical first, then warning; real alarms before examples (REQ-GHA-028)
+  const sorted = sortAlarms(alerts)
 
   const criticalCount = alerts.filter(a => a.severity === 'critical').length
   const warningCount = alerts.filter(a => a.severity === 'warning').length
@@ -64,7 +64,14 @@ export default function AlertPanel({ alerts, resolved, rules, onSelect }) {
               className={`flex items-start gap-2 ${style.bg} ${style.border} border rounded px-2 py-1.5 ${onSelect ? 'cursor-pointer hover:brightness-95 dark:hover:brightness-125' : ''}`}>
               <Icon size={12} className={`${style.color} mt-0.5 flex-shrink-0`} />
               <div className="min-w-0 flex-1">
-                <p className={`text-sm ${style.color} leading-snug`}>{alarmTitle(alert)}</p>
+                <p className={`text-sm ${style.color} leading-snug`}>
+                  {alarmKindLabel(alert) && (
+                    <span className="text-[10px] font-semibold uppercase mr-1.5 px-1 py-px rounded border border-gray-400 dark:border-purple-400 text-gray-600 dark:text-purple-200">
+                      {alarmKindLabel(alert)}
+                    </span>
+                  )}
+                  {alarmTitle(alert)}
+                </p>
                 <p className="text-xs text-gray-500 dark:text-purple-300 mt-0.5">{alarmWhen(alert)}</p>
               </div>
             </div>
