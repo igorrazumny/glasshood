@@ -44,11 +44,11 @@
 <main class="pd-page">
   <section class="hero">
     <div class="wrap hero-body">
-      <h1 class="hero-title"><span class="hero-title-first">Cross-cloud AI-infrastructure monitoring</span> <span class="hero-title-rest">for regulated systems.</span></h1>
+      <h1 class="hero-title"><span class="hero-title-first">AI monitoring for integration pipelines</span> <span class="hero-title-rest">and the complex systems around them.</span></h1>
       <p class="hero-text">
-        GlassHood is a cross-cloud monitoring engine for regulated systems: live topology reconciled
-        against declared design, with compliance evidence derived from what it observes. It runs on
-        Azure and reads a Google Cloud estate through Workload Identity Federation &mdash; no stored keys.
+        GlassHood watches the systems in an integration pipeline and the connections between them, live, and shows
+        them on one dashboard: every part on a live map, checked against the declared design, with alerts and a short
+        AI overview of what needs attention. It installs nothing in the systems it watches and only reads them.
       </p>
       <div class="cta">
         <a class="button" href="https://app.glasshood.ai/demo">Live demo &rarr;</a>
@@ -59,56 +59,79 @@
 
   <!-- The explainer goes here once it exists (REQ-GHA-018 clause 1). -->
 
-  <section class="wrap features" aria-label="What GlassHood does">
-    <a href="#read-only" class="feature pd-card" data-target="read-only">
-      <span class="feature-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></span>
-      <h2 class="feature-title">Read-only by design</h2>
-      <p class="feature-text">GlassHood installs nothing in the system it watches. Every call toward the
-        monitored cloud project is list, get or describe, made with a short-lived, viewer-only federated token.</p>
+  <section class="wrap features" aria-label="What GlassHood is, the problem it solves and how it works">
+    <a href="#what-it-is" class="feature pd-card" data-target="what-it-is">
+      <span class="feature-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></svg></span>
+      <h2 class="feature-title">What it is</h2>
+      <p class="feature-text">AI monitoring, with dashboards, of integration pipelines and other complex systems: one live view of every part,
+        every connection and its health.</p>
       <span class="pd-card-overlay" aria-hidden="true"><span class="pd-card-overlay-text">Click to read the section &rarr;</span></span>
     </a>
-    <a href="#live-topology" class="feature pd-card" data-target="live-topology">
-      <span class="feature-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4"/><path d="m15.4 6.5-6.8 4"/></svg></span>
-      <h2 class="feature-title">Live topology against declared design</h2>
-      <p class="feature-text">Live discovery is merged with declarative YAML manifests into one graph, rebuilt
-        every cycle, so the gap between what was designed and what is actually running is visible.</p>
+    <a href="#the-problem" class="feature pd-card" data-target="the-problem">
+      <span class="feature-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></span>
+      <h2 class="feature-title">The problem it solves</h2>
+      <p class="feature-text">In a chain of connected systems, a failure often shows up somewhere else and later, and each team sees only its
+        own part.</p>
       <span class="pd-card-overlay" aria-hidden="true"><span class="pd-card-overlay-text">Click to read the section &rarr;</span></span>
     </a>
-    <a href="#compliance" class="feature pd-card" data-target="compliance">
-      <span class="feature-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m9 15 2 2 4-4"/></svg></span>
-      <h2 class="feature-title">Compliance as a byproduct of observation</h2>
-      <p class="feature-text">Evidence is derived from what the engine observed, not self-attestation &mdash; aligned to
-        Annex 11 / ALCOA+ / Part 11.</p>
+    <a href="#how-it-works" class="feature pd-card" data-target="how-it-works">
+      <span class="feature-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="6" height="6" rx="1"/><rect x="15" y="15" width="6" height="6" rx="1"/><path d="M6 9v3a3 3 0 0 0 3 3h6"/></svg></span>
+      <h2 class="feature-title">How it works</h2>
+      <p class="feature-text">Read-only collectors, one live model checked against the design, deterministic signals first with AI on top,
+        and compliance evidence from what it observed.</p>
       <span class="pd-card-overlay" aria-hidden="true"><span class="pd-card-overlay-text">Click to read the section &rarr;</span></span>
     </a>
   </section>
 
-  <!-- Opened by the cards above (/architecture/app.js, as on the architecture page). The text restates
-       the architecture page's matching sections (REQ-GHA-018 clause 14, amended 2026-11-05). -->
+  <!-- Opened by the cards above (/architecture/app.js, as on the architecture page). Home answers what GlassHood is,
+       the problem it solves and how it works (REQ-GHA-018 clauses 1 and 14, amended 2026-11-06; wording approved by
+       Igor). How it works restates the architecture page: the three parts that were Home's cards until then, and its
+       analysis section, in the page's order. -->
   <div class="pd-hidden-until-reveal">
-    <section class="wrap home-detail" id="read-only">
-      <h2>Read-only by design</h2>
+    <section class="wrap home-detail" id="what-it-is">
+      <h2>What it is</h2>
+      <p>GlassHood connects to a running system &mdash; today a solution on Google Cloud, read from Azure &mdash; and builds
+        one live picture of it: every part, every connection between them and their health, refreshed every cycle. It
+        merges what it discovers with the system's declared design, so the gap between the design and what actually runs
+        is visible. Rules and anomaly detection raise the alerts; an AI overview then says in a few sentences how the
+        whole system is doing and what needs attention, and each part has its own. Operators and business readers see
+        the same dashboard, and nothing they do there changes the monitored system.</p>
+    </section>
+    <section class="wrap home-detail" id="the-problem">
+      <h2>The problem it solves</h2>
+      <p>Integration pipelines fail quietly. A connection stops, a message no longer arrives, a service is replaced and an
+        interface is left behind, and the first sign is often a wrong result further down the chain. Each team watches
+        its own system with its own tool, so nobody sees the whole chain at once, and the design on paper drifts away
+        from what actually runs. GlassHood puts the whole chain in one view, compares it with the declared design, and
+        points at the part where it breaks.</p>
+    </section>
+    <section class="wrap home-detail" id="how-it-works">
+      <h2>How it works</h2>
+      <h3>Read-only by design</h3>
       <p>GlassHood installs nothing in the system it watches. Toward the monitored cloud project, every call is list,
         get or describe; nothing creates, changes or deletes anything there. Read-only is enforced twice: by that
         call surface, and by the identity itself, a short-lived, viewer-only federated token with no stored keys.
         Even a full compromise of the engine cannot write to the monitored cloud project, and there is no stored
         cloud key to steal.</p>
-    </section>
-    <section class="wrap home-detail" id="live-topology">
-      <h2>Live topology against declared design</h2>
+      <h3>Live topology against declared design</h3>
       <p>Auto-discovery alone misses nodes it cannot enumerate and carries no intended state; a declarative manifest
         alone goes stale the moment it is written. GlassHood merges both: live discovery is overlaid with declarative
         YAML manifests into a single graph, rebuilt with fresh metrics every cycle. Because observed reality and
         declared intent sit in one model, the gap between what was designed and what is actually running is visible,
         and change between cycles is tracked.</p>
-    </section>
-    <section class="wrap home-detail" id="compliance">
-      <h2>Compliance as a byproduct of observation</h2>
+      <h3>Deterministic signals first, AI on top</h3>
+      <p>Every alert comes from a deterministic and statistical tier: threshold rules, anomaly detection over a rolling
+        baseline, and a correlator that ties anomalies to operational alerts. AI runs strictly on top and explains them;
+        it never raises an alert itself, so every conclusion rests on a signal a person can reproduce without the model.</p>
+      <h3>Compliance as a byproduct of observation</h3>
       <p>Compliance is not a pre-baked attestation. Reports are generated on demand from what the engine actually
         observed (rule alerts, CVE findings and anomalies), with a per-subsystem ALCOA+ audit trail: the evidence is
         the observation. The reports are aligned to EU GMP Annex 11, ALCOA+ and 21 CFR Part 11 and support human
         review. They are unsigned and are not an independent validation or certification; a qualified person
         reviews and adopts every artifact.</p>
+      <div class="cta home-detail-cta">
+        <a class="button" href="/architecture/">See the architecture &rarr;</a>
+      </div>
     </section>
   </div>
 </main>
