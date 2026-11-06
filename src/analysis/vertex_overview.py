@@ -252,11 +252,14 @@ def call_model(system_prompt: str, user_text: str, max_tokens: int = 600,
     _record_usage(data.get("usageMetadata") or {})
     first = (data.get("candidates") or [{}])[0]
     text = "".join(p.get("text", "") for p in (first.get("content") or {}).get("parts", []))
-    chunks = (first.get("groundingMetadata") or {}).get("groundingChunks") or []
-    sources = [{"title": str(c["web"].get("title", ""))[:200], "uri": str(c["web"].get("uri", ""))}
-               for c in chunks if isinstance(c, dict) and isinstance(c.get("web"), dict)
-               and str(c["web"].get("uri", "")).startswith("https://")]
-    return text, sources[:8]
+    grounding = first.get("groundingMetadata") or {}
+    # The searches the model made, then the pages it drew on (often absent with a JSON answer)
+    sources = [{"query": str(q)[:200]} for q in (grounding.get("webSearchQueries") or [])[:4]]
+    sources += [{"title": str(c["web"].get("title", ""))[:200], "uri": str(c["web"].get("uri", ""))}
+                for c in (grounding.get("groundingChunks") or [])[:8]
+                if isinstance(c, dict) and isinstance(c.get("web"), dict)
+                and str(c["web"].get("uri", "")).startswith("https://")]
+    return text, sources
 
 
 def parse_json(text: str):
