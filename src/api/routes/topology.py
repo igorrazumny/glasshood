@@ -298,12 +298,12 @@ def _build_topology() -> dict:
     monitoring_stats = gcp_monitoring.get_stats()
     from src.security.cve_scanner import get_stats as get_security_stats
     security_stats = get_security_stats()
-    from src.security.anomaly_detector import detect_anomalies
+    from src.security.anomaly_detector import get_anomalies
     from src.security.anomaly_detector import get_stats as get_anomaly_stats
     from src.config.settings import ANOMALY_DETECTION_ENABLED
-    anomaly_list = []
-    if ANOMALY_DETECTION_ENABLED:
-        anomaly_list = detect_anomalies(monitoring_stats, logging_stats, security_stats)
+    # REQ-GHA-026: anomalies are judged when a collector reads (judge_fresh_readings);
+    # a page view only reads the stored verdicts, so viewing never changes them.
+    anomaly_list = get_anomalies() if ANOMALY_DETECTION_ENABLED else []
     anomaly_stats = get_anomaly_stats()
     from src.rules.engine import evaluate_rules, track_findings, get_resolved, get_rule_status
     # REQ-GHA-023 clause 6 / REQ-GHA-027: drift and leftovers are alarms on their part,
@@ -311,8 +311,10 @@ def _build_topology() -> dict:
     from src.collectors.gcp_resources import get_findings
     part_labels = _manifest_labels()
     track_findings(get_findings(), nodes, part_labels)
-    anomaly_parts = dict(monitoring_stats.get("parts") or {})
-    if logging_stats.get("part"):
+    # Only metrics with a reading can end an alarm: a failed query is not a recovery
+    anomaly_parts = {m: p for m, p in (monitoring_stats.get("parts") or {}).items()
+                     if monitoring_stats.get(m) is not None}
+    if logging_stats.get("part") and logging_stats.get("error_count_15m") is not None:
         anomaly_parts["error_count_15m"] = logging_stats["part"]
     alerts = evaluate_rules(nodes, {
         "monitoring": monitoring_stats,

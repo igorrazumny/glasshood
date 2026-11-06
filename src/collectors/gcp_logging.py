@@ -62,6 +62,9 @@ async def poll_once():
             "read_at": now,
             "part": source["part"],
         }
+        # Judge this reading now, not when someone opens the page (REQ-GHA-026)
+        from src.security.anomaly_detector import judge_fresh_readings
+        judge_fresh_readings()
     except Exception as e:
         logger.warning(f"GCP Logging poll failed: {e}")
         _stats["last_poll"] = time.time()
