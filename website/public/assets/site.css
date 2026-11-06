@@ -71,7 +71,7 @@ a:hover{text-decoration:underline}
    second, so nothing is squeezed (the logo never shrinks); Log in keeps 24 px from the logo.
    From 768 px one row holds everything with at least 32 px between the logo and the links. */
 @media (max-width:767px){
-  .nav-in{height:auto;flex-wrap:wrap;align-items:flex-start;row-gap:10px;padding-top:14px;padding-bottom:8px}
+  .nav-in{height:auto;flex-wrap:wrap;align-items:center;row-gap:10px;padding-top:14px;padding-bottom:8px}
   .nav-logo{margin-right:24px}
   .nav-links{order:3;width:100%;gap:4px;margin-left:-10px}
   .nav-links a{padding:6px 10px 4px}
