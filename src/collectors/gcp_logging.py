@@ -10,7 +10,8 @@ from src.config.settings import GCP_PROJECT_ID, GCP_POLL_INTERVAL
 
 logger = logging.getLogger(__name__)
 
-_stats: dict = {"error_count_15m": 0, "recent_errors": [], "last_poll": 0}
+# read_at: time of the last successful reading (failed polls leave it unchanged)
+_stats: dict = {"error_count_15m": 0, "recent_errors": [], "last_poll": 0, "read_at": None}
 
 
 async def poll_once():
@@ -45,10 +46,12 @@ async def poll_once():
             return len(entries), errors
 
         count, errors = await loop.run_in_executor(None, _query)
+        now = time.time()
         _stats = {
             "error_count_15m": count,
             "recent_errors": errors,
-            "last_poll": time.time(),
+            "last_poll": now,
+            "read_at": now,
         }
     except Exception as e:
         logger.warning(f"GCP Logging poll failed: {e}")

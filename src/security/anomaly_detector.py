@@ -19,24 +19,44 @@ _lock = threading.Lock()
 # ALCOA+ audit trail for anomaly detection cycles
 _audit_log: collections.deque = collections.deque(maxlen=200)
 
+# Which collector reading each metric was last judged on, and the verdict
+# (REQ-GHA-026): a page view repeats the verdict, only a fresh reading changes it.
+_judged: dict[str, tuple[float, dict | None]] = {}
+
+# Which collector stats dict carries each metric; its "read_at" marks a fresh reading
+_METRIC_SOURCE = {
+    "error_count_15m": "logging",
+    "lb_latency_ms": "monitoring",
+    "lb_request_count_1h": "monitoring",
+    "vm_cpu_percent": "monitoring",
+}
+
 
 class BaselineTracker:
-    """Rolling window statistics per metric. Tracks mean and stddev."""
+    """Rolling window statistics per metric. Tracks mean and stddev.
 
-    def __init__(self, window_size: int = 60, min_points: int = 5):
+    A point is kept while it is at most window_seconds older than the newest
+    point of that metric, and at most window_size points are kept."""
+
+    def __init__(self, window_size: int = 60, min_points: int = 5,
+                 window_seconds: float | None = None):
         self.window_size = window_size
         self.min_points = min_points
+        self.window_seconds = window_seconds
         self._data: dict[str, collections.deque] = {}
 
-    def update(self, metric: str, value: float) -> None:
-        """Add a data point to the rolling window."""
-        if metric not in self._data:
-            self._data[metric] = collections.deque(maxlen=self.window_size)
-        self._data[metric].append(value)
+    def update(self, metric: str, value: float, ts: float | None = None) -> None:
+        """Add a data point (taken at ts, default now) to the rolling window."""
+        ts = time.time() if ts is None else ts
+        window = self._data.setdefault(metric, collections.deque(maxlen=self.window_size))
+        window.append((ts, value))
+        if self.window_seconds:
+            while window and window[0][0] < ts - self.window_seconds:
+                window.popleft()
 
     def get_stats(self, metric: str) -> dict:
         """Return mean, stddev, count for a metric."""
-        values = self._data.get(metric, [])
+        values = [v for _, v in self._data.get(metric, [])]
         n = len(values)
         if n == 0:
             return {"mean": 0.0, "stddev": 0.0, "count": 0}
@@ -46,18 +66,25 @@ class BaselineTracker:
         variance = sum((v - mean) ** 2 for v in values) / (n - 1)
         return {"mean": mean, "stddev": math.sqrt(variance), "count": n}
 
-    def is_anomalous(self, metric: str, value: float, sigma: float = 3.0) -> tuple[bool, float]:
+    def is_anomalous(self, metric: str, value: float, sigma: float = 3.0,
+                     min_change: float = 0.0) -> tuple[bool, float]:
         """Check if value is anomalous. Returns (is_anomaly, z_score).
-        Returns (False, 0.0) if insufficient data points."""
+        Returns (False, 0.0) if insufficient data points.
+
+        A change smaller than min_change never counts, and the spread used for
+        the z-score is never below min_change, so a flat baseline cannot make a
+        small step look infinitely unusual (REQ-GHA-026)."""
         stats = self.get_stats(metric)
         if stats["count"] < self.min_points:
             return False, 0.0
-        if stats["stddev"] == 0:
-            # Constant baseline: any different value is anomalous
-            if value != stats["mean"]:
-                return True, float("inf") if value > stats["mean"] else float("-inf")
+        delta = value - stats["mean"]
+        if abs(delta) < min_change or delta == 0:
             return False, 0.0
-        z_score = (value - stats["mean"]) / stats["stddev"]
+        spread = max(stats["stddev"], min_change)
+        if spread == 0:
+            # Flat baseline and no minimum change configured: a warning at most
+            return True, 0.0
+        z_score = delta / spread
         return abs(z_score) > sigma, z_score
 
     def all_baselines(self) -> dict:
@@ -82,86 +109,104 @@ def _load_config(path: str) -> dict:
         return {}
 
 
+def _current_values(monitoring_stats: dict, logging_stats: dict) -> dict:
+    sources = {"monitoring": monitoring_stats, "logging": logging_stats}
+    return {metric: sources[src].get(metric) for metric, src in _METRIC_SOURCE.items()}
+
+
 def update_baselines(monitoring_stats: dict, logging_stats: dict) -> None:
     """Feed current collector data into baseline tracker."""
-    metrics_to_track = {
-        "error_count_15m": logging_stats.get("error_count_15m"),
-        "lb_latency_ms": monitoring_stats.get("lb_latency_ms"),
-        "lb_request_count_1h": monitoring_stats.get("lb_request_count_1h"),
-        "vm_cpu_percent": monitoring_stats.get("vm_cpu_percent"),
-    }
-    for metric, value in metrics_to_track.items():
+    for metric, value in _current_values(monitoring_stats, logging_stats).items():
         if value is not None:
             _tracker.update(metric, float(value))
 
 
+def _judge(metric: str, value: float, config: dict, now_iso: str) -> dict | None:
+    """Judge one reading against the baseline as it stands. Returns an anomaly or None."""
+    mc = config.get("metrics", {}).get(metric, {})
+    sigma = mc.get("sigma", config.get("sigma_threshold", 3.0))
+    min_change = float(mc.get("min_change", 0.0))
+    fallback = mc.get("fallback_threshold")
+
+    is_anomaly, z_score = _tracker.is_anomalous(metric, value, sigma, min_change)
+
+    # Fallback: if baseline not warmed up, use static threshold
+    if not is_anomaly and fallback is not None:
+        stats = _tracker.get_stats(metric)
+        if stats["count"] < config.get("min_data_points", 5):
+            is_anomaly = value > float(fallback)
+            z_score = 0.0  # no z-score for fallback
+
+    if not is_anomaly:
+        return None
+    baseline = _tracker.get_stats(metric)
+    confidence = min(abs(z_score) / 5.0, 1.0) if z_score != 0 else 0.5
+    return {
+        "type": "statistical_anomaly",
+        "metric": metric,
+        "value": value,
+        "baseline_mean": round(baseline["mean"], 2),
+        "baseline_stddev": round(baseline["stddev"], 2),
+        "z_score": round(z_score, 2),
+        "confidence": round(confidence, 2),
+        "severity": "critical" if confidence > 0.8 else "warning",
+        "timestamp": now_iso,
+    }
+
+
 def detect_anomalies(monitoring_stats: dict, logging_stats: dict,
                      security_stats: dict) -> list[dict]:
-    """Detect statistical anomalies in current metrics. Returns anomaly list."""
+    """Detect statistical anomalies in current metrics. Returns anomaly list.
+
+    A metric whose source carries "read_at" (the time of its last successful
+    collector reading) is judged once per reading, against the baseline before
+    that reading, and the reading is then added to the baseline; later calls
+    for the same reading repeat that verdict (REQ-GHA-026). A source without
+    "read_at" is judged against the baseline without changing it."""
     from src.config.settings import ANOMALY_CONFIG_PATH
     config = _load_config(ANOMALY_CONFIG_PATH)
     if not config.get("enabled", True):
         return []
+    _tracker.window_seconds = config.get("window_seconds", 3600)
+    _tracker.min_points = config.get("min_data_points", _tracker.min_points)
 
-    metric_configs = config.get("metrics", {})
     now_iso = datetime.now(timezone.utc).isoformat()
-
-    current_values = {
-        "error_count_15m": logging_stats.get("error_count_15m"),
-        "lb_latency_ms": monitoring_stats.get("lb_latency_ms"),
-        "lb_request_count_1h": monitoring_stats.get("lb_request_count_1h"),
-        "vm_cpu_percent": monitoring_stats.get("vm_cpu_percent"),
-    }
+    read_at = {"monitoring": monitoring_stats.get("read_at"),
+               "logging": logging_stats.get("read_at")}
 
     detected = []
-    for metric, value in current_values.items():
+    judged_now = 0
+    for metric, value in _current_values(monitoring_stats, logging_stats).items():
         if value is None:
             continue
-
-        mc = metric_configs.get(metric, {})
-        sigma = mc.get("sigma", config.get("sigma_threshold", 3.0))
-        fallback = mc.get("fallback_threshold")
-
-        is_anomaly, z_score = _tracker.is_anomalous(metric, float(value), sigma)
-
-        # Fallback: if baseline not warmed up, use static threshold
-        if not is_anomaly and fallback is not None:
-            stats = _tracker.get_stats(metric)
-            if stats["count"] < config.get("min_data_points", 5):
-                is_anomaly = float(value) > float(fallback)
-                z_score = 0.0  # no z-score for fallback
-
-        if is_anomaly:
-            baseline = _tracker.get_stats(metric)
-            confidence = min(abs(z_score) / 5.0, 1.0) if z_score != 0 else 0.5
-            severity = "critical" if confidence > 0.8 else "warning"
-            z_display = round(z_score, 2) if math.isfinite(z_score) else z_score
-            detected.append({
-                "type": "statistical_anomaly",
-                "metric": metric,
-                "value": float(value),
-                "baseline_mean": round(baseline["mean"], 2),
-                "baseline_stddev": round(baseline["stddev"], 2),
-                "z_score": z_display,
-                "confidence": round(confidence, 2),
-                "severity": severity,
-                "timestamp": now_iso,
-            })
+        reading = read_at[_METRIC_SOURCE[metric]]
+        if reading is None:
+            anomaly = _judge(metric, float(value), config, now_iso)
+        elif metric in _judged and _judged[metric][0] == reading:
+            anomaly = _judged[metric][1]
+        else:
+            anomaly = _judge(metric, float(value), config, now_iso)
+            _tracker.update(metric, float(value), ts=float(reading))
+            _judged[metric] = (reading, anomaly)
+            judged_now += 1
+        if anomaly:
+            detected.append(anomaly)
 
     with _lock:
         _anomalies[:] = detected
 
-    # ALCOA+ audit trail
-    _audit_log.append({
-        "timestamp": now_iso,
-        "action": "detect",
-        "metrics_checked": len([v for v in current_values.values() if v is not None]),
-        "anomalies_found": len(detected),
-    })
-
-    if detected:
-        logger.info(f"Anomaly detection: {len(detected)} anomalies "
-                    f"({sum(1 for a in detected if a['severity'] == 'critical')} critical)")
+    if judged_now or not any(read_at.values()):
+        # ALCOA+ audit trail: one entry per evaluation of fresh data
+        _audit_log.append({
+            "timestamp": now_iso,
+            "action": "detect",
+            "metrics_checked": len([v for v in _current_values(monitoring_stats, logging_stats).values()
+                                    if v is not None]),
+            "anomalies_found": len(detected),
+        })
+        if detected:
+            logger.info(f"Anomaly detection: {len(detected)} anomalies "
+                        f"({sum(1 for a in detected if a['severity'] == 'critical')} critical)")
 
     return detected
 
@@ -287,7 +332,9 @@ def classify_anomalies(anomalies: list[dict]) -> dict:
         name = info.get("name", a["metric"])
         val = a["value"]
         baseline = a["baseline_mean"]
-        if baseline > 0:
+        if baseline > 0 and val == 0:
+            comparison = "dropped to 0"
+        elif baseline > 0:
             ratio = val / baseline
             if ratio >= 2:
                 comparison = f"{ratio:.0f}x higher than normal"
