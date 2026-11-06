@@ -352,3 +352,19 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Estimate (2026-11-06):** about 130k input and 12k output tokens per run, 8 runs a day: roughly $12 a month at $0.25 / $1.50 per million tokens.
 - **Who builds:** Neo.
 - **Status:** confirmed by Igor 2026-11-06 (full text); clause 6 amended by Igor the same night. Implemented: PR #52 (neo-shadow1 PROCEED for head 32f5898 after four rounds), merged 57cc123, live 2026-11-06 in image wif44 (revision 0000044). IAM: custom role glasshoodModelCaller (aiplatform.endpoints.predict only) granted to glasshood-azure-logs. First live run 00:35Z under the federated identity: system + 43 parts, 44 calls, about $0.009; Vertex AI, Cloud Monitoring and Cloud Logging calls all 200. Awaiting verification by the reviewer, including a signed-in look.
+
+## REQ-GHA-026: Anomaly alerts reflect real changes in the monitored system
+
+- **Goal:** A statistical anomaly alert (warning or critical) appears only when a monitored value really departs from its recent normal level. How many people view the dashboard, or how often, never creates, changes or clears an anomaly.
+- **Why:** Owner, 2026-11-06: 4 critical "High-confidence anomaly detected" alerts on app.glasshood.ai. The live log showed they came only while the page was open (the baseline was fed on every page load, about every 16 s, while readings refresh every 10 minutes), and no real errors matched them.
+- **Target state:**
+  1. Each metric's baseline holds at most one data point per fresh collector reading. Page views, the AI overview run and repeated reads of the same reading add nothing.
+  2. The baseline covers the real time span the configuration states (about one hour), whatever the polling and viewing rates.
+  3. A reading is judged against a baseline that does not yet include that reading.
+  4. A flat baseline (no variation, for example errors always 0) does not turn a small change into a critical alert. A change counts only when it exceeds a minimum meaningful size set per metric. A single small step, such as 0 → 1 error, is at most a warning.
+  5. Building the plain-language explanation of an anomaly never fails, including on a flat baseline.
+  6. Anomaly detection stays deterministic and keeps its audit trail. Existing thresholds in `config/anomaly_thresholds.yaml` keep their meaning.
+- **Priority:** P2
+- **Testable:** Yes (API + unit tests)
+- **Who builds:** Neo.
+- **Status:** confirmed by Igor 2026-11-06 (full text). Not started.
