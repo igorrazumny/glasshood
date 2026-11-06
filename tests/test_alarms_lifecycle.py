@@ -204,3 +204,32 @@ environments:
         assert seen["filter"].startswith('(jsonPayload.container.name="/coldvault") AND timestamp>=')
         assert "severity" not in seen["filter"] and "gce_instance" not in seen["filter"]
         assert gl.get_stats()["error_count_15m"] == 0 and gl.get_stats()["part"] == "cv-mig"
+
+
+class TestFailedQueryIsNotRecovery:
+    """neo-shadow1 review of REQ-GHA-027 (C3): a failed query must not end an alarm."""
+
+    def test_threshold_active_then_query_fails_then_normal_read(self):
+        lat = [{"id": "lb_latency_critical", "name": "Response time", "group": "lb_latency",
+                "severity": "critical", "description": "Critical LB latency", "title": "{part}: slow",
+                "scope": "global",
+                "condition": {"source": "monitoring", "metric": "lb_latency_ms", "operator": ">", "threshold": 5000}},
+               RULES[-1]]
+        backend = Node(id="cv-backend", label="Backend service", type="lb", status="healthy")
+
+        def run(value):
+            # what topology passes: anomaly parts only for metrics with a reading
+            parts = {"lb_latency_ms": "cv-backend"} if value is not None else {}
+            snap = {"monitoring": {"lb_latency_ms": value, "parts": {"lb_latency_ms": "cv-backend"}},
+                    "anomaly": {"read": True, "anomalies": [], "parts": parts}}
+            with patch.object(eng, "load_rules", return_value=lat):
+                return eng.evaluate_rules([backend], snap, rules_path="x")
+        assert run(50000)[0].severity == "critical"
+        assert len(run(None)) == 1 and eng.get_resolved() == []   # query failed: still active
+        assert run(100) == [] and len(eng.get_resolved()) == 1    # normal reading: resolved
+
+    def test_topology_passes_anomaly_parts_only_for_read_metrics(self):
+        import inspect
+        import src.api.routes.topology as topo
+        text = inspect.getsource(topo._build_topology)
+        assert "if monitoring_stats.get(m) is not None" in text

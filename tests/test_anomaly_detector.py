@@ -330,3 +330,35 @@ class TestCollectorReadAt:
             asyncio.run(gl.poll_once())
         assert gl._stats["read_at"] == 1.0
         assert gl._stats["last_poll"] > 1.0
+
+
+class TestReviewFixes:
+    """neo-shadow1 review of REQ-GHA-026 (C1, C2)."""
+
+    def setup_method(self):
+        _reset_module()
+
+    @patch("src.security.anomaly_detector._load_config", return_value=_CONFIG)
+    def test_expired_points_are_not_the_baseline_of_a_late_reading(self, _):
+        # C1: six readings, then one a long time later: no warmed baseline remains
+        import src.security.anomaly_detector as mod
+        _feed([2, 3, 2, 3, 2, 3])
+        late = mod.detect_anomalies({}, {"error_count_15m": 200, "read_at": 10000.0}, {})
+        assert all(a["severity"] != "critical" for a in late)  # fallback warning at most
+        assert mod._tracker.get_stats("error_count_15m")["count"] == 1
+
+    def test_readings_are_judged_by_the_collector_not_by_views(self):
+        # C2: every successful collector reading is judged, whether or not anyone views
+        import src.collectors.gcp_logging as gl
+        import src.security.anomaly_detector as mod
+        calls = []
+        with patch.object(mod, "detect_anomalies", side_effect=lambda *a: calls.append(a) or []), \
+                patch("src.config.settings.ANOMALY_DETECTION_ENABLED", True):
+            mod.judge_fresh_readings()
+        assert len(calls) == 1
+
+    def test_topology_view_does_not_judge(self):
+        import inspect
+        import src.api.routes.topology as topo
+        src_text = inspect.getsource(topo._build_topology)
+        assert "detect_anomalies(" not in src_text and "get_anomalies()" in src_text

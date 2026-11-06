@@ -113,6 +113,9 @@ async def poll_once():
         result = await loop.run_in_executor(None, _query)
         _stats.update(result)
         _stats["last_poll"] = _stats["read_at"] = time.time()
+        # Judge this reading now, not when someone opens the page (REQ-GHA-026)
+        from src.security.anomaly_detector import judge_fresh_readings
+        judge_fresh_readings()
 
     except Exception as e:
         logger.warning(f"GCP Monitoring poll failed: {e}")

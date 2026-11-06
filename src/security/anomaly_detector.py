@@ -50,9 +50,15 @@ class BaselineTracker:
         ts = time.time() if ts is None else ts
         window = self._data.setdefault(metric, collections.deque(maxlen=self.window_size))
         window.append((ts, value))
-        if self.window_seconds:
-            while window and window[0][0] < ts - self.window_seconds:
-                window.popleft()
+        self.expire(metric, ts)
+
+    def expire(self, metric: str, ts: float) -> None:
+        """Drop points more than window_seconds older than ts."""
+        window = self._data.get(metric)
+        if window is None or not self.window_seconds:
+            return
+        while window and window[0][0] < ts - self.window_seconds:
+            window.popleft()
 
     def get_stats(self, metric: str) -> dict:
         """Return mean, stddev, count for a metric."""
@@ -185,6 +191,8 @@ def detect_anomalies(monitoring_stats: dict, logging_stats: dict,
         elif metric in _judged and _judged[metric][0] == reading:
             anomaly = _judged[metric][1]
         else:
+            # The baseline is the hour before this reading, without it
+            _tracker.expire(metric, float(reading))
             anomaly = _judge(metric, float(value), config, now_iso)
             _tracker.update(metric, float(value), ts=float(reading))
             _judged[metric] = (reading, anomaly)
@@ -209,6 +217,21 @@ def detect_anomalies(monitoring_stats: dict, logging_stats: dict,
                         f"({sum(1 for a in detected if a['severity'] == 'critical')} critical)")
 
     return detected
+
+
+def judge_fresh_readings() -> list[dict]:
+    """Judge the collectors' latest readings. Called by each collector after a
+    successful read, so every reading is judged once whether or not anyone is
+    viewing the dashboard; views only read the stored verdicts (REQ-GHA-026)."""
+    from src.config.settings import ANOMALY_DETECTION_ENABLED
+    if not ANOMALY_DETECTION_ENABLED:
+        return []
+    from src.collectors import gcp_logging, gcp_monitoring
+    try:
+        return detect_anomalies(gcp_monitoring.get_stats(), gcp_logging.get_stats(), {})
+    except Exception as e:
+        logger.warning(f"Anomaly detection on fresh readings failed: {e}")
+        return get_anomalies()
 
 
 # Human-readable metric descriptions for alert presentation
