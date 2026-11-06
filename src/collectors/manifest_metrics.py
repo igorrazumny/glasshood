@@ -675,6 +675,8 @@ def poll_all_manifest_nodes(manifests_dir: str = "config/manifests") -> None:
     with _lock:
         _children_templates_cache.update(children_templates)
 
+    _polled_once.set()  # REQ-GHA-024: parts, VMs and their nested parts are all known now
+
     if children_templates:
         logger.info(f"Children templates cached: {list(children_templates.keys())}")
     logger.info(f"Manifest metrics polled: {len(results)} nodes, {sum(len(v) for v in _vm_cache.values())} discovered VMs")
@@ -682,6 +684,12 @@ def poll_all_manifest_nodes(manifests_dir: str = "config/manifests") -> None:
 
 # Children template cache
 _children_templates_cache = {}
+_polled_once = threading.Event()
+
+
+def polled_once() -> bool:
+    """True once a full poll (statuses, discovered VMs, their templates) has completed."""
+    return _polled_once.is_set()
 
 
 def get_children_template(parent_id: str) -> list:

@@ -331,3 +331,21 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Supersedes:** for ColdVault, REQ-GHA-021 clause 2 and the "plain" intent of clause 1. Clause 3 stays: the architecture site is not drawn.
 - **Who builds:** Neo.
 - **Status:** confirmed by Igor 2026-11-05 (full text); clause 3 amended by Igor the same evening after review. Implemented 2026-11-05: PR #47 (neo-shadow1 PROCEED for head ca76be8 after two rounds), merged 33fc0c5, live in image wif42 (revision 0000042, always on) with ColdVault manifest v4 (sha256 1bfe9dd4…). Live first poll 22:30Z: 34 parts polled; every Compute, Cloud Asset, Secret Manager and MCP call returned 200 under GlassHood's federated read-only account, so no new role was needed (clause 7). Clause 9 (pipeline layout): PR #49 (neo-shadow1 PROCEED for head c31df93 after one round), merged 76b3ec9, live 2026-11-06 in image wif43 (revision 0000043) with manifest v5 (sha256 bf4ebf1e…); same fix removes the false 'Degraded Performance' from not-checked parts. Live polls: 34 parts, every outbound call 200/202. Awaiting verification by the reviewer, including a signed-in look at the live canvas.
+
+## REQ-GHA-024: GlassHood gives a brief AI overview of the whole system and of each part
+
+- **Goal:** A business reader sees in a few sentences how the system is doing, and can open any part to read a short AI overview of it.
+- **Why:** Owner, 2026-11-05/06: the AI Analysis panel has never worked since the ColdVault Platform was switched off ("Waiting for first analysis…"). A short health summary is what a non-IT reader needs first; warnings are technical detail.
+- **Target state:**
+  1. **System overview first.** At the top of the right panel, above the alerts: one sentence on the overall state, what needs attention (if anything), and what is fine. Directly on top it shows when it was written ("Updated 14:00, 1 h ago") and by which model. Alerts and warnings follow below.
+  2. **Per-part overview.** Opening any part shows a short AI overview of that part, written from its status, check result, metrics and its recent log lines, with its own timestamp.
+  3. **Cheap model, inside Google Cloud.** Gemini 3.1 Flash-Lite on Vertex AI in the monitored Google Cloud project, reached with GlassHood's existing key-less identity. GlassHood's Google account gains exactly one new role: permission to call Vertex AI models. It still changes no resource and reads no secret value.
+  4. **Right away, then every 3 hours.** The first overviews are written as soon as GlassHood starts, without waiting, then every 3 hours. A person may ask for a fresh system overview at most once every 10 minutes. Live demo shows the same overviews but can never trigger a new one.
+  5. **Small input.** Each overview uses recent warning and error lines plus a small sample of other lines, never whole log histories.
+  6. **Spend visible and capped.** Each run records tokens used and estimated cost; the daily total is shown to the operator. A daily cap on model calls (sized for about $2 a day) is counted from Google's own record of the calls and stops further calls when reached, and the panel says so. Google's record arrives a few minutes late, so a restart within those minutes may add at most one extra run per restart (about 40 calls, under $0.01) before the cap holds again. If today's usage cannot be read, no call is made. (Amended by Igor 2026-11-06 after review.)
+  7. **Honest.** If an overview cannot be produced, the panel says why and keeps the last good one with its age. An overview older than its schedule is marked stale. The model's text is shown as plain text and never triggers any action.
+  8. **Data stays inside Google Cloud.** Only part names, statuses, check results, metrics and selected log lines are sent, and only to Vertex AI in the same project. No secret value is ever sent.
+  9. **Nothing else changes.** The canvas, the checks, login, MCP, and always-on stay as they are.
+- **Estimate (2026-11-06):** about 130k input and 12k output tokens per run, 8 runs a day: roughly $12 a month at $0.25 / $1.50 per million tokens.
+- **Who builds:** Neo.
+- **Status:** confirmed by Igor 2026-11-06 (full text). In progress.

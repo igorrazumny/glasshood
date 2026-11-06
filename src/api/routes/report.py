@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from src.config.settings import GLASSHOOD_API_KEY
 from src.api.routes.topology import get_topology_data
-from src.analysis.coldvault_client import get_analysis
+from src.analysis.vertex_overview import get_system as get_analysis  # REQ-GHA-024
 
 logger = logging.getLogger(__name__)
 

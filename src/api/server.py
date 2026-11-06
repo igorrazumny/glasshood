@@ -34,7 +34,7 @@ from src.api.routes.manifests import router as manifests_router
 from src.api.routes.mcp_recheck import router as mcp_recheck_router
 from src.collectors import coldvault, gcp_logging, gcp_monitoring, manifest_metrics
 from src.security import cve_scanner
-from src.analysis.coldvault_client import analysis_loop
+from src.analysis.vertex_overview import overview_loop  # REQ-GHA-024
 from src.integrations.sync import sync_loop
 from src.config.settings import (
     DISCOVERY_ENABLED, DISCOVERY_INTERVAL, SECURITY_SCAN_ENABLED, SNOW_ENABLED,
@@ -135,7 +135,9 @@ async def startup():
     threading.Thread(target=manifest_metrics.metrics_loop, daemon=True).start()
     logger.info("Manifest metrics poller started")
     # Analysis runs in background thread (sync, uses ThreadPoolExecutor internally)
-    threading.Thread(target=analysis_loop, args=(get_topology_data,), daemon=True).start()
+    # REQ-GHA-024: AI overviews at start (once the parts are polled), then every 3 hours
+    threading.Thread(target=overview_loop, args=(get_topology_data, manifest_metrics.polled_once),
+                     daemon=True).start()
     # Storage pipeline (sync, runs in thread)
     if STORAGE_ENABLED:
         from src.storage.pipeline import flush_loop, ensure_table

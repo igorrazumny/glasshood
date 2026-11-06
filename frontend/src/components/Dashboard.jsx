@@ -195,10 +195,11 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
       )}
 
       <RightSidebar open={rightOpen} pinned={rightPinned} onToggle={toggleRight} onPin={toggleRightPin}>
+        {/* REQ-GHA-024 clause 1: the AI overview first; alerts and warnings are the detail below */}
+        <AnalysisPanel data={analysis.data} topology={topology.data} canvas={canvas} isDemo={isDemo} />
         <AlertPanel alerts={filteredAlerts} onSelect={setSelectedAlert} />
         <AnomalyBadge anomalies={filteredAnomalies} onSelect={setSelectedAnomaly} />
         <SecurityPanel isDemo={isDemo} />
-        <AnalysisPanel data={analysis.data} topology={topology.data} canvas={canvas} isDemo={isDemo} />
       </RightSidebar>
 
       <div className="flex-1 overflow-hidden transition-all duration-300"
