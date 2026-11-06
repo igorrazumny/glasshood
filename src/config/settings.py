@@ -26,7 +26,8 @@ BACKGROUND_POLL_INTERVAL = _positive_int_env("BACKGROUND_POLL_INTERVAL", "600")
 
 # ColdVault connection
 COLDVAULT_URL = os.getenv("COLDVAULT_URL", "https://coldvault.ai")
-COLDVAULT_ADMIN_KEY = os.getenv("COLDVAULT_ADMIN_KEY", "")
+# Google account whose ID token reads ColdVault /api/metrics (REQ-GHA-025); empty = not read
+COLDVAULT_METRICS_SA = os.getenv("COLDVAULT_METRICS_SA", "")
 
 # GCP
 GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID", "example-monitoring-project")
