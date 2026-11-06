@@ -70,13 +70,23 @@ _SECRETS = re.compile(
 
 
 _PEM_BLOCK = re.compile(r"-----BEGIN [A-Z0-9 ]*-----.*?(-----END [A-Z0-9 ]*-----|$)", re.S)
+# A credential word anywhere in a line, however it is quoted or escaped, or a URL that carries a
+# password in its user part (scheme://user:password@host). Such a line is dropped whole.
+_CREDENTIAL_WORD = re.compile(r"(?i)(pass(word|wd)|secret|api[_\- ]?key|authori[sz]ation|credential|"
+                              r"private[_\- ]?key|cookie|bearer|token\b)")
+_URI_USERINFO = re.compile(r"(?i)[a-z][a-z0-9+.\-]*://[^/\s@]*:[^/\s@]*@")
+
+
+def _credential_line(line: str) -> bool:
+    return bool(_SECRETS.search(line) or _CREDENTIAL_WORD.search(line) or _URI_USERINFO.search(line))
 
 
 def redact(text: str) -> str:
     """Remove credentials from free text. A key block goes whole; any line that carries a
-    credential marker is dropped entirely, since its value cannot be told from the rest reliably."""
+    credential word, pattern or URL password is dropped entirely — its value cannot be told
+    from the rest reliably, whatever the quoting or escaping."""
     text = _PEM_BLOCK.sub("[redacted block]", text or "")
-    return "\n".join("[redacted line]" if _SECRETS.search(line) else line for line in text.split("\n"))
+    return "\n".join("[redacted line]" if _credential_line(line) else line for line in text.split("\n"))
 
 
 def sanitize(obj):

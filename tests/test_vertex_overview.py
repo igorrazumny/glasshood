@@ -209,12 +209,18 @@ def test_free_text_credentials_go_whole(monkeypatch):
         {"timestamp": "t", "severity": "ERROR", "textPayload": 'config password = "CANARY quoted with spaces"'},
         {"timestamp": "t", "severity": "ERROR", "textPayload": "first line fine\nsecret: CANARY_MULTILINE tail"},
         {"timestamp": "t", "severity": "ERROR", "jsonPayload": {"message": "ctx\\nAuthorization: Basic CANARY_ESCAPED"}},
+        {"timestamp": "t", "severity": "ERROR", "jsonPayload": {
+            "message": json.dumps({"body": json.dumps({"password": "CANARY_ESCAPED_JSON"})})}},
+        {"timestamp": "t", "severity": "ERROR",
+         "textPayload": "database connection failed: postgresql://reader:CANARY_DSN@db.example.invalid/db"},
+        {"timestamp": "t", "severity": "ERROR", "textPayload": 'x {\\"Secret\\": \\"CANARY_ESC_KEY\\"}'},
+        {"timestamp": "t", "severity": "ERROR", "textPayload": 'oauth {\\"id_token\\": \\"CANARY_ID_TOKEN\\"}'},
     ]
     _route(monkeypatch, _answer({"summary": "x"}), seen, entries)
     ov.run_system(TOPO)
     sent = seen[0]["contents"][0]["parts"][0]["text"]
     for canary in ("Q0FOQVJZX0JBU0lDOnB3", "CANARY_PEM_BODY", "END PRIVATE KEY", "CANARY quoted",
-                   "CANARY_MULTILINE", "CANARY_ESCAPED"):
+                   "CANARY_MULTILINE", "CANARY_ESCAPED", "CANARY_ESCAPED_JSON", "CANARY_DSN", "CANARY_ESC_KEY", "CANARY_ID_TOKEN"):
         assert canary not in sent, canary
     assert "first line fine" in sent  # only the credential line goes
 
