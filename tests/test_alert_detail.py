@@ -88,13 +88,14 @@ class TestAlertAck:
                 "user": "admin@9r.ai",
             })
         assert resp.status_code == 200
-        mock_ack.assert_called_once_with("global_error_spike", None, "admin@9r.ai")
+        # REQ-GHA-029 clause 2: the signed-in user is recorded, not the name sent
+        mock_ack.assert_called_once_with("global_error_spike", None, "test@9r.ai")
 
-    def test_ack_requires_user(self, mock_role, mock_auth):
-        resp = self._client().post("/api/alerts/ack", json={
-            "rule_id": "cpu_high",
-        })
-        assert resp.status_code == 422  # missing required field
+    def test_ack_needs_no_user_field(self, mock_role, mock_auth):
+        with patch("src.api.routes.alerts.acknowledge_alert", return_value=True) as mock_ack:
+            resp = self._client().post("/api/alerts/ack", json={"rule_id": "cpu_high"})
+        assert resp.status_code == 200
+        mock_ack.assert_called_once_with("cpu_high", None, "test@9r.ai")
 
 
 class TestApplyAnomalyClassification:

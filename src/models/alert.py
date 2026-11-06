@@ -35,6 +35,15 @@ class Alert:
     # REQ-GHA-028: "alarm" (trusted), "example" or "observation" (shown on the demo,
     # marked, at most a warning)
     kind: str = "alarm"
+    # REQ-GHA-029: for an alarm found by the AI log review ("ai"), the log lines it saw,
+    # and the "Investigate deeper" report once one was asked for
+    evidence: list = field(default_factory=list)
+    report: Optional[dict] = None
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "Alert":
+        names = set(cls.__dataclass_fields__)
+        return cls(**{k: v for k, v in d.items() if k in names})
 
     def to_dict(self) -> dict:
         return {
@@ -58,4 +67,6 @@ class Alert:
             "ended_at": self.ended_at,
             "reasons": list(self.reasons),
             "kind": self.kind,
+            "evidence": list(self.evidence),
+            "report": self.report,
         }

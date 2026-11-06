@@ -86,7 +86,7 @@ def _candidate(rule: dict, node_id: Optional[str], part_label: Optional[str], me
                severity: Optional[str] = None, **extra) -> Alert:
     kind = rule.get("kind", "alarm")
     severity = severity or rule.get("severity", "warning")
-    if kind != "alarm" and severity == "critical":
+    if kind in ("example", "observation") and severity == "critical":
         severity = "warning"  # REQ-GHA-028 clause 4: examples are at most a warning
     return Alert(
         rule_id=rule["id"],
@@ -247,7 +247,7 @@ def _apply(candidates: list[Alert], checked: set, now: float) -> tuple[list, lis
             new.append(top)
             continue
         for field in ("rule_id", "kind", "severity", "message", "title", "part_label", "metric_name",
-                      "metric_value", "threshold", "anomaly_classification"):
+                      "metric_value", "threshold", "anomaly_classification", "evidence"):
             setattr(current, field, getattr(top, field))
         current.last_seen = now_iso
         current.reasons = reasons
@@ -325,10 +325,10 @@ def evaluate_rules(nodes: list, snapshot: dict,
         if nodes:
             present = {n.id for n in nodes}
             # A part that is gone from the canvas (for example a replaced VM) has no
-            # condition left: its alarms end (findings follow their own checks).
+            # condition left: its alarms end (findings and AI review alarms follow their own checks).
             checked |= {k for k in _active
                         if k[1] is not None and k[1] not in present
-                        and not str(k[0]).startswith("finding:")}
+                        and not str(k[0]).startswith(("finding:", "ai:"))}
         new_alerts, resolved = _apply(candidates, checked, now)
         active = list(_active.values())
 
@@ -374,6 +374,79 @@ def track_findings(findings: list, nodes: list, labels: Optional[dict] = None) -
             candidates.append(alert)
     with _lock:
         _apply(candidates, checked, time.time())
+
+
+def track_ai_review(problems: list, reviewed_parts: set, labels: Optional[dict] = None) -> None:
+    """Problems named by the AI log review as alarms (REQ-GHA-029 clauses 1-2).
+
+    problems: [{id, part, severity, title, evidence}]. An open AI alarm on a reviewed part
+    that this review no longer names ends, except a critical one nobody has acknowledged:
+    that stays until a signed-in person acknowledges it. An AI alarm never gets milder
+    while it is open."""
+    labels = labels or {}
+    now = time.time()
+    with _lock:
+        checked = {k for k, a in _active.items()
+                   if a.kind == "ai" and k[1] in reviewed_parts
+                   and not (a.severity == "critical" and not a.acknowledged)}
+        candidates = []
+        for p in problems:
+            group, part = f"ai:{p['id']}", p["part"]
+            current = _active.get((group, part))
+            severity = p["severity"]
+            if current and _SEVERITY_RANK.get(current.severity, 0) > _SEVERITY_RANK.get(severity, 0):
+                severity = current.severity
+            rule = {"id": "ai_review", "group": group, "severity": severity, "kind": "ai",
+                    "description": "Found by AI review"}
+            alert = _candidate(rule, part, labels.get(part), f"Found by AI review: {p['title']}")
+            alert.title = f"{labels[part]}: {p['title']}" if part in labels else p["title"]
+            alert.evidence = list(p.get("evidence") or [])
+            candidates.append(alert)
+        _apply(candidates, checked, now)
+
+
+def ai_alarms() -> dict:
+    """The AI review's alarms, open and ended, for saving."""
+    with _lock:
+        return {"active": [a.to_dict() for a in _active.values() if a.kind == "ai"],
+                "resolved": [a.to_dict() for a in _resolved if a.kind == "ai"]}
+
+
+def restore_ai_alarms(saved: dict) -> int:
+    """Put saved AI alarms back after a restart; alarms already present are kept."""
+    n = 0
+    with _lock:
+        for d in saved.get("active") or []:
+            a = Alert.from_dict(d)
+            if a.kind == "ai" and (a.group, a.node_id) not in _active:
+                _active[(a.group, a.node_id)] = a
+                n += 1
+        known = {(a.group, a.node_id, a.first_seen) for a in _resolved}
+        for d in reversed(saved.get("resolved") or []):
+            a = Alert.from_dict(d)
+            if a.kind == "ai" and a.ended_at and (a.group, a.node_id, a.first_seen) not in known:
+                _resolved.appendleft(a)
+                n += 1
+    return n
+
+
+def find_alarm(group: str, node_id: Optional[str]) -> Optional[dict]:
+    """An open alarm, or an ended one from the last day, by its group and part."""
+    with _lock:
+        a = _active.get((group, node_id)) or next(
+            (r for r in _resolved if r.group == group and r.node_id == node_id), None)
+        return a.to_dict() if a else None
+
+
+def set_report(group: str, node_id: Optional[str], report: dict) -> bool:
+    """Save an investigation report with its alarm (REQ-GHA-029 clause 4)."""
+    with _lock:
+        a = _active.get((group, node_id)) or next(
+            (r for r in _resolved if r.group == group and r.node_id == node_id), None)
+        if a is None:
+            return False
+        a.report = report
+        return True
 
 
 def get_alerts() -> list[dict]:

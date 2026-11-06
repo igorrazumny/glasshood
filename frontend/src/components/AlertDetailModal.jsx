@@ -4,7 +4,8 @@
 import { useState, useEffect } from 'react'
 import { X, AlertTriangle, AlertOctagon, Info, CheckCircle, Shield } from 'lucide-react'
 import { apiFetch } from '../utils/api'
-import { alarmTitle, alarmWhen, alarmKindLabel } from '../utils/alarms'
+import { alarmTitle, alarmWhen, alarmKindLabel, alarmTag, alarmRef } from '../utils/alarms'
+import InvestigationPanel from './InvestigationPanel'
 
 // REQ-009: severity styles pair light (bg-100 + text-700 + border-300) with
 // dark (bg-500/10 + text-400 + border-500/30) so the icon + badge read on
@@ -45,13 +46,21 @@ export default function AlertDetailModal({ alert, onClose, currentUser = '' }) {
   const [acking, setAcking] = useState(false)
   const [acked, setAcked] = useState(false)
   const [ackError, setAckError] = useState(null)
+  // REQ-GHA-029: the alarm read fresh (its saved report) and whether this user may act on it
+  const [fresh, setFresh] = useState(null)
 
   useEffect(() => {
     setAcked(alert?.acknowledged || false)
     setAckError(null)
+    setFresh(null)
+    if (!alert) return
+    const ref = alarmRef(alert)
+    const q = new URLSearchParams({ group: ref.group, ...(ref.node_id ? { node_id: ref.node_id } : {}) })
+    apiFetch(`/api/alerts/one?${q}`).then(setFresh).catch(() => {})
   }, [alert])
 
   if (!alert) return null
+  const canAct = fresh ? fresh.can_act : null  // null: not known yet
 
   const style = SEVERITY_STYLE[alert.severity] || SEVERITY_STYLE.info
   const Icon = style.icon
@@ -67,11 +76,7 @@ export default function AlertDetailModal({ alert, onClose, currentUser = '' }) {
     setAckError(null)
     apiFetch('/api/alerts/ack', {
       method: 'POST',
-      body: JSON.stringify({
-        rule_id: alert.rule_id,
-        node_id: alert.node_id || null,
-        user: currentUser || 'operator',
-      }),
+      body: JSON.stringify({ rule_id: alarmRef(alert).group, node_id: alert.node_id || null }),
     })
       .then(() => setAcked(true))
       .catch(err => setAckError(err.message || 'Failed to acknowledge'))
@@ -97,9 +102,9 @@ export default function AlertDetailModal({ alert, onClose, currentUser = '' }) {
                 read as light-blue and collapsed visual distinction from
                 severity colors. Use Tailwind's stock `indigo` (untouched
                 by REQ-010) so the badge stays semantically purple-ish. */}
-            {alarmKindLabel(alert) && (
+            {alarmTag(alert) && (
               <span className="text-xs font-bold uppercase px-2 py-0.5 rounded border border-gray-400 dark:border-purple-400 text-gray-600 dark:text-purple-200">
-                {alarmKindLabel(alert)}
+                {alarmTag(alert)}
               </span>
             )}
             {isCorrelated && (
@@ -125,6 +130,12 @@ export default function AlertDetailModal({ alert, onClose, currentUser = '' }) {
             {alarmKindLabel(alert) === 'example'
               ? 'Example: shown to illustrate monitoring; not yet a trusted alarm.'
               : 'Observation about the setup; not an outage.'}
+          </p>
+        )}
+        {alert.kind === 'ai' && (
+          <p className="text-xs text-gray-500 dark:text-purple-300 -mt-3 mb-4">
+            Found by the AI review of the logs.{alert.severity === 'critical'
+              ? ' A critical one stays until someone acknowledges it.' : ' It ends when the review no longer sees it.'}
           </p>
         )}
 
@@ -227,11 +238,23 @@ export default function AlertDetailModal({ alert, onClose, currentUser = '' }) {
               </div>
             )}
 
+            {/* REQ-GHA-029: the log lines the AI review saw */}
+            {alert.evidence?.length > 0 && (
+              <div className="rounded-lg p-3 bg-surface dark:bg-purple-900/50 border border-border dark:border-purple-700">
+                <span className="text-xs font-semibold text-gray-500 dark:text-purple-300 uppercase">What the logs say</span>
+                {alert.evidence.map((e, i) => (
+                  <p key={i} className="text-[11px] font-mono text-gray-600 dark:text-purple-200 break-words mt-1">{e}</p>
+                ))}
+              </div>
+            )}
+
             {/* Recommended action */}
-            <div className="rounded-lg p-3 bg-surface dark:bg-purple-900/50 border border-border dark:border-purple-700">
-              <span className="text-xs font-semibold text-gray-500 dark:text-purple-300 uppercase">Recommended Action</span>
-              <p className="text-sm text-gray-700 dark:text-purple-100 mt-1">{recommendAction(alert)}</p>
-            </div>
+            {alert.kind !== 'ai' && (
+              <div className="rounded-lg p-3 bg-surface dark:bg-purple-900/50 border border-border dark:border-purple-700">
+                <span className="text-xs font-semibold text-gray-500 dark:text-purple-300 uppercase">Recommended Action</span>
+                <p className="text-sm text-gray-700 dark:text-purple-100 mt-1">{recommendAction(alert)}</p>
+              </div>
+            )}
 
             {/* Technical details — collapsible */}
             <details className="rounded-lg bg-surface dark:bg-purple-900/50 border border-border dark:border-purple-700">
@@ -263,13 +286,16 @@ export default function AlertDetailModal({ alert, onClose, currentUser = '' }) {
           </div>
         )}
 
-        {/* Acknowledge button */}
+        {/* REQ-GHA-029: Investigate deeper, the saved report and its follow-ups */}
+        <InvestigationPanel alert={fresh || alert} canAct={canAct === true} />
+
+        {/* Acknowledge button (operators; a viewer sees who acknowledged) */}
         {acked ? (
           <div className="flex items-center gap-2 text-green-700 dark:text-green-400 text-sm py-2">
             <CheckCircle size={16} />
             <span>Acknowledged{alert.acknowledged_by ? ` by ${alert.acknowledged_by}` : ''}</span>
           </div>
-        ) : (
+        ) : canAct === false ? null : (
           <button
             onClick={handleAck}
             disabled={acking}

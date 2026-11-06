@@ -135,7 +135,10 @@ async def startup():
     threading.Thread(target=manifest_metrics.metrics_loop, daemon=True).start()
     logger.info("Manifest metrics poller started")
     # Analysis runs in background thread (sync, uses ThreadPoolExecutor internally)
-    # REQ-GHA-024: AI overviews at start (once the parts are polled), then every 3 hours
+    # REQ-GHA-024: AI overviews at start (once the parts are polled), then every 3 hours;
+    # REQ-GHA-029: the AI log review after each, with its saved alarms put back first
+    from src.analysis import ai_review
+    ai_review.load()
     threading.Thread(target=overview_loop, args=(get_topology_data, manifest_metrics.polled_once),
                      daemon=True).start()
     # Storage pipeline (sync, runs in thread)

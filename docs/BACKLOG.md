@@ -429,4 +429,4 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Priority:** P2
 - **Testable:** Yes (API + UI; one live run)
 - **Who builds:** Neo.
-- **Status:** confirmed by Igor 2026-11-06 (full text).
+- **Status:** implemented 2026-11-06 (AI review every 3 h after the overview; AI alarms and reports are saved to AI_STATE_DIR when it points at a writable folder, otherwise kept in memory). Live acceptance (a planted or real problem, an investigation, a follow-up) outstanding.
