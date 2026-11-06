@@ -352,3 +352,19 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Estimate (2026-11-06):** about 130k input and 12k output tokens per run, 8 runs a day: roughly $12 a month at $0.25 / $1.50 per million tokens.
 - **Who builds:** Neo.
 - **Status:** confirmed by Igor 2026-11-06 (full text); clause 6 amended by Igor the same night. Implemented: PR #52 (neo-shadow1 PROCEED for head 32f5898 after four rounds), merged 57cc123, live 2026-11-06 in image wif44 (revision 0000044). IAM: custom role glasshoodModelCaller (aiplatform.endpoints.predict only) granted to glasshood-azure-logs. First live run 00:35Z under the federated identity: system + 43 parts, 44 calls, about $0.009; Vertex AI, Cloud Monitoring and Cloud Logging calls all 200. Awaiting verification by the reviewer, including a signed-in look.
+
+## REQ-GHA-025: GlassHood reads ColdVault's metrics with its own short-lived identity, never a stored key
+
+- **Goal:** GlassHood reads ColdVault's own metrics (`https://coldvault.ai/api/metrics`) only with an identity token that proves it is GlassHood and expires within about an hour. No shared key or password between the two systems exists anywhere.
+- **Why:** Igor decided GlassHood gets no shared admin key from ColdVault (2026-11-05). ColdVault's side (its REQ-229, by the architect) has been live since 2026-11-06 01:15Z.
+- **Target state:**
+  1. **Its own identity.** GlassHood proves who it is with its Azure managed identity. Google Workload Identity Federation exchanges that for a token of the Google account `glasshood-coldvault@braintransplant-prod`, which ColdVault accepts for `/api/metrics` and nothing else.
+  2. **Narrow token.** The token is valid only for the audience `https://coldvault.ai/api/metrics`, names its account, and is sent as a Bearer token.
+  3. **Only GlassHood can get it.** The federation accepts only GlassHood's own Azure managed identity. No other Azure identity can get this token.
+  4. **No key.** GlassHood holds no ColdVault admin key, and the `COLDVAULT_ADMIN_KEY` setting is removed.
+  5. **Honest failure.** If the token can't be obtained or ColdVault refuses it, the ColdVault metrics show as "not read", with the reason and the time. Old numbers are never shown as current. The token never appears in logs or on screen.
+  6. **Nothing else changes.** The public health check, the other checks and the AI overview stay as they are.
+- **Priority:** P2
+- **Testable:** Yes (API tests, plus the architect checking for a 200 in ColdVault's log)
+- **Who builds:** Neo.
+- **Status:** confirmed by Igor 2026-11-06 (full text). Not started.
