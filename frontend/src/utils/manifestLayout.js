@@ -14,7 +14,7 @@ export function filterVMsForGroup(topologyNodes, groupParent) {
 }
 
 import { nodeHeight, childHeight, CHILD_H, CHILD_GAP } from '../components/TopologyNode'
-import { isSpacer, connectionEdge } from './canvasParts.js'
+import { isSpacer, connectionEdge, placedPosition } from './canvasParts.js'
 
 const NODE_W = 140    // must match TopologyNode.NODE_W
 const NODE_H = 50     // must match TopologyNode.NODE_H
@@ -196,6 +196,11 @@ export function computeManifestLayout(topologyNodes, manifests) {
           x: baseX + GROUP_PAD + col * (NODE_W + NODE_GAP_X),
           y: rowOffsets[row],
         }
+        // REQ-GHA-023 clause 9: a manifest may place a box exactly (pos), so connected boxes line
+        // up and their lines run straight. A dynamic group's pos places its first VM; further
+        // VMs stand below it, side by side in the flow (parallel, never chained).
+        const placed = placedPosition(nodeMap[id], group, i, topoMap[id] || nodeMap[id], nodeHeight)
+        if (placed) positions[id] = placed
         nodeGroups[id] = groupIdx
         if (group.style === 'encrypted') encryptedIds.push(id)
 

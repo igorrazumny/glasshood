@@ -3,7 +3,7 @@
 // Run: node frontend/src/utils/canvasParts.test.js
 
 import assert from 'node:assert/strict'
-import { canvasNodes, attestationBadge, nearestSide, groupAttestationBadge, statsNodes, worstStatus, fitViewBox, anchorPoint, edgeStyle, boxSizes, isSpacer, connectionEdge, nestedChildIds, flowAnchors, elbowPath } from './canvasParts.js'
+import { canvasNodes, attestationBadge, nearestSide, groupAttestationBadge, statsNodes, worstStatus, fitViewBox, anchorPoint, edgeStyle, boxSizes, isSpacer, connectionEdge, nestedChildIds, flowAnchors, elbowPath, routeEdge, pathD, labelPoint, placedPosition } from './canvasParts.js'
 
 let failed = 0
 function test(name, fn) {
@@ -178,6 +178,53 @@ test('lines are straight when aligned, right-angled otherwise, never slanted', (
 test('a connection may carry an axis hint; anything else is ignored', () => {
   assert.equal(connectionEdge('a', { to: 'b', axis: 'v' }).axis, 'v')
   assert.equal(connectionEdge('a', { to: 'b', axis: 'diagonal' }).axis, undefined)
+})
+
+const B = (x, y, hw = 70, hh = 25) => ({ x, y, hw, hh })
+
+test('aligned boxes get a straight line', () => {
+  const r = routeEdge({ src: { box: B(500, 200) }, tgt: { box: B(500, 280) } })
+  assert.equal(r.bends, 0)
+  assert.deepEqual(r.pts, [{ x: 500, y: 225 }, { x: 500, y: 255 }])
+  const h = routeEdge({ src: { box: B(500, 520) }, tgt: { box: B(880, 520) } })
+  assert.equal(h.bends, 0)
+})
+
+test('offset boxes get one bend where one is enough', () => {
+  const r = routeEdge({ src: { box: B(500, 200) }, tgt: { box: B(900, 500) } })
+  assert.equal(r.bends, 1)
+})
+
+test('a line into a group lands level with its source, so it stays straight', () => {
+  const group = { box: B(1560, 535, 90, 145), isGroup: true }
+  const r = routeEdge({ src: { box: B(1080, 520, 54, 14) }, tgt: group, srcSides: ['L', 'R'] })
+  assert.equal(r.bends, 0)
+  assert.equal(r.pts[1].y, 520)
+})
+
+test('a box in the way is avoided even at the cost of a bend', () => {
+  const blocker = B(700, 520)
+  const r = routeEdge({ src: { box: B(500, 520) }, tgt: { box: B(900, 520) }, obstacles: [blocker] })
+  assert.equal(r.hits, 0)
+  assert.ok(r.bends >= 1)
+})
+
+test('a nested app keeps its side ports', () => {
+  const r = routeEdge({ src: { box: B(880, 400) }, tgt: { box: B(1080, 520, 54, 14) }, tgtSides: ['L', 'R'] })
+  assert.equal(r.pts[r.pts.length - 1].x, 1026)
+})
+
+test('path and label helpers', () => {
+  assert.equal(pathD([{ x: 0, y: 0 }, { x: 10, y: 0 }]), 'M 0 0 L 10 0')
+  assert.deepEqual(labelPoint([{ x: 0, y: 0 }, { x: 0, y: 10 }, { x: 100, y: 10 }]), { x: 50, y: 10 })
+})
+
+test('a manifest pos places a box; further VMs stack below the group pos', () => {
+  assert.deepEqual(placedPosition({ pos: { x: 5, y: 6 } }, {}, 0, {}), { x: 5, y: 6 })
+  const g = { dynamic: true, pos: { x: 1080, y: 509 } }
+  assert.deepEqual(placedPosition({}, g, 0, {}, () => 162), { x: 1080, y: 509 })
+  assert.deepEqual(placedPosition({}, g, 1, {}, () => 162), { x: 1080, y: 691 })
+  assert.equal(placedPosition({}, {}, 0, {}), null)
 })
 
 if (failed) { console.error(`${failed} failed`); process.exit(1) }
