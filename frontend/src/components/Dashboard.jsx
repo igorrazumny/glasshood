@@ -10,11 +10,9 @@ import TopologyMap from './TopologyMap'
 import AnalysisPanel from './AnalysisPanel'
 import AlertPanel from './AlertPanel'
 import SecurityPanel from './SecurityPanel'
-import AnomalyBadge from './AnomalyBadge'
 import MetricsBar from './MetricsBar'
 import NodeDetailModal from './NodeDetailModal'
 import AlertDetailModal from './AlertDetailModal'
-import AnomalyDetailModal from './AnomalyDetailModal'
 import VerificationReportModal from './VerificationReportModal'
 import { usePolling } from '../hooks/usePolling'
 import { computeManifestLayout } from '../utils/manifestLayout'
@@ -56,7 +54,6 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
   })()
   const [selectedNode, setSelectedNode] = useState(null)
   const [selectedAlert, setSelectedAlert] = useState(null)
-  const [selectedAnomaly, setSelectedAnomaly] = useState(null)
   const [activeProject, setActiveProject] = useState(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [sidebarPinned, setSidebarPinned] = useState(true)
@@ -157,9 +154,9 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
   const filteredAlerts = contextNodeIds
     ? (topology.data?.alerts || []).filter(a => contextNodeIds.has(a.node_id))
     : (topology.data?.alerts || [])
-  const filteredAnomalies = contextNodeIds
-    ? (topology.data?.anomalies || []).filter(a => contextNodeIds.has(a.node_id))
-    : (topology.data?.anomalies || [])
+  const filteredResolved = contextNodeIds
+    ? (topology.data?.resolved_alerts || []).filter(a => contextNodeIds.has(a.node_id))
+    : (topology.data?.resolved_alerts || [])
 
   return (
     <div className="h-screen bg-surface dark:bg-purple-950 flex flex-col overflow-hidden">
@@ -197,8 +194,10 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
       <RightSidebar open={rightOpen} pinned={rightPinned} onToggle={toggleRight} onPin={toggleRightPin}>
         {/* REQ-GHA-024 clause 1: the AI overview first; alerts and warnings are the detail below */}
         <AnalysisPanel data={analysis.data} topology={topology.data} canvas={canvas} isDemo={isDemo} />
-        <AlertPanel alerts={filteredAlerts} onSelect={setSelectedAlert} />
-        <AnomalyBadge anomalies={filteredAnomalies} onSelect={setSelectedAnomaly} />
+        {/* REQ-GHA-027: an anomaly is an alarm on its part (with its classification in the
+            detail), so it is not listed a second time in a separate anomaly panel */}
+        <AlertPanel alerts={filteredAlerts} resolved={filteredResolved}
+          rules={topology.data?.alarm_rules} onSelect={setSelectedAlert} />
         <SecurityPanel isDemo={isDemo} />
       </RightSidebar>
 
@@ -214,7 +213,6 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
       {/* REQ-004: classification travels per-alert on selectedAlert.anomaly_classification —
           no global prop. AlertDetailModal reads its own alert's snapshot. */}
       <AlertDetailModal alert={selectedAlert} onClose={() => setSelectedAlert(null)} currentUser={currentUser} />
-      <AnomalyDetailModal anomaly={selectedAnomaly} onClose={() => setSelectedAnomaly(null)} />
       {showVerifyModal && (
         <VerificationReportModal
           reports={verifyReports}

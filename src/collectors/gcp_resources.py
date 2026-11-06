@@ -222,24 +222,27 @@ _findings_lock = threading.Lock()
 
 def evaluate_findings(project: str, findings: list) -> list:
     """A finding is active while its check holds: `asset` exists (or is duplicated, with
-    `min_count`). A finding with no check is a statement by its `source`, always listed."""
-    active = []
+    `min_count`). A finding with no check is a statement by its `source`, always listed.
+    Every finding whose check ran is returned, with `active` saying whether it holds and
+    `part` naming the part it concerns (REQ-GHA-027); one whose check failed is left out."""
+    out = []
     for f in findings or []:
         chk = f.get("check")
+        active = True
         if chk:
             try:
                 n = len(search_assets(chk.get("project", project), chk["asset_type"], chk.get("name", "")))
             except (httpx.HTTPError, KeyError) as e:
                 logger.debug(f"finding check {f.get('id')} failed: {e}")
                 continue  # unknown is not reported as a finding
-            if n < chk.get("min_count", 1):
-                continue
+            active = n >= chk.get("min_count", 1)
             text = f["text"].replace("{count}", str(n))
         else:
             text = f["text"]
-        active.append({"id": f["id"], "text": text, "source": f.get("source", ""),
-                       "checked": bool(chk), "checked_at": time.time()})
-    return active
+        out.append({"id": f["id"], "text": text, "source": f.get("source", ""),
+                    "part": f.get("part"), "active": active,
+                    "checked": bool(chk), "checked_at": time.time()})
+    return out
 
 
 def set_findings(items: list) -> None:

@@ -305,28 +305,29 @@ def _build_topology() -> dict:
     if ANOMALY_DETECTION_ENABLED:
         anomaly_list = detect_anomalies(monitoring_stats, logging_stats, security_stats)
     anomaly_stats = get_anomaly_stats()
-    from src.rules.engine import evaluate_rules
+    from src.rules.engine import evaluate_rules, track_findings, get_resolved, get_rule_status
+    # REQ-GHA-023 clause 6 / REQ-GHA-027: drift and leftovers are alarms on their part,
+    # with the same current-only lifecycle, never parts on the canvas.
+    from src.collectors.gcp_resources import get_findings
+    part_labels = _manifest_labels()
+    track_findings(get_findings(), nodes, part_labels)
+    anomaly_parts = dict(monitoring_stats.get("parts") or {})
+    if logging_stats.get("part"):
+        anomaly_parts["error_count_15m"] = logging_stats["part"]
     alerts = evaluate_rules(nodes, {
         "monitoring": monitoring_stats,
         "logging": logging_stats,
         "security": security_stats,
-        "anomaly": anomaly_stats,
-    })
+        "anomaly": {**anomaly_stats, "anomalies": anomaly_list, "parts": anomaly_parts,
+                    "read": bool(ANOMALY_DETECTION_ENABLED)},
+    }, labels=part_labels)
 
-    # Correlate operational alerts with anomalies (pharma data integrity)
+    # Correlate operational alerts with anomalies (pharma data integrity). Kept for its
+    # audit trail; an operational alarm and an anomaly on the same part are already one
+    # alarm, so no second "correlated" alarm is shown (REQ-GHA-027 clause 2).
     from src.security.correlator import correlate
-    correlated = correlate(alerts, anomaly_list)
-    all_alerts = alerts + correlated
-
-    # REQ-GHA-023 clause 6: drift and leftovers are warnings, never parts on the canvas.
-    from src.collectors.gcp_resources import get_findings
-    from src.models.alert import Alert
-    for f in get_findings():
-        all_alerts.append(Alert(
-            rule_id=f"finding:{f['id']}", severity="warning",
-            message=f"Finding: {f['text']}" + (f" (source: {f['source']})" if f.get("source") else ""),
-            triggered_at=datetime.fromtimestamp(f["checked_at"], timezone.utc).isoformat(),
-        ))
+    correlate(alerts, anomaly_list)
+    all_alerts = list(alerts)
 
     # Propagate alert severity to project nodes (green → yellow/red based on alerts)
     if all_alerts:
@@ -362,10 +363,23 @@ def _build_topology() -> dict:
     result["user_stats"] = user_stats
     result["coldvault_metrics"] = coldvault.get_metrics_status()
     result["alerts"] = [a.to_dict() for a in all_alerts]
+    result["resolved_alerts"] = get_resolved()
+    result["alarm_rules"] = get_rule_status()
     result["anomalies"] = anomaly_list
     _apply_anomaly_classification(result, anomaly_list)
 
     return result
+
+
+def _manifest_labels() -> dict:
+    """Part id -> the label the canvas shows, from the manifests (REQ-GHA-027 clause 3)."""
+    try:
+        from src.api.routes.manifests import _load_manifests
+        return {n["id"]: n["label"] for m in _load_manifests() for n in m.get("nodes", [])
+                if n.get("id") and n.get("label")}
+    except Exception as e:
+        logger.warning(f"manifest labels unavailable: {e}")
+        return {}
 
 
 def _apply_anomaly_classification(result: dict, anomaly_list: list) -> None:

@@ -23,6 +23,15 @@ class Alert:
     # this — never a global topology field — so each alert shows the
     # classification recorded when IT triggered, not a moving target.
     anomaly_classification: Optional[dict] = None
+    # REQ-GHA-027: one alarm per (group, part); a plain title for the reader, the
+    # technical lines behind it, and when it was first seen, last seen and ended.
+    group: Optional[str] = None
+    title: Optional[str] = None
+    part_label: Optional[str] = None
+    first_seen: Optional[str] = None
+    last_seen: Optional[str] = None
+    ended_at: Optional[str] = None
+    reasons: list = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -38,4 +47,11 @@ class Alert:
             "acknowledged_at": self.acknowledged_at,
             "acknowledged_by": self.acknowledged_by,
             "anomaly_classification": self.anomaly_classification,
+            "group": self.group,
+            "title": self.title or self.message,
+            "part_label": self.part_label,
+            "first_seen": self.first_seen or self.triggered_at,
+            "last_seen": self.last_seen or self.triggered_at,
+            "ended_at": self.ended_at,
+            "reasons": list(self.reasons),
         }

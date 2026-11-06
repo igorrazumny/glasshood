@@ -143,10 +143,13 @@ def test_findings_active_only_while_their_check_holds(api):
             "asset_type": "monitoring.googleapis.com/AlertPolicy", "min_count": 2}},
         {"id": "gone", "text": "leftover rule", "check": {
             "asset_type": "compute.googleapis.com/Firewall", "name": "x"}},
-        {"id": "said", "text": "Auth0 idle", "source": "ColdVault architect"},
+        {"id": "said", "text": "Auth0 idle", "source": "ColdVault architect", "part": "cv-secrets"},
     ])
-    assert [(f["id"], f["text"], f["checked"]) for f in found] == [
-        ("dup", "29 alert policies", True), ("said", "Auth0 idle", False)]
+    # REQ-GHA-027: every finding whose check ran is returned with whether it holds and its part
+    assert [(f["id"], f["text"], f["checked"], f["active"], f["part"]) for f in found] == [
+        ("dup", "29 alert policies", True, True, None),
+        ("gone", "leftover rule", True, False, None),
+        ("said", "Auth0 idle", False, True, "cv-secrets")]
 
 
 def test_finding_whose_check_fails_is_not_reported(api):

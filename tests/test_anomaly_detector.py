@@ -324,7 +324,9 @@ class TestCollectorReadAt:
             raise RuntimeError("logging unavailable")
         broken.Client = _client
         gl._stats = {"error_count_15m": 3, "recent_errors": [], "last_poll": 1.0, "read_at": 1.0}
-        with patch.dict(sys.modules, {"google.cloud.logging_v2": broken}):
+        source = {"errors": {"part": "cv-mig", "project": "p", "filter": "x"}}
+        with patch.dict(sys.modules, {"google.cloud.logging_v2": broken}), \
+                patch.object(gl.alarm_sources, "load", return_value=source):
             asyncio.run(gl.poll_once())
         assert gl._stats["read_at"] == 1.0
         assert gl._stats["last_poll"] > 1.0

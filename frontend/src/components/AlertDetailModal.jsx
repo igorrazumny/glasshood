@@ -4,6 +4,7 @@
 import { useState, useEffect } from 'react'
 import { X, AlertTriangle, AlertOctagon, Info, CheckCircle, Shield } from 'lucide-react'
 import { apiFetch } from '../utils/api'
+import { alarmTitle, alarmWhen } from '../utils/alarms'
 
 // REQ-009: severity styles pair light (bg-100 + text-700 + border-300) with
 // dark (bg-500/10 + text-400 + border-500/30) so the icon + badge read on
@@ -107,8 +108,12 @@ export default function AlertDetailModal({ alert, onClose, currentUser = '' }) {
           </button>
         </div>
 
-        {/* Message */}
-        <p className="text-sm text-gray-800 dark:text-purple-100 mb-4 leading-relaxed">{alert.message}</p>
+        {/* REQ-GHA-027 clause 5: the plain line first; rule names and metric=value are
+            only in the technical details below */}
+        <p className="text-sm text-gray-800 dark:text-purple-100 leading-relaxed">{alarmTitle(alert)}</p>
+        <p className="text-xs text-gray-500 dark:text-purple-300 mb-4">
+          {alert.part_label ? `${alert.part_label} · ` : ''}{alarmWhen(alert)}
+        </p>
 
         {/* Anomaly alerts: rich classified presentation */}
         {isAnomaly && ac ? (
@@ -168,8 +173,8 @@ export default function AlertDetailModal({ alert, onClose, currentUser = '' }) {
                   <span className="font-mono">{alert.rule_id}</span>
                 </div>
                 <div className="flex items-center justify-between text-xs text-gray-500 dark:text-purple-300">
-                  <span>Triggered</span>
-                  <span>{alert.triggered_at ? new Date(alert.triggered_at).toLocaleString() : '-'}</span>
+                  <span>First seen</span>
+                  <span>{alert.first_seen ? new Date(alert.first_seen).toLocaleString() : '-'}</span>
                 </div>
               </div>
             </details>
@@ -177,31 +182,6 @@ export default function AlertDetailModal({ alert, onClose, currentUser = '' }) {
         ) : (
           /* Standard (non-anomaly) alert layout */
           <div className="space-y-3 mb-4">
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-              <div>
-                <span className="text-gray-500 dark:text-purple-300">Rule ID</span>
-                <p className="text-gray-700 dark:text-purple-100 font-mono text-xs mt-0.5">{alert.rule_id}</p>
-              </div>
-              <div>
-                <span className="text-gray-500 dark:text-purple-300">Triggered</span>
-                <p className="text-gray-700 dark:text-purple-100 text-xs mt-0.5">
-                  {alert.triggered_at ? new Date(alert.triggered_at).toLocaleString() : '-'}
-                </p>
-              </div>
-              {alert.node_id && (
-                <div>
-                  <span className="text-gray-500 dark:text-purple-300">Node</span>
-                  <p className="text-gray-700 dark:text-purple-100 font-mono text-xs mt-0.5">{alert.node_id}</p>
-                </div>
-              )}
-              {alert.metric_name && (
-                <div>
-                  <span className="text-gray-500 dark:text-purple-300">Metric</span>
-                  <p className="text-gray-700 dark:text-purple-100 text-xs mt-0.5">{alert.metric_name}</p>
-                </div>
-              )}
-            </div>
-
             {/* Metric value vs threshold */}
             {alert.metric_value != null && (
               <div className={`rounded-lg p-3 ${style.bg} border ${style.border}`}>
@@ -239,6 +219,34 @@ export default function AlertDetailModal({ alert, onClose, currentUser = '' }) {
               <span className="text-xs font-semibold text-gray-500 dark:text-purple-300 uppercase">Recommended Action</span>
               <p className="text-sm text-gray-700 dark:text-purple-100 mt-1">{recommendAction(alert)}</p>
             </div>
+
+            {/* Technical details — collapsible */}
+            <details className="rounded-lg bg-surface dark:bg-purple-900/50 border border-border dark:border-purple-700">
+              <summary className="p-3 text-xs font-semibold text-gray-500 dark:text-purple-300 uppercase cursor-pointer hover:text-gray-700 dark:hover:text-purple-200">
+                Technical Details
+              </summary>
+              <div className="px-3 pb-3 space-y-1 text-xs text-gray-600 dark:text-purple-200">
+                {(alert.reasons?.length ? alert.reasons : [alert.message]).map((r, i) => (
+                  <p key={i} className="font-mono break-words">{r}</p>
+                ))}
+                <div className="flex items-center justify-between text-gray-500 dark:text-purple-300 mt-2">
+                  <span>Rule ID</span>
+                  <span className="font-mono">{alert.rule_id}</span>
+                </div>
+                {alert.node_id && (
+                  <div className="flex items-center justify-between text-gray-500 dark:text-purple-300">
+                    <span>Part</span>
+                    <span className="font-mono">{alert.node_id}</span>
+                  </div>
+                )}
+                {alert.metric_name && (
+                  <div className="flex items-center justify-between text-gray-500 dark:text-purple-300">
+                    <span>Metric</span>
+                    <span className="font-mono">{alert.metric_name}</span>
+                  </div>
+                )}
+              </div>
+            </details>
           </div>
         )}
 

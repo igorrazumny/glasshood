@@ -1,7 +1,11 @@
 // File: frontend/src/components/AlertPanel.jsx
 // Purpose: Display active Layer 1 rule engine alerts
+// REQ-GHA-027: only alarms whose condition holds now, each once, in plain words;
+// recently resolved alarms and rules without data are listed underneath.
 
-import { AlertTriangle, AlertOctagon, Info } from 'lucide-react'
+import { useState } from 'react'
+import { AlertTriangle, AlertOctagon, Info, CheckCircle } from 'lucide-react'
+import { alarmTitle, alarmWhen, resolvedWhen, notCheckedNames } from '../utils/alarms'
 
 // REQ-009: severity styles get dark: variants. Light uses bg-100 + text-700
 // for readable contrast on white card; dark keeps the /10 alpha + light text.
@@ -20,15 +24,11 @@ const SEVERITY_STYLE = {
     border: 'border-blue-300 dark:border-blue-400/20' },
 }
 
-function timeAgo(isoStr) {
-  const seconds = Math.round((Date.now() - new Date(isoStr).getTime()) / 1000)
-  if (seconds < 60) return `${seconds}s ago`
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
-  return `${Math.floor(seconds / 3600)}h ago`
-}
-
-export default function AlertPanel({ alerts, onSelect }) {
-  if (!alerts?.length) return null
+export default function AlertPanel({ alerts, resolved, rules, onSelect }) {
+  const [showResolved, setShowResolved] = useState(false)
+  const notChecked = notCheckedNames(rules)
+  if (!alerts?.length && !resolved?.length && !notChecked.length) return null
+  alerts = alerts || []
 
   // Sort: critical first, then warning, then info
   const order = { critical: 0, warning: 1, info: 2 }
@@ -64,13 +64,43 @@ export default function AlertPanel({ alerts, onSelect }) {
               className={`flex items-start gap-2 ${style.bg} ${style.border} border rounded px-2 py-1.5 ${onSelect ? 'cursor-pointer hover:brightness-95 dark:hover:brightness-125' : ''}`}>
               <Icon size={12} className={`${style.color} mt-0.5 flex-shrink-0`} />
               <div className="min-w-0 flex-1">
-                <p className={`text-sm ${style.color} leading-snug`}>{alert.message}</p>
-                <p className="text-xs text-gray-500 dark:text-purple-300 mt-0.5">{timeAgo(alert.triggered_at)}</p>
+                <p className={`text-sm ${style.color} leading-snug`}>{alarmTitle(alert)}</p>
+                <p className="text-xs text-gray-500 dark:text-purple-300 mt-0.5">{alarmWhen(alert)}</p>
               </div>
             </div>
           )
         })}
+        {!alerts.length && (
+          <p className="text-sm text-gray-500 dark:text-purple-300">No alarm is active now.</p>
+        )}
       </div>
+
+      {resolved?.length > 0 && (
+        <div className="mt-2">
+          <button onClick={() => setShowResolved(v => !v)}
+            className="text-xs text-gray-500 dark:text-purple-300 hover:underline">
+            {showResolved ? 'Hide' : 'Show'} recently resolved ({resolved.length})
+          </button>
+          {showResolved && (
+            <div className="space-y-1 mt-1 max-h-32 overflow-y-auto">
+              {resolved.map((alert, i) => (
+                <div key={`${alert.group}-${alert.node_id}-${alert.ended_at}-${i}`}
+                  className="flex items-start gap-2 text-xs text-gray-600 dark:text-purple-200">
+                  <CheckCircle size={11} className="text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                  <span className="min-w-0 flex-1">{alarmTitle(alert)}</span>
+                  <span className="text-gray-500 dark:text-purple-300 whitespace-nowrap">{resolvedWhen(alert)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {notChecked.length > 0 && (
+        <p className="text-xs text-gray-500 dark:text-purple-300 mt-2">
+          Not checked (no data for this system): {notChecked.join(', ')}
+        </p>
+      )}
     </div>
   )
 }
