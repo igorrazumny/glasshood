@@ -3,7 +3,8 @@
 // Run: node frontend/src/utils/alarms.test.js
 
 import assert from 'node:assert/strict'
-import { alarmWhen, resolvedWhen, alarmTitle, notCheckedNames, alarmKindLabel, sortAlarms } from './alarms.js'
+import { alarmWhen, resolvedWhen, alarmTitle, notCheckedNames, alarmKindLabel, sortAlarms,
+  alarmTag, alarmRef, patternLabel, errorText } from './alarms.js'
 
 let failed = 0
 function test(name, fn) {
@@ -55,6 +56,31 @@ test('REQ-GHA-028: critical first, then real alarms before examples', () => {
   ]
   assert.deepEqual(sortAlarms(list).map(a => a.id), ['crit', 'real', 'ex', 'obs'])
   assert.deepEqual(sortAlarms(undefined), [])
+})
+
+test('an alarm the AI review found is tagged and sorts with the real alarms (REQ-GHA-029)', () => {
+  const ai = { kind: 'ai', severity: 'critical' }
+  assert.equal(alarmTag(ai), 'AI review')
+  assert.equal(alarmTag({ kind: 'example' }), 'example')
+  assert.equal(alarmTag({ kind: 'alarm' }), '')
+  const ex = { kind: 'example', severity: 'critical' }
+  assert.deepEqual(sortAlarms([ex, ai]), [ai, ex])
+})
+
+test('finds an alarm by its group and part, the rule id for older ones', () => {
+  assert.deepEqual(alarmRef({ group: 'ai:ab12', rule_id: 'ai_review', node_id: 'cv-mig' }), { group: 'ai:ab12', node_id: 'cv-mig' })
+  assert.deepEqual(alarmRef({ rule_id: 'cpu_high' }), { group: 'cpu_high', node_id: null })
+})
+
+test('says in plain words whether it is ongoing or happened once', () => {
+  assert.equal(patternLabel('once'), 'Happened once')
+  assert.equal(patternLabel('ongoing'), 'Still going on')
+  assert.equal(patternLabel('whatever'), 'Not clear yet')
+})
+
+test('shows the server reason of a refused request', () => {
+  assert.equal(errorText(new Error('409: {"detail":"daily cap of 30 investigations reached"}')), 'daily cap of 30 investigations reached')
+  assert.equal(errorText(new Error('Unauthorized')), 'Unauthorized')
 })
 
 if (failed) { console.error(`${failed} failed`); process.exit(1) }

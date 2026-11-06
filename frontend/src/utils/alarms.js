@@ -46,3 +46,24 @@ export function sortAlarms(alerts) {
     ((order[a.severity] ?? 3) - (order[b.severity] ?? 3)) ||
     ((alarmKindLabel(a) ? 1 : 0) - (alarmKindLabel(b) ? 1 : 0)))
 }
+
+// REQ-GHA-029: the tag in front of an alarm's title ("AI review" for one the AI found)
+export function alarmTag(alert) {
+  return alert.kind === 'ai' ? 'AI review' : alarmKindLabel(alert)
+}
+
+// How the server finds this alarm: its group and part (the rule id for older alarms)
+export function alarmRef(alert) {
+  return { group: alert.group || alert.rule_id, node_id: alert.node_id || null }
+}
+
+// The report's "ongoing or once" in plain words
+export function patternLabel(pattern) {
+  return { ongoing: 'Still going on', once: 'Happened once', recurring: 'Keeps coming back' }[pattern] || 'Not clear yet'
+}
+
+// The server's reason from an apiFetch error ("409: {"detail":"..."}"), else the message
+export function errorText(err) {
+  const m = String(err?.message || err || '')
+  try { return JSON.parse(m.slice(m.indexOf('{'))).detail || m } catch { return m }
+}

@@ -6,7 +6,7 @@
 
 import { useState } from 'react'
 import { AlertTriangle, AlertOctagon, Info, CheckCircle } from 'lucide-react'
-import { alarmTitle, alarmWhen, resolvedWhen, notCheckedNames, alarmKindLabel, sortAlarms } from '../utils/alarms'
+import { alarmTitle, alarmWhen, resolvedWhen, notCheckedNames, alarmTag, sortAlarms } from '../utils/alarms'
 
 // REQ-009: severity styles get dark: variants. Light uses bg-100 + text-700
 // for readable contrast on white card; dark keeps the /10 alpha + light text.
@@ -65,9 +65,9 @@ export default function AlertPanel({ alerts, resolved, rules, onSelect }) {
               <Icon size={12} className={`${style.color} mt-0.5 flex-shrink-0`} />
               <div className="min-w-0 flex-1">
                 <p className={`text-sm ${style.color} leading-snug`}>
-                  {alarmKindLabel(alert) && (
+                  {alarmTag(alert) && (
                     <span className="text-[10px] font-semibold uppercase mr-1.5 px-1 py-px rounded border border-gray-400 dark:border-purple-400 text-gray-600 dark:text-purple-200">
-                      {alarmKindLabel(alert)}
+                      {alarmTag(alert)}
                     </span>
                   )}
                   {alarmTitle(alert)}
