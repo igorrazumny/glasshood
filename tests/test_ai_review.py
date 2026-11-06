@@ -292,3 +292,29 @@ class TestRoutes:
             one = c.get("/api/alerts/one", params={"group": a["group"], "node_id": "cv-mig"}).json()
         assert r.status_code == 403 and one["can_act"] is False
         assert eng.find_alarm(a["group"], "cv-mig")["report"] is None
+
+
+class TestWebSearchIsReportedTruly:
+    def test_a_search_that_returned_nothing_is_not_called_a_web_search(self):
+        _review(_problem("critical"))
+        [a] = _ai()
+        with patch.object(ov, "_log_lines", return_value=[LINE_1]), \
+                patch.object(ov, "call_model", return_value=(json.dumps(REPORT), [])):
+            ai_investigate.start(a["group"], "cv-mig", "u", TOPOLOGY, run_async=False)
+        assert eng.find_alarm(a["group"], "cv-mig")["report"]["searched_web"] is False
+
+    def test_the_searches_made_are_kept_even_without_page_links(self, monkeypatch):
+        class Resp:
+            status_code = 200
+
+            def json(self):
+                return {"candidates": [{"content": {"parts": [{"text": "{}"}]},
+                                        "groundingMetadata": {"webSearchQueries": ["envoy reset reason"],
+                                                              "groundingChunks": [{"web": {"uri": "javascript:x"}}]}}],
+                        "usageMetadata": {}}
+        monkeypatch.setattr(ov, "_reserve_call", lambda: None)
+        monkeypatch.setattr(ov, "_headers", lambda: {})
+        monkeypatch.setattr(ov, "_record_usage", lambda usage: None)
+        monkeypatch.setattr(ov.httpx, "post", lambda *a, **k: Resp())
+        _, sources = ov.call_model("p", "t", search=True)
+        assert sources == [{"query": "envoy reset reason"}]  # a non-https link is dropped

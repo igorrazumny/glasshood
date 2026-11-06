@@ -63,12 +63,14 @@ function Report({ report }) {
       {(report.known_issue || report.sources?.length > 0) && (
         <Section title="Known elsewhere">
           {report.known_issue && <p className={TEXT}>{report.known_issue}</p>}
-          {report.sources?.map((s, i) => (
+          {report.sources?.map((s, i) => (s.uri ? (
             <a key={i} href={s.uri} target="_blank" rel="noopener noreferrer nofollow"
                className="text-xs text-blue-700 dark:text-blue-300 hover:underline flex items-center gap-1 mt-1 break-all">
               <ExternalLink size={11} />{s.title || s.uri}
             </a>
-          ))}
+          ) : s.query ? (
+            <p key={i} className="text-xs text-gray-500 dark:text-purple-300 mt-1">Searched the web for: {s.query}</p>
+          ) : null))}
         </Section>
       )}
       <Section title="Conclusion and next step">

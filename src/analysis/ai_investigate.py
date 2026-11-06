@@ -117,7 +117,7 @@ def _ask(prompt: str, payload: dict, max_tokens: int, search: bool):
     if search:
         try:
             text, sources = ov.call_model(prompt, text_in, max_tokens=max_tokens, search=True)
-            return ov.parse_json(text), sources, True
+            return ov.parse_json(text), sources, bool(sources)  # searched only if it did
         except ov.CapReached:
             raise
         except Exception as e:  # a model or region without web search: investigate without it
