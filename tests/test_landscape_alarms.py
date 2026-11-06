@@ -204,3 +204,26 @@ class TestReviewOfLiveRollout:
             eng.evaluate_rules([MIG], {})
         _eval_landscape([SITE], [PUBLIC], {"coldvault": {"site_unreachable": 0}})
         assert [r["id"] for r in eng.get_rule_status()] == ["site_unreachable"]
+
+    def test_poll_once_reads_the_median_from_real_monitoring_messages(self):
+        """neo-shadow1 review of PR #65 (C1): through poll_once, with real message types."""
+        import asyncio
+        import google.cloud.monitoring_v3 as mv3
+        import src.collectors.gcp_monitoring as gm
+        from google.cloud.monitoring_v3.types import Point, TimeSeries
+
+        series = TimeSeries({"points": [Point({"value": {"distribution_value": {
+            "count": 101,
+            "bucket_options": {"explicit_buckets": {"bounds": [100, 150, 1000, 100000]}},
+            "bucket_counts": [0, 100, 0, 1]}}})]})
+
+        class Client:
+            def list_time_series(self, request):
+                return [series] if "backend_latencies" in request.filter else []
+
+        sources = {"load_balancer": {"part": "cv-backend", "project": "p", "filter": "x"}}
+        with patch.object(mv3, "MetricServiceClient", Client), \
+                patch.object(gm.alarm_sources, "load", return_value=sources), \
+                patch("src.security.anomaly_detector.judge_fresh_readings"):
+            asyncio.run(gm.poll_once())
+        assert 100 <= gm.get_stats()["lb_latency_ms"] <= 150
