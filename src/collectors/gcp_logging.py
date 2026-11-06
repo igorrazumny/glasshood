@@ -6,17 +6,29 @@ import time
 import logging
 from datetime import datetime, timezone, timedelta
 
-from src.config.settings import GCP_PROJECT_ID, GCP_POLL_INTERVAL
+from src.collectors import alarm_sources
+from src.config.settings import GCP_POLL_INTERVAL
 
 logger = logging.getLogger(__name__)
 
-# read_at: time of the last successful reading (failed polls leave it unchanged)
-_stats: dict = {"error_count_15m": 0, "recent_errors": [], "last_poll": 0, "read_at": None}
+# Counts only the errors the manifest's alarm_sources.errors filter selects, i.e. the
+# monitored system's own failures, and names the part they belong to (REQ-GHA-027).
+# read_at: time of the last successful reading (failed polls leave it unchanged).
+# error_count_15m is None while nothing was read: an alarm on it is "not checked".
+_stats: dict = {"error_count_15m": None, "recent_errors": [], "last_poll": 0,
+                "read_at": None, "part": None}
+
+_MAX_COUNTED = 1000
 
 
 async def poll_once():
-    """Query Cloud Logging for recent errors."""
+    """Query Cloud Logging for the monitored system's recent errors."""
     global _stats
+    source = alarm_sources.load().get("errors")
+    if not source:
+        _stats = {"error_count_15m": None, "recent_errors": [], "last_poll": time.time(),
+                  "read_at": None, "part": None}
+        return
     try:
         from google.cloud.logging_v2 import Client
 
@@ -24,17 +36,13 @@ async def poll_once():
         loop = asyncio.get_running_loop()
 
         def _query():
-            client = Client(project=GCP_PROJECT_ID)
+            client = Client(project=source["project"])
             cutoff = datetime.now(timezone.utc) - timedelta(minutes=15)
-            filter_str = (
-                f'resource.type="gce_instance" '
-                f'severity>=ERROR '
-                f'timestamp>="{cutoff.isoformat()}"'
-            )
+            filter_str = f'({source["filter"]}) AND timestamp>="{cutoff.isoformat()}"'
             entries = list(client.list_entries(
                 filter_=filter_str,
                 order_by="timestamp desc",
-                max_results=50,
+                max_results=_MAX_COUNTED,
             ))
             errors = []
             for entry in entries[:10]:  # Last 10 for display
@@ -52,6 +60,7 @@ async def poll_once():
             "recent_errors": errors,
             "last_poll": now,
             "read_at": now,
+            "part": source["part"],
         }
     except Exception as e:
         logger.warning(f"GCP Logging poll failed: {e}")

@@ -6,22 +6,44 @@ import time
 import logging
 from datetime import datetime, timezone, timedelta
 
-from src.config.settings import GCP_PROJECT_ID, GCP_POLL_INTERVAL
+from src.collectors import alarm_sources
+from src.config.settings import GCP_POLL_INTERVAL
 
 logger = logging.getLogger(__name__)
 
+# Reads only the load balancer and VMs the manifest's alarm_sources select, and records
+# the part each metric belongs to (REQ-GHA-027). A metric stays None while it was not
+# read, so an alarm on it is "not checked".
 _stats: dict = {
     "lb_latency_ms": None,
-    "lb_request_count_1h": 0,
+    "lb_request_count_1h": None,
     "vm_cpu_percent": None,
+    "parts": {},
     "last_poll": 0,
     "read_at": None,  # time of the last successful reading (failed polls leave it unchanged)
 }
 
+_LB_METRICS = ("lb_latency_ms", "lb_request_count_1h")
+
+
+def _series(client, request_cls, project: str, metric_type: str, scope: str, interval):
+    return client.list_time_series(request=request_cls(
+        name=f"projects/{project}",
+        filter=f'metric.type="{metric_type}" AND ({scope})',
+        interval=interval,
+        view="FULL",
+    ))
+
 
 async def poll_once():
-    """Query Cloud Monitoring for LB and VM metrics."""
+    """Query Cloud Monitoring for the monitored system's LB and VM metrics."""
     global _stats
+    sources = alarm_sources.load()
+    lb, cpu = sources.get("load_balancer"), sources.get("cpu")
+    if not lb and not cpu:
+        _stats = {"lb_latency_ms": None, "lb_request_count_1h": None, "vm_cpu_percent": None,
+                  "parts": {}, "last_poll": time.time(), "read_at": None}
+        return
     try:
         from google.cloud.monitoring_v3 import MetricServiceClient, ListTimeSeriesRequest
         from google.protobuf.timestamp_pb2 import Timestamp
@@ -30,7 +52,6 @@ async def poll_once():
 
         def _query():
             client = MetricServiceClient()
-            project_name = f"projects/{GCP_PROJECT_ID}"
             now = datetime.now(timezone.utc)
             start = now - timedelta(hours=1)
 
@@ -41,64 +62,51 @@ async def poll_once():
 
             interval = {"start_time": start_ts, "end_time": end_ts}
 
-            stats = {}
+            stats = {"lb_latency_ms": None, "lb_request_count_1h": None, "vm_cpu_percent": None,
+                     "parts": {}}
 
-            # LB backend latency
-            try:
-                results = client.list_time_series(
-                    request=ListTimeSeriesRequest(
-                        name=project_name,
-                        filter='metric.type="loadbalancing.googleapis.com/https/backend_latencies"',
-                        interval=interval,
-                        view="FULL",
-                    )
-                )
-                latencies = []
-                for ts in results:
-                    for point in ts.points:
-                        if point.value.distribution_value.count > 0:
-                            latencies.append(point.value.distribution_value.mean)
-                if latencies:
-                    stats["lb_latency_ms"] = round(sum(latencies) / len(latencies), 1)
-            except Exception as e:
-                logger.debug(f"LB latency query failed: {e}")
+            if lb:
+                stats["parts"].update({m: lb["part"] for m in _LB_METRICS})
+                # LB backend latency
+                try:
+                    latencies = []
+                    for ts in _series(client, ListTimeSeriesRequest, lb["project"],
+                                      "loadbalancing.googleapis.com/https/backend_latencies",
+                                      lb["filter"], interval):
+                        for point in ts.points:
+                            if point.value.distribution_value.count > 0:
+                                latencies.append(point.value.distribution_value.mean)
+                    if latencies:
+                        stats["lb_latency_ms"] = round(sum(latencies) / len(latencies), 1)
+                except Exception as e:
+                    logger.debug(f"LB latency query failed: {e}")
 
-            # LB request count
-            try:
-                results = client.list_time_series(
-                    request=ListTimeSeriesRequest(
-                        name=project_name,
-                        filter='metric.type="loadbalancing.googleapis.com/https/request_count"',
-                        interval=interval,
-                        view="FULL",
-                    )
-                )
-                total = 0
-                for ts in results:
-                    for point in ts.points:
-                        total += point.value.int64_value
-                stats["lb_request_count_1h"] = total
-            except Exception as e:
-                logger.debug(f"LB request count query failed: {e}")
+                # LB request count
+                try:
+                    total = 0
+                    for ts in _series(client, ListTimeSeriesRequest, lb["project"],
+                                      "loadbalancing.googleapis.com/https/request_count",
+                                      lb["filter"], interval):
+                        for point in ts.points:
+                            total += point.value.int64_value
+                    stats["lb_request_count_1h"] = total
+                except Exception as e:
+                    logger.debug(f"LB request count query failed: {e}")
 
-            # VM CPU utilization
-            try:
-                results = client.list_time_series(
-                    request=ListTimeSeriesRequest(
-                        name=project_name,
-                        filter='metric.type="compute.googleapis.com/instance/cpu/utilization"',
-                        interval=interval,
-                        view="FULL",
-                    )
-                )
-                cpus = []
-                for ts in results:
-                    for point in ts.points:
-                        cpus.append(point.value.double_value * 100)
-                if cpus:
-                    stats["vm_cpu_percent"] = round(sum(cpus) / len(cpus), 1)
-            except Exception as e:
-                logger.debug(f"VM CPU query failed: {e}")
+            if cpu:
+                stats["parts"]["vm_cpu_percent"] = cpu["part"]
+                # VM CPU utilization
+                try:
+                    cpus = []
+                    for ts in _series(client, ListTimeSeriesRequest, cpu["project"],
+                                      "compute.googleapis.com/instance/cpu/utilization",
+                                      cpu["filter"], interval):
+                        for point in ts.points:
+                            cpus.append(point.value.double_value * 100)
+                    if cpus:
+                        stats["vm_cpu_percent"] = round(sum(cpus) / len(cpus), 1)
+                except Exception as e:
+                    logger.debug(f"VM CPU query failed: {e}")
 
             return stats
 
