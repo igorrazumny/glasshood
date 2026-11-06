@@ -2,8 +2,9 @@
 # Purpose: REQ-GHA-029 clauses 1-2 — every 3 hours the AI reads each part's recent log lines,
 # at the log locations in the landscape files, and names the real problems it finds. Each
 # becomes an alarm "found by AI review". The model's text is plain data: it is shown, never
-# acted on. Calls count against the overview's daily cap. AI alarms (and their reports) are
-# saved to AI_STATE_DIR when it is set, so a restart does not drop a critical one.
+# acted on. Calls count against the overview's daily cap. AI alarms, and any alarm with an
+# investigation report, are saved to AI_STATE_DIR so a restart does not drop them. Without a
+# writable AI_STATE_DIR they live in memory only, and the status says so plainly.
 
 import hashlib
 import json
@@ -21,9 +22,11 @@ logger = logging.getLogger(__name__)
 WARN_LINES_PER_PART = 40
 SAMPLE_LINES_PER_PART = 5
 STATE_DIR = os.getenv("AI_STATE_DIR", "")
-_STATE_FILE = "ai_alarms.json"
+_STATE_FILE = "saved_alarms.json"
 _save_lock = threading.Lock()
 _status: dict = {"reviewed_at": None, "error": None, "problems": 0, "parts": 0}
+_NOT_SET_UP = "not set up: alarms and reports are kept in memory only and a restart drops them"
+_saving: dict = {"durable": False, "problem": _NOT_SET_UP}
 
 REVIEW_PROMPT = """You review the recent log lines of a running cloud system and name its real problems.
 You get the parts (id, label, status), the problems still open from earlier reviews, and log lines
@@ -104,33 +107,47 @@ def run(topology: dict) -> None:
 
 
 def status() -> dict:
-    return dict(_status, interval_s=ov.INTERVAL_S, saved=bool(STATE_DIR))
+    return dict(_status, interval_s=ov.INTERVAL_S, saved=_saving["durable"], saving_problem=_saving["problem"])
 
 
 # --- Saving (survives a restart when AI_STATE_DIR is a mounted, writable folder) ---
 
-def save() -> None:
+def save() -> bool:
+    """Write what must survive a restart. Returns whether it is now on durable storage."""
+    if _saving["problem"] and "could not be read" in _saving["problem"]:
+        return False
     if not STATE_DIR:
-        return
+        _saving.update(durable=False, problem=_NOT_SET_UP)
+        return False
     with _save_lock:
         try:
             path = Path(STATE_DIR) / _STATE_FILE
             tmp = path.with_suffix(".tmp")
-            tmp.write_text(json.dumps(engine.ai_alarms(), default=str))
+            tmp.write_text(json.dumps(engine.saved_alarms(), default=str))
             os.replace(tmp, path)
+            _saving.update(durable=True, problem=None)
+            return True
         except Exception as e:
-            logger.warning(f"AI alarms could not be saved: {e}")
+            _saving.update(durable=False, problem=f"saving failed ({type(e).__name__}): a restart would drop "
+                                                  f"alarms and reports")
+            logger.error(f"alarms with reports could not be saved: {e}")
+            return False
 
 
 def load() -> None:
     if not STATE_DIR:
-        logger.info("AI_STATE_DIR not set: AI alarms are kept in memory only")
+        _saving.update(durable=False, problem=_NOT_SET_UP)
+        logger.warning("AI_STATE_DIR not set: " + _NOT_SET_UP)
         return
     path = Path(STATE_DIR) / _STATE_FILE
-    if not path.exists():
-        return
-    try:
-        n = engine.restore_ai_alarms(json.loads(path.read_text()))
-        logger.info(f"AI alarms restored: {n}")
-    except Exception as e:
-        logger.warning(f"AI alarms could not be restored: {e}")
+    if path.exists():
+        try:
+            n = engine.restore_alarms(json.loads(path.read_text()))
+            logger.info(f"saved alarms restored: {n}")
+        except Exception as e:
+            # Keep the unreadable file for a person to look at; do not write over it
+            _saving.update(durable=False, problem=f"saved alarms could not be read ({type(e).__name__}); "
+                                                  f"the file was left as it is")
+            logger.error(f"saved alarms could not be restored: {e}")
+            return
+    save()  # proves the folder is writable now, so the status is true from the start

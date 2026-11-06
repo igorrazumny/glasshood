@@ -93,14 +93,19 @@ def _strs(items, n, size=400) -> list:
     return [str(i)[:size] for i in (items or []) if isinstance(i, (str, int, float))][:n]
 
 
-def report_from(answer, sources: list, searched: bool) -> dict:
-    """The report in its fixed order (clause 4); a missing executive summary is a failure."""
+def report_from(answer, sources: list, searched: bool, shown: set) -> dict:
+    """The report in its fixed order (clause 4); a missing executive summary is a failure.
+    Evidence is only a log line the model was shown; a finding left with none is marked
+    as not backed by the logs rather than published with an invented quote."""
     if not isinstance(answer, dict) or not str(answer.get("executive_summary") or "").strip():
         raise ValueError("the model's answer had no executive summary")
-    findings = []
+    findings, dropped = [], 0
     for f in answer.get("findings") or []:
         if isinstance(f, dict) and str(f.get("what") or "").strip():
-            findings.append({"what": str(f["what"])[:600], "evidence": _strs(f.get("evidence"), 6)})
+            quoted = [e for e in (f.get("evidence") or []) if isinstance(e, str)]
+            evidence = [e for e in quoted if e in shown][:6]
+            dropped += len([e for e in quoted if e not in shown])
+            findings.append({"what": str(f["what"])[:600], "evidence": evidence, "backed_by_logs": bool(evidence)})
     timeline = [{"time": str(t.get("time", ""))[:40], "event": str(t.get("event", ""))[:300]}
                 for t in (answer.get("timeline") or []) if isinstance(t, dict) and t.get("event")][:20]
     pattern = answer.get("pattern") if answer.get("pattern") in ("ongoing", "once", "recurring") else "unclear"
@@ -109,11 +114,13 @@ def report_from(answer, sources: list, searched: bool) -> dict:
             "what_is_happening": text("what_is_happening", 2000), "timeline": timeline,
             "pattern": pattern, "pattern_explained": text("pattern_explained", 400),
             "known_issue": text("known_issue", 800), "conclusion": text("conclusion"),
-            "next_step": text("next_step", 600), "sources": sources, "searched_web": searched}
+            "next_step": text("next_step", 600), "sources": sources, "searched_web": searched,
+            "quotes_not_in_logs_dropped": dropped}
 
 
 def _ask(prompt: str, payload: dict, max_tokens: int, search: bool):
-    text_in = json.dumps(ov.sanitize(payload), default=str)
+    """payload is already sanitised (the lines checked as evidence are the lines sent)."""
+    text_in = json.dumps(payload, default=str)
     if search:
         try:
             text, sources = ov.call_model(prompt, text_in, max_tokens=max_tokens, search=True)
@@ -141,8 +148,10 @@ def _investigate(alarm: dict, user: str, topology: dict) -> None:
                              "last_seen": alarm.get("last_seen"),
                              "evidence": alarm.get("evidence") or alarm.get("reasons") or []},
                    "part_logs_24h": own, "connected_parts_logs_24h": related}
+        payload = ov.sanitize(payload)
+        shown = set(payload["part_logs_24h"]) | {l for ls in payload["connected_parts_logs_24h"].values() for l in ls}
         answer, sources, searched = _ask(REPORT_PROMPT, payload, 4000, search=True)
-        report = report_from(answer, sources, searched)
+        report = report_from(answer, sources, searched, shown)
         report.update(status="done", requested_by=user, started_at=_iso(started),
                       written_at=_iso(time.time()), lines_read=len(own) + sum(map(len, related.values())),
                       followups=[])
@@ -195,7 +204,7 @@ def followup(group: str, part, user: str, topology: dict):
                                       "evidence": [e for f in report.get("findings", []) for e in f.get("evidence", [])][:12],
                                       "written_at": report.get("written_at")},
                    "since": last, "part_logs_since": lines}
-        answer, _, _ = _ask(FOLLOWUP_PROMPT, payload, 600, search=False)
+        answer, _, _ = _ask(FOLLOWUP_PROMPT, ov.sanitize(payload), 600, search=False)
         if not isinstance(answer, dict) or not str(answer.get("summary") or "").strip():
             raise ValueError("the model's answer had no summary")
         entry = {"at": _iso(time.time()), "by": user, "since": last, "lines_read": len(lines),

@@ -36,6 +36,9 @@ function Report({ report }) {
           {report.findings.map((f, i) => (
             <div key={i} className="mt-2">
               <p className="text-sm text-gray-800 dark:text-purple-100">{f.what}</p>
+              {f.backed_by_logs === false && (
+                <p className="text-[11px] italic text-gray-500 dark:text-purple-300">No log line backs this finding.</p>
+              )}
               {f.evidence?.map((e, j) => (
                 <p key={j} className="text-[11px] font-mono text-gray-500 dark:text-purple-300 break-words mt-0.5">{e}</p>
               ))}

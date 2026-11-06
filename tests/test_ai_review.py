@@ -31,6 +31,7 @@ def _reset(monkeypatch):
         s.clear()
     ai_investigate._count.update(day="", n=0)
     monkeypatch.setattr(ai_review, "STATE_DIR", "")
+    monkeypatch.setattr(ai_review, "_saving", {"durable": False, "problem": None})
     monkeypatch.setattr(ov, "_walk_parts", lambda topology: iter(PARTS))
     monkeypatch.setattr(ov, "refresh_durable_spend", lambda: None)
     yield
@@ -318,3 +319,60 @@ class TestWebSearchIsReportedTruly:
         monkeypatch.setattr(ov.httpx, "post", lambda *a, **k: Resp())
         _, sources = ov.call_model("p", "t", search=True)
         assert sources == [{"query": "envoy reset reason"}]  # a non-https link is dropped
+
+
+class TestReviewC1Persistence:
+    def test_without_a_state_folder_the_status_says_a_restart_drops_alarms(self):
+        ai_review.load()
+        st = ai_review.status()
+        assert st["saved"] is False and "restart drops" in st["saving_problem"]
+
+    def test_an_unwritable_folder_is_reported_not_silent(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(ai_review, "STATE_DIR", str(tmp_path / "missing"))
+        _review(_problem("critical"))
+        assert ai_review.save() is False
+        assert "saving failed" in ai_review.status()["saving_problem"]
+
+    def test_a_report_on_an_ordinary_alarm_survives_a_restart(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(ai_review, "STATE_DIR", str(tmp_path))
+        eng.track_findings([{"id": "drift", "text": "Config drift", "part": "cv-mig"}], [])
+        [f] = eng.get_alerts()
+        assert eng.set_report(f["group"], "cv-mig", {"status": "done", "executive_summary": "drift report"})
+        ai_review.save()
+        eng._active.clear()
+        ai_review.load()
+        back = eng.find_alarm(f["group"], "cv-mig")
+        assert back["kind"] == "observation" and back["report"]["executive_summary"] == "drift report"
+        # The next check of that finding updates it and keeps the report
+        eng.track_findings([{"id": "drift", "text": "Config drift", "part": "cv-mig"}], [])
+        assert eng.find_alarm(f["group"], "cv-mig")["report"]["executive_summary"] == "drift report"
+
+    def test_an_unacknowledged_critical_survives_a_restart(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(ai_review, "STATE_DIR", str(tmp_path))
+        _review(_problem("critical"))
+        eng._active.clear()
+        ai_review.load()
+        [a] = _ai()
+        assert a["severity"] == "critical" and not a["acknowledged"]
+        assert ai_review.status()["saved"] is True
+
+    def test_an_unreadable_saved_file_is_left_as_it_is(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(ai_review, "STATE_DIR", str(tmp_path))
+        (tmp_path / ai_review._STATE_FILE).write_text("{not json")
+        monkeypatch.setattr(ai_review, "_saving", {"durable": False, "problem": None})
+        ai_review.load()
+        _review(_problem("critical"))
+        assert (tmp_path / ai_review._STATE_FILE).read_text() == "{not json"
+        assert "could not be read" in ai_review.status()["saving_problem"]
+
+
+class TestReviewC2EvidenceIntegrity:
+    def test_a_quote_the_model_was_not_shown_is_never_published_as_evidence(self):
+        answer = dict(REPORT, findings=[{"what": "Data lost", "evidence": ["FABRICATED LINE NOT IN INPUT"]},
+                                        {"what": "Upstream timeouts", "evidence": [LINE_1, "ALSO MADE UP"]}])
+        _, alarm, _ = _investigate(answer=answer)
+        found = alarm["report"]["findings"]
+        assert found[0] == {"what": "Data lost", "evidence": [], "backed_by_logs": False}
+        assert found[1]["evidence"] == [LINE_1] and found[1]["backed_by_logs"] is True
+        assert alarm["report"]["quotes_not_in_logs_dropped"] == 2
+        assert "FABRICATED" not in json.dumps(alarm["report"])

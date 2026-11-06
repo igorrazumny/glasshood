@@ -405,26 +405,38 @@ def track_ai_review(problems: list, reviewed_parts: set, labels: Optional[dict] 
         _apply(candidates, checked, now)
 
 
+def _kept(a: Alert) -> bool:
+    return a.kind == "ai" or a.report is not None
+
+
 def ai_alarms() -> dict:
-    """The AI review's alarms, open and ended, for saving."""
+    """The AI review's open alarms (what the next review is told about)."""
     with _lock:
-        return {"active": [a.to_dict() for a in _active.values() if a.kind == "ai"],
-                "resolved": [a.to_dict() for a in _resolved if a.kind == "ai"]}
+        return {"active": [a.to_dict() for a in _active.values() if a.kind == "ai"]}
 
 
-def restore_ai_alarms(saved: dict) -> int:
-    """Put saved AI alarms back after a restart; alarms already present are kept."""
+def saved_alarms() -> dict:
+    """What must survive a restart (REQ-GHA-029): every AI alarm, and every alarm of any
+    kind that carries an investigation report, open and ended."""
+    with _lock:
+        return {"active": [a.to_dict() for a in _active.values() if _kept(a)],
+                "resolved": [a.to_dict() for a in _resolved if _kept(a)]}
+
+
+def restore_alarms(saved: dict) -> int:
+    """Put saved alarms back after a restart; alarms already present are kept. A restored
+    rule alarm is then updated or ended by the next check of its rule, report and all."""
     n = 0
     with _lock:
         for d in saved.get("active") or []:
             a = Alert.from_dict(d)
-            if a.kind == "ai" and (a.group, a.node_id) not in _active:
+            if _kept(a) and (a.group, a.node_id) not in _active:
                 _active[(a.group, a.node_id)] = a
                 n += 1
         known = {(a.group, a.node_id, a.first_seen) for a in _resolved}
         for d in reversed(saved.get("resolved") or []):
             a = Alert.from_dict(d)
-            if a.kind == "ai" and a.ended_at and (a.group, a.node_id, a.first_seen) not in known:
+            if _kept(a) and a.ended_at and (a.group, a.node_id, a.first_seen) not in known:
                 _resolved.appendleft(a)
                 n += 1
     return n
