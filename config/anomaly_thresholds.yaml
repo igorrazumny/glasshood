@@ -6,22 +6,29 @@ anomaly_detection:
   enabled: true
   sigma_threshold: 3.0       # default standard deviations for anomaly
   min_data_points: 5          # minimum before adaptive baseline activates
-  window_size: 60             # rolling window data points (~1h at 60s polling)
+  window_size: 60             # most data points kept per metric
+  window_seconds: 3600        # baseline covers the last hour of collector readings
+  # min_change: the smallest change from the baseline mean that can count at all;
+  # it is also the smallest spread a z-score is measured against (REQ-GHA-026)
 
   # Per-metric overrides
   metrics:
     error_count_15m:
       sigma: 3.0
+      min_change: 5
       fallback_threshold: 15  # static fallback during baseline warmup
 
     lb_latency_ms:
       sigma: 2.5              # LB latency is more sensitive
+      min_change: 200
       fallback_threshold: 2000
 
     lb_request_count_1h:
       sigma: 3.0
+      min_change: 100
       fallback_threshold: 10000
 
     vm_cpu_percent:
       sigma: 2.5
+      min_change: 15
       fallback_threshold: 90
