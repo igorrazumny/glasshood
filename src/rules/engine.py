@@ -293,8 +293,10 @@ def evaluate_rules(nodes: list, snapshot: dict,
     checked: set = set()
 
     with _lock:
+        # Only the rules in force now are listed (a landscape change replaces the defaults)
+        _rule_names.clear()
         for rule in rules:
-            _rule_names[rule["id"]] = rule.get("name") or rule.get("description", rule["id"])
+            _rule_names[rule["id"]] =rule.get("name") or rule.get("description", rule["id"])
             scope = rule.get("scope", "node")
             rule_checked = False
             if rule.get("condition", {}).get("source") == "anomaly" and rule.get("per_anomaly"):

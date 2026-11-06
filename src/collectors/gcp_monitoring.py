@@ -44,7 +44,9 @@ def _bucket_bounds(kind: str, params: dict, n: int) -> list[tuple]:
 
 
 def _options(bucket_options) -> tuple:
-    kind = type(bucket_options).pb(bucket_options).WhichOneof("options")
+    # distribution_value is a raw protobuf (google.api.Distribution), not a proto-plus wrapper
+    pb = bucket_options if hasattr(bucket_options, "WhichOneof") else type(bucket_options).pb(bucket_options)
+    kind = pb.WhichOneof("options")
     o = getattr(bucket_options, kind)
     if kind == "explicit_buckets":
         return kind, {"bounds": list(o.bounds)}

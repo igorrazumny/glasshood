@@ -179,3 +179,28 @@ class TestTypicalResponseTime:
     def test_no_requests_is_no_reading(self):
         assert median_from_buckets({}) is None
         assert median_from_buckets({(0, 10): 0}) is None
+
+
+class TestReviewOfLiveRollout:
+    """Found on the live rollout of REQ-GHA-028 (2026-11-06)."""
+
+    def test_buckets_of_the_raw_protobuf_distribution_are_read(self):
+        # list_time_series returns google.api.Distribution (raw protobuf), not proto-plus
+        from google.api import distribution_pb2 as dp
+        from google.cloud.monitoring_v3.types import Point, TypedValue
+        from src.collectors.gcp_monitoring import _options
+        opts = dp.Distribution.BucketOptions(explicit_buckets=dp.Distribution.BucketOptions.Explicit(
+            bounds=[100, 150, 1000, 100000]))
+        p = Point(value=TypedValue(distribution_value=dp.Distribution(
+            count=101, bucket_options=opts, bucket_counts=[0, 100, 0, 1])))
+        d = p.value.distribution_value
+        kind, params = _options(d.bucket_options)
+        b = _bucket_bounds(kind, params, len(d.bucket_counts))
+        assert 100 <= median_from_buckets(dict(zip(b, d.bucket_counts))) <= 150
+
+    def test_not_checked_lists_only_the_rules_in_force(self):
+        with patch.object(alarm_sources, "alarms", return_value=None), \
+                patch.object(eng, "load_rules", return_value=[MEMORY, ERRORS]):
+            eng.evaluate_rules([MIG], {})
+        _eval_landscape([SITE], [PUBLIC], {"coldvault": {"site_unreachable": 0}})
+        assert [r["id"] for r in eng.get_rule_status()] == ["site_unreachable"]
