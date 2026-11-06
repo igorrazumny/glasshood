@@ -15,6 +15,7 @@ _stats: dict = {
     "lb_request_count_1h": 0,
     "vm_cpu_percent": None,
     "last_poll": 0,
+    "read_at": None,  # time of the last successful reading (failed polls leave it unchanged)
 }
 
 
@@ -103,7 +104,7 @@ async def poll_once():
 
         result = await loop.run_in_executor(None, _query)
         _stats.update(result)
-        _stats["last_poll"] = time.time()
+        _stats["last_poll"] = _stats["read_at"] = time.time()
 
     except Exception as e:
         logger.warning(f"GCP Monitoring poll failed: {e}")

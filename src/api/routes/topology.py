@@ -298,12 +298,11 @@ def _build_topology() -> dict:
     monitoring_stats = gcp_monitoring.get_stats()
     from src.security.cve_scanner import get_stats as get_security_stats
     security_stats = get_security_stats()
-    from src.security.anomaly_detector import update_baselines, detect_anomalies
+    from src.security.anomaly_detector import detect_anomalies
     from src.security.anomaly_detector import get_stats as get_anomaly_stats
     from src.config.settings import ANOMALY_DETECTION_ENABLED
     anomaly_list = []
     if ANOMALY_DETECTION_ENABLED:
-        update_baselines(monitoring_stats, logging_stats)
         anomaly_list = detect_anomalies(monitoring_stats, logging_stats, security_stats)
     anomaly_stats = get_anomaly_stats()
     from src.rules.engine import evaluate_rules

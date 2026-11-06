@@ -13,6 +13,7 @@ def _reset_module():
     mod._anomalies = []
     mod._tracker = BaselineTracker()
     mod._audit_log.clear()
+    mod._judged.clear()
 
 
 class TestBaselineTracker:
@@ -94,7 +95,8 @@ class TestDetectAnomalies:
     @patch("src.security.anomaly_detector._load_config")
     def test_detects_spike(self, mock_config):
         from src.security.anomaly_detector import update_baselines, detect_anomalies
-        mock_config.return_value = {"enabled": True, "metrics": {}, "min_data_points": 5}
+        mock_config.return_value = {"enabled": True, "min_data_points": 5,
+                                    "metrics": {"error_count_15m": {"min_change": 5}}}
         monitoring = {"lb_latency_ms": 100, "lb_request_count_1h": 500, "vm_cpu_percent": 30}
         logging_stats = {"error_count_15m": 2}
         # Build baseline with normal values
@@ -182,3 +184,147 @@ class TestGetAnomalies:
         stats = get_stats()
         assert stats["anomaly_count"] == 0
         assert stats["high_confidence_count"] == 0
+
+
+_CONFIG = {
+    "enabled": True, "min_data_points": 5, "window_seconds": 3600,
+    "metrics": {"error_count_15m": {"sigma": 3.0, "min_change": 5, "fallback_threshold": 15},
+                "lb_latency_ms": {"sigma": 2.5, "min_change": 200, "fallback_threshold": 2000}},
+}
+
+
+def _feed(values, start=1000.0, step=600.0, metric_key="error_count_15m"):
+    """Run one detection per fresh reading, readings `step` seconds apart. Returns the last result."""
+    from src.security.anomaly_detector import detect_anomalies
+    result = []
+    for i, v in enumerate(values):
+        result = detect_anomalies({}, {metric_key: v, "read_at": start + i * step}, {})
+    return result
+
+
+class TestFreshReadings:
+    """REQ-GHA-026: the baseline follows collector readings, not page views."""
+
+    def setup_method(self):
+        _reset_module()
+
+    @patch("src.security.anomaly_detector._load_config", return_value=_CONFIG)
+    def test_repeated_views_of_one_reading_add_nothing(self, _):
+        import src.security.anomaly_detector as mod
+        _feed([2, 3, 2])
+        before = mod._tracker.get_stats("error_count_15m")["count"]
+        for _ in range(50):
+            mod.detect_anomalies({}, {"error_count_15m": 2, "read_at": 1000.0 + 2 * 600}, {})
+        assert mod._tracker.get_stats("error_count_15m")["count"] == before == 3
+
+    @patch("src.security.anomaly_detector._load_config", return_value=_CONFIG)
+    def test_verdict_does_not_depend_on_view_count(self, _):
+        import src.security.anomaly_detector as mod
+        _feed([2, 3, 2, 3, 2, 3])
+        spike = {"error_count_15m": 200, "read_at": 1000.0 + 6 * 600}
+        first = mod.detect_anomalies({}, spike, {})
+        again = [mod.detect_anomalies({}, spike, {}) for _ in range(20)]
+        assert first and first[0]["severity"] == "critical"
+        assert all(r == first for r in again)
+        assert mod.get_stats()["anomaly_count"] == 1
+
+    @patch("src.security.anomaly_detector._load_config", return_value=_CONFIG)
+    def test_reading_judged_against_baseline_without_it(self, _):
+        import src.security.anomaly_detector as mod
+        _feed([2, 3, 2, 3, 2, 3])
+        result = mod.detect_anomalies({}, {"error_count_15m": 200, "read_at": 1000.0 + 6 * 600}, {})
+        assert result[0]["baseline_mean"] == 2.5
+        assert mod._tracker.get_stats("error_count_15m")["count"] == 7
+
+    @patch("src.security.anomaly_detector._load_config", return_value=_CONFIG)
+    def test_failed_poll_is_not_a_new_reading(self, _):
+        import src.security.anomaly_detector as mod
+        _feed([2, 3, 2])
+        # A failed poll changes last_poll but not read_at
+        for poll in range(5):
+            mod.detect_anomalies({}, {"error_count_15m": 2, "read_at": 2200.0, "last_poll": 3000.0 + poll}, {})
+        assert mod._tracker.get_stats("error_count_15m")["count"] == 3
+
+    @patch("src.security.anomaly_detector._load_config", return_value=_CONFIG)
+    def test_baseline_covers_configured_time_span(self, _):
+        import src.security.anomaly_detector as mod
+        # 30 readings ten minutes apart = five hours; only the last hour stays
+        _feed([2] * 30)
+        assert mod._tracker.get_stats("error_count_15m")["count"] == 7  # 0..60 min inclusive
+
+    def test_time_window_drops_old_points(self):
+        tracker = BaselineTracker(window_seconds=100)
+        for ts in range(0, 1000, 10):
+            tracker.update("m", 1.0, ts=float(ts))
+        assert tracker.get_stats("m")["count"] == 11
+
+
+class TestFlatBaseline:
+    """REQ-GHA-026: a flat baseline does not turn a small step into a critical alert."""
+
+    def setup_method(self):
+        _reset_module()
+
+    @patch("src.security.anomaly_detector._load_config", return_value=_CONFIG)
+    def test_one_error_after_zero_errors_is_not_critical(self, _):
+        result = _feed([0, 0, 0, 0, 0, 0, 1])
+        assert not any(a["severity"] == "critical" for a in result)
+
+    @patch("src.security.anomaly_detector._load_config", return_value=_CONFIG)
+    def test_change_below_min_change_never_counts(self, _):
+        assert _feed([0, 0, 0, 0, 0, 0, 4]) == []
+
+    @patch("src.security.anomaly_detector._load_config", return_value=_CONFIG)
+    def test_large_jump_from_flat_baseline_still_alerts(self, _):
+        result = _feed([0, 0, 0, 0, 0, 0, 200])
+        assert result and result[0]["severity"] == "critical"
+        assert math.isfinite(result[0]["z_score"])
+
+    @patch("src.security.anomaly_detector._load_config")
+    def test_flat_baseline_without_min_change_is_at_most_warning(self, mock_config):
+        mock_config.return_value = {"enabled": True, "min_data_points": 5, "metrics": {}}
+        result = _feed([0, 0, 0, 0, 0, 0, 1])
+        assert result and all(a["severity"] == "warning" for a in result)
+
+    def test_tracker_flat_baseline_gives_finite_z(self):
+        tracker = BaselineTracker(min_points=3)
+        for _ in range(5):
+            tracker.update("constant", 0.0)
+        is_anomaly, z = tracker.is_anomalous("constant", 1.0, sigma=3.0, min_change=5)
+        assert is_anomaly is False and math.isfinite(z)
+
+
+class TestClassifyNeverFails:
+    """REQ-GHA-026: the plain-language explanation never fails."""
+
+    def test_value_zero_against_positive_baseline(self):
+        from src.security.anomaly_detector import classify_anomalies
+        out = classify_anomalies([{"metric": "lb_request_count_1h", "value": 0.0,
+                                   "baseline_mean": 500.0, "z_score": -4.2, "confidence": 0.84}])
+        assert "dropped to 0" in out["details"][0]["summary"]
+
+    def test_flat_zero_baseline(self):
+        from src.security.anomaly_detector import classify_anomalies
+        out = classify_anomalies([{"metric": "error_count_15m", "value": 1.0,
+                                   "baseline_mean": 0.0, "z_score": 0.0, "confidence": 0.5}])
+        assert out["details"][0]["summary"]
+
+
+class TestCollectorReadAt:
+    """REQ-GHA-026: only a successful collector poll is a fresh reading."""
+
+    def test_failed_logging_poll_keeps_read_at(self):
+        import asyncio
+        import sys
+        import types
+        import src.collectors.gcp_logging as gl
+        broken = types.ModuleType("google.cloud.logging_v2")
+
+        def _client(**_):
+            raise RuntimeError("logging unavailable")
+        broken.Client = _client
+        gl._stats = {"error_count_15m": 3, "recent_errors": [], "last_poll": 1.0, "read_at": 1.0}
+        with patch.dict(sys.modules, {"google.cloud.logging_v2": broken}):
+            asyncio.run(gl.poll_once())
+        assert gl._stats["read_at"] == 1.0
+        assert gl._stats["last_poll"] > 1.0
