@@ -348,4 +348,4 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
   9. **Nothing else changes.** The canvas, the checks, login, MCP, and always-on stay as they are.
 - **Estimate (2026-11-06):** about 130k input and 12k output tokens per run, 8 runs a day: roughly $12 a month at $0.25 / $1.50 per million tokens.
 - **Who builds:** Neo.
-- **Status:** confirmed by Igor 2026-11-06 (full text). In progress.
+- **Status:** confirmed by Igor 2026-11-06 (full text); clause 6 amended by Igor the same night. Implemented: PR #52 (neo-shadow1 PROCEED for head 32f5898 after four rounds), merged 57cc123, live 2026-11-06 in image wif44 (revision 0000044). IAM: custom role glasshoodModelCaller (aiplatform.endpoints.predict only) granted to glasshood-azure-logs. First live run 00:35Z under the federated identity: system + 43 parts, 44 calls, about $0.009; Vertex AI, Cloud Monitoring and Cloud Logging calls all 200. Awaiting verification by the reviewer, including a signed-in look.
