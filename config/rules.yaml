@@ -6,6 +6,9 @@
 # REQ-GHA-027 (2026-11-06, Igor): an alarm is shown while its condition holds, once
 # per group and part (the higher severity wins); title is the reader's plain line
 # ({part}, {value}); name is the rule's short name in the "not checked" list.
+# REQ-GHA-028: these are DEFAULTS. A system whose landscape file lists `alarms:` uses
+# those instead. kind: example marks an alarm shown on the demo but not yet trusted
+# (at most a warning). Response time is the median request (typical), not the mean.
 # =============================================================================
 
 rules:
@@ -41,6 +44,7 @@ rules:
     name: "Processor load"
     group: cpu_node
     title: "{part}: processor is busy ({value}%)"
+    kind: example
     severity: warning
     scope: node
     node_types: [vm]
@@ -67,7 +71,7 @@ rules:
     description: "High load balancer latency"
     name: "Response time"
     group: lb_latency
-    title: "{part}: responses are slow ({value} ms on average)"
+    title: "{part}: responses are slow (typical {value} ms)"
     severity: warning
     scope: global
     condition:
@@ -80,7 +84,7 @@ rules:
     description: "Critical load balancer latency"
     name: "Response time"
     group: lb_latency
-    title: "{part}: responses are very slow ({value} ms on average)"
+    title: "{part}: responses are very slow (typical {value} ms)"
     severity: critical
     scope: global
     condition:
@@ -175,6 +179,7 @@ rules:
     description: "Statistical anomaly in infrastructure metrics"
     name: "Unusual readings"
     title: "{part}: {what} is unusual ({value}, normally about {normal})"
+    kind: example
     severity: warning
     scope: global
     per_anomaly: true

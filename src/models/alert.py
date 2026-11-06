@@ -32,6 +32,9 @@ class Alert:
     last_seen: Optional[str] = None
     ended_at: Optional[str] = None
     reasons: list = field(default_factory=list)
+    # REQ-GHA-028: "alarm" (trusted), "example" or "observation" (shown on the demo,
+    # marked, at most a warning)
+    kind: str = "alarm"
 
     def to_dict(self) -> dict:
         return {
@@ -54,4 +57,5 @@ class Alert:
             "last_seen": self.last_seen or self.triggered_at,
             "ended_at": self.ended_at,
             "reasons": list(self.reasons),
+            "kind": self.kind,
         }

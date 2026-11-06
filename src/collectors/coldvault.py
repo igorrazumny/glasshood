@@ -19,6 +19,9 @@ _last_poll: float = 0
 _last_error: str = ""
 # REQ-GHA-025: whether the last metrics read worked, why not, and when it was tried
 _metrics_status: dict = {"read": False, "reason": "not read yet", "checked_at": None}
+# REQ-GHA-028: time of the last metrics reading that worked (process start until then)
+_started_at: float = time.time()
+_last_read_ok: float = 0
 
 
 async def poll_once():
@@ -52,7 +55,7 @@ def _not_read(reason: str, checked_at: float) -> None:
 
 
 async def _poll_metrics():
-    global _metrics, _metrics_status
+    global _metrics, _metrics_status, _last_read_ok
     checked_at = time.time()
     loop = asyncio.get_running_loop()
     try:
@@ -78,6 +81,7 @@ async def _poll_metrics():
         return _not_read("ColdVault answered with no readable metrics", checked_at)
     _metrics = data
     _metrics_status = {"read": True, "reason": "", "checked_at": checked_at}
+    _last_read_ok = checked_at
 
 
 async def poll_loop():
@@ -101,6 +105,24 @@ def get_metrics() -> dict:
 def get_metrics_status() -> dict:
     """Whether ColdVault's metrics were read, and if not why, with the time tried."""
     return dict(_metrics_status)
+
+
+def alarm_data(now: float = None) -> dict:
+    """REQ-GHA-028: what ColdVault's own alarms read. A value is None while it was not
+    read, so its alarm is "not checked" rather than healthy.
+
+    site_unreachable: 1 when the last health call failed, 0 when it answered.
+    minutes_since_reading: since the last metrics reading that worked (or since start)."""
+    now = time.time() if now is None else now
+    status = _health.get("status")
+    system = _metrics.get("system") if _metrics_status.get("read") else None
+    system = system if isinstance(system, dict) else {}
+    return {
+        "site_unreachable": None if status is None else (1 if status == "unreachable" else 0),
+        "ram_used_percent": system.get("ram_used_percent"),
+        "disk_used_percent": system.get("disk_used_percent"),
+        "minutes_since_reading": round((now - (_last_read_ok or _started_at)) / 60, 1),
+    }
 
 
 def get_last_poll() -> float:

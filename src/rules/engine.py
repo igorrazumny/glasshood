@@ -84,9 +84,14 @@ def _title(rule: dict, part_label: Optional[str], value=None, **extra) -> str:
 def _candidate(rule: dict, node_id: Optional[str], part_label: Optional[str], message: str,
                metric_name: Optional[str] = None, value=None, threshold=None,
                severity: Optional[str] = None, **extra) -> Alert:
+    kind = rule.get("kind", "alarm")
+    severity = severity or rule.get("severity", "warning")
+    if kind != "alarm" and severity == "critical":
+        severity = "warning"  # REQ-GHA-028 clause 4: examples are at most a warning
     return Alert(
         rule_id=rule["id"],
-        severity=severity or rule.get("severity", "warning"),
+        kind=kind,
+        severity=severity,
         message=message,
         triggered_at=datetime.now(timezone.utc).isoformat(),
         node_id=node_id,
@@ -111,6 +116,8 @@ def _check_node_rule(rule: dict, node: Node,
     # Filter by node type if specified
     allowed_types = rule.get("node_types")
     if allowed_types and node.type not in allowed_types:
+        return False, None
+    if node.type in (rule.get("exclude_node_types") or ()):
         return False, None
 
     # Get value: special case for "status" (check node.status), otherwise node.metrics
@@ -229,7 +236,8 @@ def _apply(candidates: list[Alert], checked: set, now: float) -> tuple[list, lis
         by_key[(c.group, c.node_id)].append(c)
     new, resolved = [], []
     for key, items in by_key.items():
-        top = max(items, key=lambda a: _SEVERITY_RANK.get(a.severity, 0))
+        # The higher severity wins; at equal severity a trusted alarm wins over an example
+        top = max(items, key=lambda a: (_SEVERITY_RANK.get(a.severity, 0), a.kind == "alarm"))
         reasons = [a.message for a in items]
         current = _active.get(key)
         if current is None:
@@ -238,7 +246,7 @@ def _apply(candidates: list[Alert], checked: set, now: float) -> tuple[list, lis
             _active[key] = top
             new.append(top)
             continue
-        for field in ("rule_id", "severity", "message", "title", "part_label", "metric_name",
+        for field in ("rule_id", "kind", "severity", "message", "title", "part_label", "metric_name",
                       "metric_value", "threshold", "anomaly_classification"):
             setattr(current, field, getattr(top, field))
         current.last_seen = now_iso
@@ -255,17 +263,26 @@ def _apply(candidates: list[Alert], checked: set, now: float) -> tuple[list, lis
     return new, resolved
 
 
+def _rules(rules_path: Optional[str]) -> list[dict]:
+    """REQ-GHA-028: the alarms the landscape files define; the general rules file only
+    when no landscape file defines any (or when a path is given explicitly)."""
+    if rules_path is None:
+        from src.collectors import alarm_sources
+        declared = alarm_sources.alarms()
+        if declared is not None:
+            return declared
+        from src.config.settings import RULES_CONFIG_PATH
+        rules_path = RULES_CONFIG_PATH
+    return load_rules(rules_path)
+
+
 def evaluate_rules(nodes: list, snapshot: dict,
                    rules_path: str = None, labels: Optional[dict] = None) -> list[Alert]:
     """Evaluate all rules against current state. Returns the active alarms.
 
     Only conditions this call could check can start, update or end an alarm, so a
     call with partial data (for example ingest) leaves the others as they are."""
-    from src.config.settings import RULES_CONFIG_PATH
-    if rules_path is None:
-        rules_path = RULES_CONFIG_PATH
-
-    rules = load_rules(rules_path)
+    rules = _rules(rules_path)
     if not rules:
         return []
 
@@ -345,7 +362,7 @@ def track_findings(findings: list, nodes: list, labels: Optional[dict] = None) -
     candidates, checked = [], set()
     for f in findings:
         rule = {"id": f"finding:{f['id']}", "severity": "warning", "title": f["text"],
-                "description": "Finding"}
+                "description": "Finding", "kind": "observation"}
         part = f.get("part")
         checked.add((rule["id"], part))
         if f.get("active", True):
