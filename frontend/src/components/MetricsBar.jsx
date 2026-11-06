@@ -2,6 +2,7 @@
 // Purpose: Bottom bar — key numbers from topology data
 
 import { Clock, Activity, HardDrive, Users } from 'lucide-react'
+import { metricsNotRead } from '../utils/coldvaultMetrics'
 
 // REQ-009: default text color flips to dark slate on light, purple-100 on dark.
 function Metric({ icon: Icon, label, value, color = 'text-gray-700 dark:text-purple-100' }) {
@@ -32,6 +33,7 @@ export default function MetricsBar({ topology }) {
   const ram = cv?.metrics?.ram_percent
   const reqs = lb?.metrics?.requests_1h
   const users = topology.user_stats?.active_users
+  const cvMetrics = topology.coldvault_metrics
 
   return (
     <div className="flex items-center justify-center gap-8 px-4 py-2 bg-card dark:bg-purple-900 border-t border-border dark:border-purple-700">
@@ -56,6 +58,12 @@ export default function MetricsBar({ topology }) {
         label="Active Users"
         value={users ?? '-'}
       />
+      {/* REQ-GHA-025 clause 5: say plainly when ColdVault's metrics were not read */}
+      {cvMetrics && !cvMetrics.read && (
+        <span className="text-xs text-gray-500 dark:text-purple-300">
+          {metricsNotRead(cvMetrics)}
+        </span>
+      )}
     </div>
   )
 }

@@ -361,6 +361,7 @@ def _build_topology() -> dict:
     }
     result["security"] = security
     result["user_stats"] = user_stats
+    result["coldvault_metrics"] = coldvault.get_metrics_status()
     result["alerts"] = [a.to_dict() for a in all_alerts]
     result["anomalies"] = anomaly_list
     _apply_anomaly_classification(result, anomaly_list)
