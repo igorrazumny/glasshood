@@ -188,3 +188,106 @@ export function elbowPath(from, to, axis) {
   const my = (from.y + to.y) / 2
   return `M ${from.x} ${from.y} V ${my} H ${to.x} V ${to.y}`
 }
+
+// --- REQ-GHA-023 clause 9 "few bends": route a line between two boxes ---
+// A box is {x, y, hw, hh} (centre and half sizes). Candidate paths use the boxes' side
+// middles (a group's side at the point level with the other end), and are straight, one
+// right angle, or two. A path that cuts through an unrelated box is never preferred; among
+// the rest the fewest bends win, then the shortest.
+
+const DIRS = { L: [-1, 0], R: [1, 0], T: [0, -1], B: [0, 1] }
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)) }
+
+function port(box, side, other, isGroup) {
+  const m = 12
+  if (isGroup) {   // a group side: level with the other end where the side allows
+    if (side === 'L' || side === 'R') {
+      return { x: box.x + (side === 'L' ? -box.hw : box.hw), y: clamp(other.y, box.y - box.hh + m, box.y + box.hh - m) }
+    }
+    return { x: clamp(other.x, box.x - box.hw + m, box.x + box.hw - m), y: box.y + (side === 'T' ? -box.hh : box.hh) }
+  }
+  if (side === 'L') return { x: box.x - box.hw, y: box.y }
+  if (side === 'R') return { x: box.x + box.hw, y: box.y }
+  if (side === 'T') return { x: box.x, y: box.y - box.hh }
+  return { x: box.x, y: box.y + box.hh }
+}
+
+function segHitsBox(a, b, r) {
+  // axis-aligned segment a-b against rectangle r (shrunk slightly so touching edges is fine)
+  const x1 = Math.min(a.x, b.x), x2 = Math.max(a.x, b.x), y1 = Math.min(a.y, b.y), y2 = Math.max(a.y, b.y)
+  return x2 > r.x - r.hw + 1 && x1 < r.x + r.hw - 1 && y2 > r.y - r.hh + 1 && y1 < r.y + r.hh - 1
+}
+
+function pathsFor(p, s, q, t) {
+  const [sx, sy] = DIRS[s], [tx, ty] = DIRS[t]
+  const out = []
+  const horizS = sx !== 0, horizT = tx !== 0
+  const leaves = (a, b, dx, dy) => (b.x - a.x) * dx + (b.y - a.y) * dy > 0.5
+  const arrives = (a, b) => (a.x - b.x) * tx + (a.y - b.y) * ty > 0.5   // comes from outside t's side
+  if (horizS && horizT) {
+    if (Math.abs(p.y - q.y) < 0.5 && leaves(p, q, sx, 0) && arrives(p, q)) out.push([p, q])
+    const mids = [(p.x + q.x) / 2, Math.max(p.x, q.x) + 24, Math.min(p.x, q.x) - 24]
+    for (const mx of mids) {
+      const a = { x: mx, y: p.y }, b = { x: mx, y: q.y }
+      if (Math.abs(p.y - q.y) >= 0.5 && leaves(p, a, sx, 0) && arrives(b, q)) out.push([p, a, b, q])
+    }
+  } else if (!horizS && !horizT) {
+    if (Math.abs(p.x - q.x) < 0.5 && leaves(p, q, 0, sy) && arrives(p, q)) out.push([p, q])
+    const mids = [(p.y + q.y) / 2, Math.max(p.y, q.y) + 24, Math.min(p.y, q.y) - 24]
+    for (const my of mids) {
+      const a = { x: p.x, y: my }, b = { x: q.x, y: my }
+      if (Math.abs(p.x - q.x) >= 0.5 && leaves(p, a, 0, sy) && arrives(b, q)) out.push([p, a, b, q])
+    }
+  } else {
+    const c = horizS ? { x: q.x, y: p.y } : { x: p.x, y: q.y }
+    if (leaves(p, c, sx, sy) && arrives(c, q)) out.push([p, c, q])
+  }
+  return out
+}
+
+export function routeEdge({ src, tgt, obstacles = [], srcSides, tgtSides }) {
+  // src/tgt: {box, isGroup}; obstacles: boxes the line must not cut through
+  const sides = ['L', 'R', 'T', 'B']
+  let best = null
+  for (const s of srcSides || sides) {
+    for (const t of tgtSides || sides) {
+      const p = port(src.box, s, tgt.box, src.isGroup)
+      const q = port(tgt.box, t, p, tgt.isGroup)
+      for (const pts of pathsFor(p, s, q, t)) {
+        let hits = 0, len = 0
+        for (let i = 1; i < pts.length; i++) {
+          len += Math.abs(pts[i].x - pts[i - 1].x) + Math.abs(pts[i].y - pts[i - 1].y)
+          for (const o of obstacles) if (segHitsBox(pts[i - 1], pts[i], o)) hits++
+        }
+        const score = hits * 1e6 + (pts.length - 2) * 1e3 + len
+        if (!best || score < best.score) best = { pts, score, bends: pts.length - 2, hits }
+      }
+    }
+  }
+  return best
+}
+
+export function pathD(pts) {
+  return pts.map((p, i) => `${i ? 'L' : 'M'} ${p.x} ${p.y}`).join(' ')
+}
+
+// The middle of a route's longest segment: where its label goes.
+export function labelPoint(pts) {
+  let best = [pts[0], pts[1]], bl = -1
+  for (let i = 1; i < pts.length; i++) {
+    const l = Math.abs(pts[i].x - pts[i - 1].x) + Math.abs(pts[i].y - pts[i - 1].y)
+    if (l > bl) { bl = l; best = [pts[i - 1], pts[i]] }
+  }
+  return { x: (best[0].x + best[1].x) / 2, y: (best[0].y + best[1].y) / 2 }
+}
+
+// REQ-GHA-023 clause 9: an exact position from the manifest, if it gives one. VMs of a dynamic
+// group stack below the group's pos, each its own height plus a gap apart.
+export function placedPosition(mNode, group, index, node, heightOf = () => 162, gap = 20) {
+  if (mNode?.pos && Number.isFinite(mNode.pos.x) && Number.isFinite(mNode.pos.y)) return { x: mNode.pos.x, y: mNode.pos.y }
+  if (group?.dynamic && group.pos && Number.isFinite(group.pos.x) && Number.isFinite(group.pos.y)) {
+    return { x: group.pos.x, y: group.pos.y + index * (heightOf(node) + gap) }
+  }
+  return null
+}

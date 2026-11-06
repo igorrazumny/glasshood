@@ -4,7 +4,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import TopologyNode, { nodeHeight, NODE_H, NODE_W, childHeight, CHILD_H, CHILD_GAP, CHILD_PAD } from './TopologyNode'
 import { computeManifestLayout, buildParentNodeRecord } from '../utils/manifestLayout'
-import { nearestSide, groupCenter, groupAttestationBadge, worstStatus, anchorPoint, boxSizes, edgeStyle, fitViewBox, nestedChildIds, flowAnchors, elbowPath } from '../utils/canvasParts.js'
+import { groupAttestationBadge, worstStatus, boxSizes, edgeStyle, fitViewBox, nestedChildIds, routeEdge, pathD, labelPoint } from '../utils/canvasParts.js'
 import { useNodePositions } from '../hooks/useNodePositions'
 
 // Dynamic live layout — HARDWARE ONLY
@@ -228,40 +228,23 @@ const STATUS_COLORS_HEX_REFERENCE = {
   planned: '#94a3b8',
 }
 
-function EdgeLine({ edge, positions, boxes, nested, index = 0 }) {
-  const fromC = positions[edge.source]
-  const toC = positions[edge.target]
-  if (!fromC || !toC) return null
+function EdgeLine({ edge }) {
+  const pts = edge.pts
+  if (!pts || pts.length < 2) return null
   const look = edgeStyle(edge)
-  // REQ-GHA-023 clause 9: request/data flow and dashed lines run at right angles between side or
-  // top/bottom middles; configuration, probe and observation lines are straight between facing sides.
-  const flow = !edge.style || edge.style === 'default'
-  const routed = flow || edge.style === 'dashed'   // dashed (deploy, redirect) also runs at right angles
-  let from, to, pathD
-  if (routed) {
-    const a = flowAnchors(edge.source, edge.target, fromC, toC, boxes, nested, edge.axis)
-    from = a.from; to = a.to
-    pathD = elbowPath(from, to, a.axis)
-  } else {
-    from = anchorPoint(edge.source, fromC, toC, boxes)
-    to = anchorPoint(edge.target, toC, fromC, boxes)
-    pathD = `M ${from.x} ${from.y} L ${to.x} ${to.y}`
-  }
-
   const isDeployEdge = edge.style === 'dashed'
   // REQ-005 + REQ-009 Phase 4b: deploy-edge gray via CSS var so dark mode
   // can substitute a brighter slate.
   const color = (isDeployEdge || edge.style === 'thin') ? 'var(--edge-deploy)' : (STATUS_COLORS[edge.status] || STATUS_COLORS.unknown)
   const broken = edge.status === 'disconnected' || edge.status === 'error'
   const dash = broken ? '6 4' : look.dash
-  const pathId = `edge-${edge.source}-${edge.target}-${index}`
+  const lp = labelPoint(pts)
 
   return (
     <g>
       {edge.label && <title>{`${edge.source} → ${edge.target}: ${edge.label}`}</title>}
       <path
-        id={pathId}
-        d={pathD}
+        d={pathD(pts)}
         fill="none"
         stroke={color}
         strokeWidth={look.width}
@@ -270,7 +253,7 @@ function EdgeLine({ edge, positions, boxes, nested, index = 0 }) {
         markerEnd={look.arrow ? 'url(#arrowhead)' : undefined}
       />
       {look.showLabel && edge.label && (
-        <text x={(from.x + to.x) / 2} y={(from.y + to.y) / 2 - 3} fill="var(--canvas-text-soft)" fontSize={6.5} textAnchor="middle">
+        <text x={lp.x} y={lp.y - 3} fill="var(--canvas-text-soft)" fontSize={6.5} textAnchor="middle">
           {edge.label}
         </text>
       )}
@@ -779,30 +762,46 @@ export default function TopologyMap({ data, error, isDemo, hideCosts, onNodeSele
   for (const g of effectiveGroups) {
     if (g._name) groupBoundsMap[g._name] = g
   }
+  const edgeBoxes = boxSizes(nodes, { nodeW: NODE_W, nodeHeight, childHeight, childPad: CHILD_PAD })
+  const nestedIds = nestedChildIds(nodes)
+  // REQ-GHA-023 clause 9 "few bends": every line is routed between box sides with as few bends
+  // as possible, never through an unrelated box. topOf: a nested box's top-level box (its VM).
+  const topOf = {}
+  const markTop = (children, top) => { for (const c of children || []) { if (c.id) topOf[c.id] = top; markTop(c.children, top) } }
+  for (const n of nodes) markTop(n.children, n.id)
+  const boxOf = (id) => {
+    const p = resolvedPositions[id], b = edgeBoxes[id]
+    return p && b ? { x: p.x, y: p.y, hw: b.hw, hh: b.hh } : null
+  }
+  const groupBox = (g) => ({ x: g.x + g.w / 2, y: g.y + g.h / 2, hw: g.w / 2, hh: g.h / 2 })
+  const topBoxes = nodes.map(n => ({ id: n.id, box: boxOf(n.id) })).filter(o => o.box)
   const resolvedEdges = edges.map(e => {
     const srcGroup = e.source?.startsWith('@') ? groupBoundsMap[e.source.slice(1)] : null
     const tgtGroup = e.target?.startsWith('@') ? groupBoundsMap[e.target.slice(1)] : null
-    if (!srcGroup && !tgtGroup) return e  // normal node-to-node edge
-    const resolvedSource = srcGroup
-      ? `__grp_${e.source.slice(1)}_R`
-      : e.source
-    const resolvedTarget = tgtGroup
-      ? `__grp_${e.target.slice(1)}_L`
-      : e.target
-    // Create temporary positions for group boundary points (in resolvedPositions, not base positions).
-    // REQ-GHA-023: a group's edge meets the side facing the other end, so many edges into one
-    // group spread over its sides instead of converging on one point.
-    const srcSide = srcGroup && nearestSide(srcGroup, tgtGroup ? groupCenter(tgtGroup) : resolvedPositions[e.target])
-    const tgtSide = tgtGroup && nearestSide(tgtGroup, srcGroup ? groupCenter(srcGroup) : resolvedPositions[e.source])
-    const srcKey = srcGroup ? `${resolvedSource}_${srcSide?.side}` : resolvedSource
-    const tgtKey = tgtGroup ? `${resolvedTarget}_${tgtSide?.side}` : resolvedTarget
-    if (srcSide) resolvedPositions[srcKey] = srcSide.point
-    if (tgtSide) resolvedPositions[tgtKey] = tgtSide.point
-    return { ...e, source: srcKey, target: tgtKey }
-  }).filter(e => resolvedPositions[e.source] && resolvedPositions[e.target])
+    const src = srcGroup ? { box: groupBox(srcGroup), isGroup: true } : { box: boxOf(e.source) }
+    const tgt = tgtGroup ? { box: groupBox(tgtGroup), isGroup: true } : { box: boxOf(e.target) }
+    if (!src.box || !tgt.box) return null
+    const exclude = new Set([e.source, e.target, topOf[e.source], topOf[e.target]])
+    const groupMembers = (g) => g ? new Set(Object.entries(activeNodeGroups).filter(([, gi]) => gi === g._idx).map(([nid]) => nid)) : new Set()
+    const inSrc = groupMembers(srcGroup), inTgt = groupMembers(tgtGroup)
+    // Unrelated boxes and unrelated group frames are obstacles; the groups holding either end are not.
+    const ownGroups = new Set([srcGroup?._idx, tgtGroup?._idx,
+      activeNodeGroups[e.source], activeNodeGroups[e.target],
+      activeNodeGroups[topOf[e.source]], activeNodeGroups[topOf[e.target]]].filter(v => v !== undefined && v !== null))
+    const obstacles = [
+      ...topBoxes.filter(o => !exclude.has(o.id) && !inSrc.has(o.id) && !inTgt.has(o.id)).map(o => o.box),
+      ...effectiveGroups.filter(g => g.label && !ownGroups.has(g._idx)).map(groupBox),
+    ]
+    // An app nested in a VM is entered from its left and left from its right.
+    const hOnly = ['L', 'R']
+    const route = routeEdge({
+      src, tgt, obstacles,
+      srcSides: nestedIds.has(e.source) ? hOnly : null,
+      tgtSides: nestedIds.has(e.target) ? hOnly : null,
+    })
+    return route ? { ...e, pts: route.pts } : null
+  }).filter(Boolean)
 
-  const edgeBoxes = boxSizes(nodes, { nodeW: NODE_W, nodeHeight, childHeight, childPad: CHILD_PAD })
-  const nestedIds = nestedChildIds(nodes)
 
   // REQ-GHA-023 clause 9: open on the whole pipeline once it is laid out; later polls do not
   // re-snap the view (a rollout adding a VM keeps the reader's pan and zoom).
@@ -1056,7 +1055,7 @@ export default function TopologyMap({ data, error, isDemo, hideCosts, onNodeSele
         ))}
 
         {resolvedEdges.map((edge, i) => (nestedIds.has(edge.source) || nestedIds.has(edge.target)) ? null : (
-          <EdgeLine key={i} edge={edge} positions={resolvedPositions} boxes={edgeBoxes} nested={nestedIds} index={i} />
+          <EdgeLine key={i} edge={edge} />
         ))}
 
         {nodes.map((node, idx) => {
@@ -1089,7 +1088,7 @@ export default function TopologyMap({ data, error, isDemo, hideCosts, onNodeSele
         {/* REQ-GHA-023 clause 9: lines into or out of an app nested in a VM are drawn on top,
             so the arrow is seen reaching the app's side instead of vanishing under the VM box. */}
         {resolvedEdges.map((edge, i) => (nestedIds.has(edge.source) || nestedIds.has(edge.target)) ? (
-          <EdgeLine key={`n${i}`} edge={edge} positions={resolvedPositions} boxes={edgeBoxes} nested={nestedIds} index={i} />
+          <EdgeLine key={`n${i}`} edge={edge} />
         ) : null)}
       </svg>
 
