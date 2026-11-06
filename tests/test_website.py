@@ -287,7 +287,13 @@ def test_the_architecture_page_carries_the_site_masthead_on_both_hosts():
 
 def test_home_has_the_two_colour_hero_and_cards_with_icons():
     home = _read(_PUB / "index.html")
-    assert '<span class="hero-title-first">' in home and '<span class="hero-title-rest">' in home
+    # REQ-GHA-018 clauses 1 and 14, amended 2026-11-06 (third): the hero says what GlassHood is, in Igor's approved words.
+    assert ('<h1 class="hero-title"><span class="hero-title-first">AI monitoring for integration pipelines</span> '
+            '<span class="hero-title-rest">and the complex systems around them.</span></h1>') in home
+    hero = " ".join(home.split('<p class="hero-text">', 1)[1].split("</p>", 1)[0].split())
+    assert hero == ("GlassHood watches the systems in an integration pipeline and the connections between them, live, and shows "
+                    "them on one dashboard: every part on a live map, checked against the declared design, with alerts and a short "
+                    "AI overview of what needs attention. It installs nothing in the systems it watches and only reads them.")
     # No colour wash behind the hero (Igor, 2026-11-05: "fade out, we will remove for GlassHood").
     assert "hero-wash" not in home and "hero-wash" not in _read(_PUB / "assets/site.css")
     assert home.count('<span class="feature-icon">') == 3
@@ -434,7 +440,7 @@ def test_the_logo_is_always_shown_at_full_strength():
             assert not (":hover" in sel and " img" in sel), sel
 
 
-_HOME_SECTIONS = {
+_HOW_IT_WORKS_PARTS = {  # Home's cards until 2026-11-06, now parts of How it works
     "read-only": ("Read-only by design",
         "GlassHood installs nothing in the system it watches. Toward the monitored cloud project, every call is "
         "list, get or describe; nothing creates, changes or deletes anything there. Read-only is enforced twice: "
@@ -454,20 +460,61 @@ _HOME_SECTIONS = {
         "human review. They are unsigned and are not an independent validation or certification; a qualified "
         "person reviews and adopts every artifact."),
 }
+_ANALYSIS_PART = ("Deterministic signals first, AI on top",
+    "Every alert comes from a deterministic and statistical tier: threshold rules, anomaly detection over a rolling "
+    "baseline, and a correlator that ties anomalies to operational alerts. AI runs strictly on top and explains them; "
+    "it never raises an alert itself, so every conclusion rests on a signal a person can reproduce without the model.")
+
+# REQ-GHA-018 clauses 1 and 14, amended 2026-11-06 (third), in the wording Igor approved on 2026-11-06.
+_HOME_CARDS = {
+    "what-it-is": ("What it is",
+        "AI monitoring, with dashboards, of integration pipelines and other complex systems: one live view of every part, "
+        "every connection and its health.",
+        "GlassHood connects to a running system — today a solution on Google Cloud, read from Azure — and builds one live "
+        "picture of it: every part, every connection between them and their health, refreshed every cycle. It merges what "
+        "it discovers with the system's declared design, so the gap between the design and what actually runs is visible. "
+        "Rules and anomaly detection raise the alerts; an AI overview then says in a few sentences how the whole system is "
+        "doing and what needs attention, and each part has its own. Operators and business readers see the same dashboard, "
+        "and nothing they do there changes the monitored system."),
+    "the-problem": ("The problem it solves",
+        "In a chain of connected systems, a failure often shows up somewhere else and later, and each team sees only its "
+        "own part.",
+        "Integration pipelines fail quietly. A connection stops, a message no longer arrives, a service is replaced and an "
+        "interface is left behind, and the first sign is often a wrong result further down the chain. Each team watches its "
+        "own system with its own tool, so nobody sees the whole chain at once, and the design on paper drifts away from what "
+        "actually runs. GlassHood puts the whole chain in one view, compares it with the declared design, and points at the "
+        "part where it breaks."),
+    "how-it-works": ("How it works",
+        "Read-only collectors, one live model checked against the design, deterministic signals first with AI on top, and "
+        "compliance evidence from what it observed.",
+        None),
+}
 
 
-def test_home_cards_open_their_sections_as_on_the_architecture_page():
-    # REQ-GHA-018 clause 14, amended 2026-11-05 (third): each card can be clicked as a whole and shows a
-    # section further down on Home about its topic, in the wording Igor approved on 2026-11-05.
+def test_home_answers_what_it_is_the_problem_it_solves_and_how_it_works():
+    # Each card can be clicked as a whole and shows the sections further down on Home, as on the architecture page.
+    # How it works restates the architecture page in its order (collection, topology, analysis, compliance).
+    import html as _html
+    norm = lambda t: " ".join(_html.unescape(t).split())
     home = _read(_PUB / "index.html")
     assert '<main class="pd-page">' in home and home.count('class="feature pd-card"') == 3
+    order = [home.index(f'<a href="#{cid}" class="feature pd-card" data-target="{cid}">') for cid in _HOME_CARDS]
+    assert order == sorted(order), "What it is, then The problem it solves, then How it works"
     hidden = home.split('<div class="pd-hidden-until-reveal">', 1)[1].split("</main>", 1)[0]
-    for cid, (title, text) in _HOME_SECTIONS.items():
-        assert f'<a href="#{cid}" class="feature pd-card" data-target="{cid}">' in home, cid
+    for cid, (title, text, detail) in _HOME_CARDS.items():
+        card = home[home.index(f'data-target="{cid}">'):]
+        assert f'<h2 class="feature-title">{title}</h2>' in card[:2000], cid
+        assert norm(card.split('<p class="feature-text">', 1)[1].split("</p>", 1)[0]) == text, cid
         section = re.search(rf'<section class="wrap home-detail" id="{cid}">(.*?)</section>', hidden, re.S)
-        assert section, cid
-        assert f"<h2>{title}</h2>" in section.group(1), cid
-        assert " ".join(re.search(r"<p>(.*?)</p>", section.group(1), re.S).group(1).split()) == text, cid
+        assert section and f"<h2>{title}</h2>" in section.group(1), cid
+        if detail:
+            assert norm(re.search(r"<p>(.*?)</p>", section.group(1), re.S).group(1)) == detail, cid
+    how = re.search(r'<section class="wrap home-detail" id="how-it-works">(.*?)</section>', hidden, re.S).group(1)
+    parts = [(t, norm(p)) for t, p in re.findall(r"<h3>(.*?)</h3>\s*<p>(.*?)</p>", how, re.S)]
+    expected = [_HOW_IT_WORKS_PARTS["read-only"], _HOW_IT_WORKS_PARTS["live-topology"], _ANALYSIS_PART, _HOW_IT_WORKS_PARTS["compliance"]]
+    assert parts == expected
+    assert '<a class="button" href="/architecture/">See the architecture &rarr;</a>' in how
+    assert "Where we are today" not in home and "system description" not in home.lower()
     assert home.count("Click to read the section &rarr;") == 3
     assert home.rstrip().endswith('<script src="/architecture/app.js"></script>\n</body>\n</html>')
     css = _read(_PUB / "assets/site.css")

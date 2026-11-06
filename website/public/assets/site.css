@@ -143,6 +143,10 @@ a:hover{text-decoration:underline}
 .home-detail{padding-top:28px;padding-bottom:28px;scroll-margin-top:24px}
 .home-detail h2{margin:0 0 14px;font-size:22px;line-height:1.3;font-weight:700;color:var(--blue);letter-spacing:-.01em}
 .home-detail p{margin:0;max-width:760px;font-size:19px;line-height:1.55;color:var(--sub)}
+/* How it works holds parts, each under its own heading, and ends with the button to the architecture page. */
+.home-detail h3{margin:22px 0 6px;font-size:18px;line-height:1.35;font-weight:700;color:var(--navy)}
+.home-detail h2 + h3{margin-top:0}
+.home-detail-cta{margin-top:26px}
 
 /* Contact and the not-found page */
 .page{padding-top:64px;padding-bottom:96px}
