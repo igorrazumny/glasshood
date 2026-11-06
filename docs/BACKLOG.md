@@ -397,3 +397,36 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Testable:** Yes (API + UI)
 - **Who builds:** Neo.
 - **Status:** confirmed by Igor 2026-11-06 (full text). Implemented and live 2026-11-06: PR #60 (merged 7e8f463 before review on Igor's instruction) plus review fix PR #61 (C3 failed query is not a recovery; neo-shadow1 PROCEED for c7bf62f). Map file v9 (sha d296107a…) live on the config share. Signed-in acceptance still open.
+
+## REQ-GHA-028: Each system's alarms are defined in GlassHood, in its landscape file; start with alarms we are sure of
+
+- **Goal:** GlassHood, not the monitored system, defines what is alarmed, where the data is read and at what threshold, per system, as part of the landscape definition. The first set holds only alarms we trust; the rest stay visible on the demo as marked examples.
+- **Why:** Owner, 2026-11-06 (with the architect): most target systems can't define alarms or quality levels themselves, so the monitoring system must know each system, where to check and what the alarms are. Focus first on alarms we are sure of and add more progressively, but keep examples so the demo never looks as if nothing could go wrong.
+- **Target state:**
+  1. For each monitored system, its landscape file in GlassHood lists which alarms apply, the part each one concerns, where its data is read (logs, metrics, health address) and its threshold. GlassHood never expects the monitored system to define or send alarms. The general rules file keeps only defaults for systems that don't set their own.
+  2. First set for ColdVault, only alarms we are sure of: site not reachable (critical); application errors above a set number in 15 minutes, ColdVault's own errors only (warning; critical above a higher number); memory and disk use above a set percentage (warning); no new reading from ColdVault for longer than expected (warning); a check the system itself reports as failing (critical).
+  3. The response-time alarm uses typical response time (the median), not the average, so one long chat answer does not count as "very slow".
+  4. Other alarms (unusual readings, configuration findings) stay on the demo as examples at warning level, clearly marked "example" or "observation", and are promoted to real alarms one at a time once trusted. The demo keeps showing at least the configuration findings.
+  5. An alarm whose data GlassHood can't read shows as "not checked", never as healthy.
+- **Acceptance:** ColdVault's landscape file holds its alarm list and thresholds, and changing a threshold there changes the alarm. The live page shows the sure alarms as alarms and the others marked as examples. One slow chat answer doesn't raise a response-time alarm.
+- **Priority:** P2
+- **Testable:** Yes (API + UI)
+- **Who builds:** Neo.
+- **Status:** confirmed by Igor 2026-11-06 (full text).
+
+## REQ-GHA-029: An AI log review raises alarms; critical ones stay until acknowledged; "Investigate deeper" writes a report
+
+- **Goal:** The AI reads each system's logs regularly and says when there is a real problem. Critical problems are not lost, and a user can ask for a deeper investigation of one problem and get a report.
+- **Why:** Owner, 2026-11-06: the main thing to show is the AI looking at the logs every few hours and saying "there is a problem there"; real critical messages shouldn't disappear, they should be acknowledged and investigated; a button "investigate deeper" should build the picture, maybe search the internet, follow up, and report with an executive summary, on demand per issue.
+- **Target state:**
+  1. Every 3 hours the AI reads each system's recent logs, at the log locations in its landscape file, and names each real problem it finds, the part involved and a severity. Each becomes an alarm marked "found by AI review".
+  2. A critical problem found by the AI does not go away by itself, even if the next review doesn't see it again. It stays open until a signed-in person acknowledges it; the alarm records who acknowledged it and when. Warnings from the AI review end on their own when the problem is no longer seen.
+  3. Each alarm has an "Investigate deeper" button (signed-in users only). It starts one investigation of that problem only; nothing is prepared in advance. The investigation reads further back in the logs and the related parts' logs, builds a timeline, may search the internet for the error to see whether it is a known, common problem, and checks whether it happened again after the first time.
+  4. The report gives, in order: an executive summary of a few sentences; what was found, with the log lines as evidence; what is happening; whether it is ongoing or happened once; a conclusion and a suggested next step. It is saved with the alarm and can be opened again.
+  5. Reopening a report later allows a follow-up, which adds what happened since (for example "this happened once and has not happened again").
+  6. The AI's text is plain data and never triggers any action in the monitored system. Investigations have a daily cost cap, as the overview has today.
+- **Acceptance:** A problem planted in the ColdVault logs (or a real one) appears as an AI-found alarm after the review. A critical one stays until acknowledged. "Investigate deeper" writes a report that opens with an executive summary. A follow-up says whether the problem happened again.
+- **Priority:** P2
+- **Testable:** Yes (API + UI; one live run)
+- **Who builds:** Neo.
+- **Status:** confirmed by Igor 2026-11-06 (full text).
