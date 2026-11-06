@@ -110,7 +110,7 @@ export default function AnalysisPanel({ data, topology, canvas }) {
         )}
       </div>
 
-      {/* REQ-GHA-024 clause 1: when it was written and by which model, right on top */}
+      {/* REQ-GHA-024 clause 1: when it was written, right on top (the model is not named) */}
       <p className="text-xs text-gray-500 dark:text-purple-300 -mt-2">{overviewStamp(analysis)}</p>
       {analysis.error && (
         <p className="text-xs text-yellow-700 dark:text-yellow-300">{analysis.error}{hasData ? ' — showing the last overview.' : ''}</p>

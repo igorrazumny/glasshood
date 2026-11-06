@@ -1,5 +1,6 @@
 // File: frontend/src/utils/overview.js
-// Purpose: REQ-GHA-024 — how an AI overview's time, model and spend read on screen.
+// Purpose: REQ-GHA-024 — how an AI overview's time and spend read on screen. The model is
+// not named: GlassHood uses whichever model suits (Igor, 2026-11-06).
 
 export function ago(tsSeconds, now = Date.now()) {
   const s = Math.max(0, Math.round(now / 1000 - tsSeconds))
@@ -10,10 +11,10 @@ export function ago(tsSeconds, now = Date.now()) {
 }
 
 export function overviewStamp(o, now = Date.now()) {
-  if (!o?.analyzed_at) return o?.model ? `Not written yet · ${o.model}` : 'Not written yet'
+  if (!o?.analyzed_at) return 'Not written yet'
   const t = new Date(o.analyzed_at * 1000)
   const hhmm = t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  return `Updated ${hhmm}, ${ago(o.analyzed_at, now)}${o.model ? ` · ${o.model}` : ''}`
+  return `Updated ${hhmm}, ${ago(o.analyzed_at, now)}`
 }
 
 export function spendLine(sp) {

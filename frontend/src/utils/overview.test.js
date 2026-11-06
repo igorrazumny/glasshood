@@ -1,5 +1,5 @@
 // File: frontend/src/utils/overview.test.js
-// Purpose: REQ-GHA-024 — the overview says when it was written, by which model, and the spend
+// Purpose: REQ-GHA-024 — the overview says when it was written (not by which model), and the spend
 // Run: node frontend/src/utils/overview.test.js
 
 import assert from 'node:assert/strict'
@@ -19,13 +19,14 @@ test('age reads in plain words', () => {
   assert.equal(ago(now / 1000 - 2 * 86400, now), '2 d ago')
 })
 
-test('stamp names the time, the age and the model', () => {
+test('stamp names the time and the age, never the model', () => {
   const s = overviewStamp({ analyzed_at: now / 1000 - 3600, model: 'gemini-3.1-flash-lite' }, now)
-  assert.match(s, /^Updated \S+.*, 1 h ago · gemini-3\.1-flash-lite$/)
+  assert.match(s, /^Updated \S+.*, 1 h ago$/)
+  assert.doesNotMatch(s, /gemini/)
 })
 
 test('no overview yet says so', () => {
-  assert.equal(overviewStamp({ analyzed_at: null, model: 'm' }, now), 'Not written yet · m')
+  assert.equal(overviewStamp({ analyzed_at: null, model: 'm' }, now), 'Not written yet')
   assert.equal(overviewStamp(undefined, now), 'Not written yet')
 })
 
