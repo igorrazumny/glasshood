@@ -7,14 +7,15 @@ import yaml
 from src.ingest.processor import (
     process_batch, _events, _agent_heartbeats, _audit_log,
 )
-from src.rules.engine import get_alerts, _alerts, _audit_log as _rules_audit_log
+from src.rules.engine import get_alerts, _active, _resolved, _audit_log as _rules_audit_log
 
 
 def _reset():
     _events.clear()
     _agent_heartbeats.clear()
     _audit_log.clear()
-    _alerts.clear()
+    _active.clear()
+    _resolved.clear()
     _rules_audit_log.clear()
 
 
@@ -27,6 +28,7 @@ class TestIngestRulesIntegration:
         rules_yaml.write_text(yaml.dump({
             "rules": [{
                 "id": "ingest_syslog_errors",
+                "part": "mw-01",  # REQ-GHA-027: an alarm names its part
                 "description": "High syslog error rate",
                 "severity": "warning",
                 "scope": "global",
@@ -60,6 +62,7 @@ class TestIngestRulesIntegration:
         rules_yaml.write_text(yaml.dump({
             "rules": [{
                 "id": "ingest_file_errors",
+                "part": "mw-01",  # REQ-GHA-027: an alarm names its part
                 "description": "High file error rate",
                 "severity": "warning",
                 "scope": "global",
@@ -99,6 +102,7 @@ class TestIngestRulesIntegration:
         rules_yaml.write_text(yaml.dump({
             "rules": [{
                 "id": "webhook_volume",
+                "part": "mw-01",  # REQ-GHA-027: an alarm names its part
                 "description": "High webhook volume",
                 "severity": "info",
                 "scope": "global",
@@ -125,3 +129,16 @@ class TestIngestRulesIntegration:
         alerts = get_alerts()
         assert len(alerts) == 1
         assert alerts[0]["rule_id"] == "webhook_volume"
+
+    def test_rule_without_a_part_raises_nothing(self, tmp_path):
+        """REQ-GHA-027 clause 3: an alarm must name the part it concerns."""
+        rules_yaml = tmp_path / "rules.yaml"
+        rules_yaml.write_text(yaml.dump({"rules": [{
+            "id": "ingest_syslog_errors", "severity": "warning", "scope": "global",
+            "condition": {"source": "ingest_syslog", "metric": "error_count",
+                          "operator": ">", "threshold": 0}}]}))
+        events = [{"source_id": "x", "message": "m", "source_type": "syslog", "severity": "error"}]
+        with patch("src.config.settings.INGEST_RULES_ENABLED", True), \
+             patch("src.config.settings.RULES_CONFIG_PATH", str(rules_yaml)):
+            process_batch(events, "agent-1")
+        assert get_alerts() == []
