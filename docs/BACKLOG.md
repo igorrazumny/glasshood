@@ -352,3 +352,20 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Estimate (2026-11-06):** about 130k input and 12k output tokens per run, 8 runs a day: roughly $12 a month at $0.25 / $1.50 per million tokens.
 - **Who builds:** Neo.
 - **Status:** confirmed by Igor 2026-11-06 (full text); clause 6 amended by Igor the same night. Implemented: PR #52 (neo-shadow1 PROCEED for head 32f5898 after four rounds), merged 57cc123, live 2026-11-06 in image wif44 (revision 0000044). IAM: custom role glasshoodModelCaller (aiplatform.endpoints.predict only) granted to glasshood-azure-logs. First live run 00:35Z under the federated identity: system + 43 parts, 44 calls, about $0.009; Vertex AI, Cloud Monitoring and Cloud Logging calls all 200. Awaiting verification by the reviewer, including a signed-in look.
+
+## REQ-GHA-027: Every alarm on the ColdVault view is about ColdVault, current, and said once
+
+- **Goal:** A reader can trust each alarm shown: it concerns ColdVault, it's true now, and it appears once.
+- **Why:** Owner, 2026-11-06: "the alarms need to be properly reviewed, they very often do not seem meaningful." The review found alarms kept for an hour after their condition cleared and re-added every 5 minutes (one anomaly showed as 4 criticals), one event raising a warning and a critical together, error and machine counts covering every VM in the Google project (the only "errors" were the VM's own system software), alarms tied to no part, engineer wording ("high_confidence_count=1"), and rules from other demos with no data source.
+- **Target state:**
+  1. **Current only.** An alarm shows as active only while its condition holds. When the condition clears, the alarm leaves the active list and appears under "recently resolved" with when it started and ended.
+  2. **Said once.** A condition that persists is one alarm entry, showing when it was first and last seen, never repeated copies. One underlying event creates one alarm, at the single severity that fits it, not a warning plus a critical.
+  3. **About ColdVault.** Each alarm counts only signals from ColdVault's own resources. Other machines and services in the same Google project don't count. Each alarm names the part of ColdVault it concerns, and that part is shown on the canvas.
+  4. **Real failures only.** Only errors from ColdVault's application and the managed services it uses count as errors. The cloud platform's own housekeeping messages on the VM don't.
+  5. **Plain words.** Each alarm says in plain language what is wrong and where. Internal rule names and "metric=value" text only appear in the technical detail, one click away.
+  6. **No rules that can't apply.** A rule with no data source for this system raises no alarm and is listed as "not checked".
+  7. **Nothing else changes.** Thresholds, the AI overview, the canvas and REQ-GHA-006 (still pending) stay as they are.
+- **Priority:** P2
+- **Testable:** Yes (API + UI)
+- **Who builds:** Neo.
+- **Status:** confirmed by Igor 2026-11-06 (full text). Not started.
