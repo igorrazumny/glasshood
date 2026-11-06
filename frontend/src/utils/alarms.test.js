@@ -3,7 +3,7 @@
 // Run: node frontend/src/utils/alarms.test.js
 
 import assert from 'node:assert/strict'
-import { alarmWhen, resolvedWhen, alarmTitle, notCheckedNames } from './alarms.js'
+import { alarmWhen, resolvedWhen, alarmTitle, notCheckedNames, alarmKindLabel, sortAlarms } from './alarms.js'
 
 let failed = 0
 function test(name, fn) {
@@ -37,6 +37,24 @@ test('lists each unchecked rule name once, and not when a sibling rule was check
   ]
   assert.deepEqual(notCheckedNames(rules), ['Memory use', 'Disk space'])
   assert.deepEqual(notCheckedNames(undefined), [])
+})
+
+test('REQ-GHA-028: examples and observations are marked; real alarms are not', () => {
+  assert.equal(alarmKindLabel({ kind: 'example' }), 'example')
+  assert.equal(alarmKindLabel({ kind: 'observation' }), 'observation')
+  assert.equal(alarmKindLabel({ kind: 'alarm' }), '')
+  assert.equal(alarmKindLabel({}), '')
+})
+
+test('REQ-GHA-028: critical first, then real alarms before examples', () => {
+  const list = [
+    { id: 'ex', severity: 'warning', kind: 'example' },
+    { id: 'real', severity: 'warning', kind: 'alarm' },
+    { id: 'crit', severity: 'critical', kind: 'alarm' },
+    { id: 'obs', severity: 'warning', kind: 'observation' },
+  ]
+  assert.deepEqual(sortAlarms(list).map(a => a.id), ['crit', 'real', 'ex', 'obs'])
+  assert.deepEqual(sortAlarms(undefined), [])
 })
 
 if (failed) { console.error(`${failed} failed`); process.exit(1) }

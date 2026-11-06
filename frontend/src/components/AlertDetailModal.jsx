@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react'
 import { X, AlertTriangle, AlertOctagon, Info, CheckCircle, Shield } from 'lucide-react'
 import { apiFetch } from '../utils/api'
-import { alarmTitle, alarmWhen } from '../utils/alarms'
+import { alarmTitle, alarmWhen, alarmKindLabel } from '../utils/alarms'
 
 // REQ-009: severity styles pair light (bg-100 + text-700 + border-300) with
 // dark (bg-500/10 + text-400 + border-500/30) so the icon + badge read on
@@ -97,6 +97,11 @@ export default function AlertDetailModal({ alert, onClose, currentUser = '' }) {
                 read as light-blue and collapsed visual distinction from
                 severity colors. Use Tailwind's stock `indigo` (untouched
                 by REQ-010) so the badge stays semantically purple-ish. */}
+            {alarmKindLabel(alert) && (
+              <span className="text-xs font-bold uppercase px-2 py-0.5 rounded border border-gray-400 dark:border-purple-400 text-gray-600 dark:text-purple-200">
+                {alarmKindLabel(alert)}
+              </span>
+            )}
             {isCorrelated && (
               <span className="text-xs font-bold uppercase px-2 py-0.5 rounded bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300">
                 Correlated
@@ -114,6 +119,14 @@ export default function AlertDetailModal({ alert, onClose, currentUser = '' }) {
         <p className="text-xs text-gray-500 dark:text-purple-300 mb-4">
           {alert.part_label ? `${alert.part_label} · ` : ''}{alarmWhen(alert)}
         </p>
+        {/* REQ-GHA-028 clause 4 */}
+        {alarmKindLabel(alert) && (
+          <p className="text-xs text-gray-500 dark:text-purple-300 -mt-3 mb-4">
+            {alarmKindLabel(alert) === 'example'
+              ? 'Example: shown to illustrate monitoring; not yet a trusted alarm.'
+              : 'Observation about the setup; not an outage.'}
+          </p>
+        )}
 
         {/* Anomaly alerts: rich classified presentation */}
         {isAnomaly && ac ? (

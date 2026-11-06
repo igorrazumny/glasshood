@@ -32,3 +32,17 @@ export function notCheckedNames(rules) {
   const checked = new Set((rules || []).filter(r => r.checked).map(r => r.name))
   return [...new Set((rules || []).filter(r => !r.checked && !checked.has(r.name)).map(r => r.name))]
 }
+
+// REQ-GHA-028: "example" or "observation" for alarms shown on the demo that are not
+// yet trusted; empty for a real alarm
+export function alarmKindLabel(alert) {
+  return alert.kind === 'example' || alert.kind === 'observation' ? alert.kind : ''
+}
+
+// Critical first, then warning; at equal severity real alarms before examples
+export function sortAlarms(alerts) {
+  const order = { critical: 0, warning: 1, info: 2 }
+  return [...(alerts || [])].sort((a, b) =>
+    ((order[a.severity] ?? 3) - (order[b.severity] ?? 3)) ||
+    ((alarmKindLabel(a) ? 1 : 0) - (alarmKindLabel(b) ? 1 : 0)))
+}
