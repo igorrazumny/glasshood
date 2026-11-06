@@ -3,12 +3,18 @@
 # =============================================================================
 # Evaluated on every topology poll (~15s). GMP-classifiable under Annex 22.
 # Changes to this file should be documented (who, when, why).
+# REQ-GHA-027 (2026-11-06, Igor): an alarm is shown while its condition holds, once
+# per group and part (the higher severity wins); title is the reader's plain line
+# ({part}, {value}); name is the rule's short name in the "not checked" list.
 # =============================================================================
 
 rules:
   # --- Resource usage (VM nodes) ---
   - id: ram_high
     description: "High RAM usage"
+    name: "Memory use"
+    group: ram
+    title: "{part}: memory is {value}% full"
     severity: warning
     scope: node
     node_types: [vm]
@@ -19,6 +25,9 @@ rules:
 
   - id: ram_critical
     description: "Critical RAM usage"
+    name: "Memory use"
+    group: ram
+    title: "{part}: memory is almost full ({value}%)"
     severity: critical
     scope: node
     node_types: [vm]
@@ -29,6 +38,9 @@ rules:
 
   - id: cpu_high
     description: "High CPU usage"
+    name: "Processor load"
+    group: cpu_node
+    title: "{part}: processor is busy ({value}%)"
     severity: warning
     scope: node
     node_types: [vm]
@@ -39,6 +51,9 @@ rules:
 
   - id: disk_full
     description: "Disk nearing capacity"
+    name: "Disk space"
+    group: disk
+    title: "{part}: disk is almost full ({value}%)"
     severity: critical
     scope: node
     node_types: [vm]
@@ -50,6 +65,9 @@ rules:
   # --- Load balancer ---
   - id: lb_latency_high
     description: "High load balancer latency"
+    name: "Response time"
+    group: lb_latency
+    title: "{part}: responses are slow ({value} ms on average)"
     severity: warning
     scope: global
     condition:
@@ -60,6 +78,9 @@ rules:
 
   - id: lb_latency_critical
     description: "Critical load balancer latency"
+    name: "Response time"
+    group: lb_latency
+    title: "{part}: responses are very slow ({value} ms on average)"
     severity: critical
     scope: global
     condition:
@@ -71,6 +92,9 @@ rules:
   # --- Error rates ---
   - id: error_spike
     description: "Error rate spike"
+    name: "Application errors"
+    group: errors
+    title: "{part}: {value} application errors in the last 15 minutes"
     severity: warning
     scope: global
     condition:
@@ -81,6 +105,9 @@ rules:
 
   - id: error_storm
     description: "Error storm"
+    name: "Application errors"
+    group: errors
+    title: "{part}: many application errors ({value} in the last 15 minutes)"
     severity: critical
     scope: global
     condition:
@@ -92,6 +119,9 @@ rules:
   # --- Node status ---
   - id: node_error
     description: "Node in error state"
+    name: "Part failing its check"
+    group: status
+    title: "{part} is failing its check"
     severity: critical
     scope: node
     condition:
@@ -101,6 +131,9 @@ rules:
 
   - id: node_stale
     description: "Node data stale"
+    name: "Part without fresh data"
+    group: status
+    title: "{part}: no fresh data"
     severity: warning
     scope: node
     condition:
@@ -111,6 +144,9 @@ rules:
   # --- CVE security (Phase 2) ---
   - id: cve_critical_gxp
     description: "Critical CVE on GxP-critical system"
+    name: "Critical vulnerabilities"
+    group: cve_critical
+    title: "{part}: critical security vulnerability found"
     severity: critical
     scope: global
     condition:
@@ -121,6 +157,9 @@ rules:
 
   - id: cve_high_count
     description: "Multiple high-severity CVEs"
+    name: "Serious vulnerabilities"
+    group: cve_high
+    title: "{part}: {value} serious security vulnerabilities"
     severity: warning
     scope: global
     condition:
@@ -130,22 +169,19 @@ rules:
       threshold: 3
 
   # --- Anomaly detection (Phase 3) ---
+  # One alarm per anomaly, in the same group and part as the threshold rules on that
+  # metric, at the anomaly's own severity (REQ-GHA-026, REQ-GHA-027 clause 2).
   - id: anomaly_detected
     description: "Statistical anomaly in infrastructure metrics"
+    name: "Unusual readings"
+    title: "{part}: {what} is unusual ({value}, normally about {normal})"
     severity: warning
     scope: global
+    per_anomaly: true
+    groups:
+      error_count_15m: errors
+      lb_latency_ms: lb_latency
+      lb_request_count_1h: traffic
+      vm_cpu_percent: cpu
     condition:
       source: anomaly
-      metric: anomaly_count
-      operator: ">"
-      threshold: 0
-
-  - id: anomaly_high_confidence
-    description: "High-confidence anomaly detected"
-    severity: critical
-    scope: global
-    condition:
-      source: anomaly
-      metric: high_confidence_count
-      operator: ">"
-      threshold: 0
