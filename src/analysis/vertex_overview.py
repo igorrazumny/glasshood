@@ -227,8 +227,10 @@ class CapReached(Exception):
 
 # --- Model call ---
 
-def _generate(system_prompt: str, user_text: str) -> dict:
-    """One Vertex AI generateContent call; returns the parsed JSON answer."""
+def call_model(system_prompt: str, user_text: str, max_tokens: int = 600,
+               search: bool = False) -> tuple[str, list]:
+    """One Vertex AI generateContent call within today's cap. Returns the answer's text and,
+    when a web search was allowed and used, the pages it drew on ([{title, uri}])."""
     refused = _reserve_call()
     if refused:
         raise CapReached(refused)
@@ -238,24 +240,41 @@ def _generate(system_prompt: str, user_text: str) -> dict:
     body = {
         "systemInstruction": {"parts": [{"text": system_prompt}]},
         "contents": [{"role": "user", "parts": [{"text": user_text}]}],
-        "generationConfig": {"responseMimeType": "application/json", "maxOutputTokens": 600, "temperature": 0.2},
+        "generationConfig": {"responseMimeType": "application/json", "maxOutputTokens": max_tokens,
+                             "temperature": 0.2},
     }
-    r = httpx.post(url, json=body, headers=_headers(), timeout=60)
+    if search:
+        body["tools"] = [{"googleSearch": {}}]
+    r = httpx.post(url, json=body, headers=_headers(), timeout=120 if search else 60)
     if r.status_code != 200:
         raise RuntimeError(f"Vertex AI HTTP {r.status_code}")
     data = r.json()
     _record_usage(data.get("usageMetadata") or {})
-    text = "".join(p.get("text", "") for c in data.get("candidates", [])[:1]
-                   for p in (c.get("content") or {}).get("parts", []))
-    return _parse(text)
+    first = (data.get("candidates") or [{}])[0]
+    text = "".join(p.get("text", "") for p in (first.get("content") or {}).get("parts", []))
+    chunks = (first.get("groundingMetadata") or {}).get("groundingChunks") or []
+    sources = [{"title": str(c["web"].get("title", ""))[:200], "uri": str(c["web"].get("uri", ""))}
+               for c in chunks if isinstance(c, dict) and isinstance(c.get("web"), dict)
+               and str(c["web"].get("uri", "")).startswith("https://")]
+    return text, sources[:8]
 
 
-def _parse(text: str) -> dict:
+def parse_json(text: str):
     t = (text or "").strip()
     if t.startswith("```"):
         t = t.split("\n", 1)[-1].rsplit("```", 1)[0]
     s, e = t.find("{"), t.rfind("}") + 1
-    obj = json.loads(t[s:e] if s >= 0 and e > s else t)
+    return json.loads(t[s:e] if s >= 0 and e > s else t)
+
+
+def _generate(system_prompt: str, user_text: str) -> dict:
+    """One overview call; returns the parsed JSON answer."""
+    text, _ = call_model(system_prompt, user_text)
+    return _parse(text)
+
+
+def _parse(text: str) -> dict:
+    obj = parse_json(text)
 
     def strings(items, n):
         return [str(i.get("description", i)) if isinstance(i, dict) else str(i) for i in (items or [])][:n]
@@ -281,12 +300,15 @@ def _entry_text(e: dict) -> str:
     return f"{e.get('timestamp', '')[:19]} {e.get('severity', 'DEFAULT')} {str(msg)[:LINE_CHARS]}"
 
 
-def _log_lines(log_filter: str, warn_n: int, sample_n: int, project: str = "") -> list:
+def _log_lines(log_filter: str, warn_n: int, sample_n: int, project: str = "",
+               since_s: int = None) -> list:
     """Recent warning/error lines plus a small sample of other lines, newest first."""
-    since = (datetime.now(timezone.utc) - timedelta(seconds=INTERVAL_S)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    since = (datetime.now(timezone.utc) - timedelta(seconds=since_s or INTERVAL_S)).strftime("%Y-%m-%dT%H:%M:%SZ")
     base = f'timestamp>="{since}"' + (f" AND ({log_filter})" if log_filter else "")
     out = []
     for flt, n in ((f"{base} AND severity>=WARNING", warn_n), (f"{base} AND severity<WARNING", sample_n)):
+        if n <= 0:
+            continue
         # Errors (unreachable API, credential refresh) propagate to the overview's own error boundary.
         r = httpx.post("https://logging.googleapis.com/v2/entries:list", headers=_headers(), timeout=30,
                        json={"resourceNames": [f"projects/{project or PROJECT}"], "filter": flt,
@@ -465,5 +487,10 @@ def overview_loop(get_topology_fn, ready_fn=None):
             run_all(get_topology_fn())
         except Exception as e:
             logger.error(f"overview loop error: {e}")
+        try:  # REQ-GHA-029 clause 1: the AI log review, on the same 3-hour beat
+            from src.analysis import ai_review
+            ai_review.run(get_topology_fn())
+        except Exception as e:
+            logger.error(f"AI log review error: {e}")
         if stop.wait(INTERVAL_S):
             break
