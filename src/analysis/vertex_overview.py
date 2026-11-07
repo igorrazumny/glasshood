@@ -49,8 +49,31 @@ Answer in JSON only:
 {"score": 1-10, "summary": "one or two plain sentences",
  "issues": ["what needs attention, empty if nothing"], "recommendations": ["at most two, empty if none"]}"""
 
+# REQ-GHA-036 clause 7: external systems, seen only through what their provider publishes
+OUTSIDE_SYSTEM_PROMPT = """You write a short overview of an EXTERNAL service for a business reader whose
+organisation depends on it. You only have what the provider publishes on its public status page:
+each component's state and last update, and open incidents and maintenance with the provider's updates.
+Say what the current state means for people who use this service, what the provider has said, and what
+cannot be known from outside. Never invent an internal cause or internal parts; quote or paraphrase the
+provider for causes. Refer to components by their published names.
+Answer in JSON only:
+{"score": 1-10, "summary": "one or two plain sentences on the service as a whole",
+ "issues": ["what a user of this service should know now, empty if nothing"],
+ "recommendations": ["at most three short next steps for a team that depends on it, empty if none"]}"""
+
+OUTSIDE_PART_PROMPT = """You write a short analysis of ONE component of an EXTERNAL service for a business
+reader. You only have what the provider publishes: this component's state and how long it has been in it,
+open incidents or maintenance naming it with the provider's updates, and other components named in the
+same incidents. Say what it means for people who use this component, what the provider has said, and what
+cannot be known from outside. Never invent an internal cause. Refer to components by their published names.
+Answer in JSON only:
+{"score": 1-10, "summary": "one or two plain sentences",
+ "issues": ["what needs attention, empty if nothing"], "recommendations": ["at most two, empty if none"]}"""
+
 _lock = threading.Lock()
 _system: dict = {}
+_outside: dict = {}        # product -> overview of that external system
+_outside_sig: dict = {}    # box id -> what its last analysis was written from (rewritten only on change)
 _parts: dict = {}          # part id -> overview
 _spend: dict = {}  # today's accounting, see refresh_durable_spend
 _last_manual = 0.0
@@ -449,7 +472,13 @@ def run_all(topology: dict) -> None:
             except Exception as e:  # _run_part records its own failures; this is a last resort
                 failed += 1
                 logger.error(f"part overview worker failed: {e}")
-    logger.info(f"AI overviews written: system + {len(futures) - failed} parts; spend today {get_spend()}")
+    try:
+        written = run_outside()
+    except Exception as e:
+        written = 0
+        logger.error(f"outside overviews failed: {e}")
+    logger.info(f"AI overviews written: system + {len(futures) - failed} parts + {written} external parts; "
+                f"spend today {get_spend()}")
 
 
 def _with_staleness(entry: dict) -> dict:
@@ -463,6 +492,95 @@ def _with_staleness(entry: dict) -> dict:
 def get_system() -> dict:
     with _lock:
         return _with_staleness(_system)
+
+
+def get_outside(product: str) -> dict:
+    with _lock:
+        entry = _outside.get(product)
+    return _with_staleness(entry) if entry else None
+
+
+def _published_parts(p: dict) -> list:
+    """[(box id, record, signature)] for one provider: the part, the provider's words about it,
+    and what its analysis depends on, so it is rewritten only when that changes."""
+    by_cid = {c.get("id"): c for c in p["components"]}
+    groups = {c.get("id"): c.get("name") for c in p["components"] if c.get("group")}
+    out = []
+    for cid, box in p["comps"].items():
+        c = by_cid.get(cid) or {}
+        events = [e for e in p["events"] if any(x.get("id") == cid for x in e.get("components") or [])]
+        rec = {"component": c.get("name"), "group": groups.get(c.get("group_id")),
+               "provider_status": c.get("status"), "provider_updated": c.get("updated_at"),
+               "open_incidents_and_maintenance": [{
+                   "name": e.get("name"), "kind": e.get("_kind"), "status": e.get("status"),
+                   "impact": e.get("impact"),
+                   "updates": [{"at": u.get("created_at"), "status": u.get("status"), "text": (u.get("body") or "")[:600]}
+                               for u in (e.get("incident_updates") or [])[:5]],
+                   "also_affects": [x.get("name") for x in e.get("components") or [] if x.get("id") != cid][:20],
+               } for e in events]}
+        sig = (c.get("status"), c.get("updated_at"),
+               tuple(sorted((e.get("id"), (e.get("incident_updates") or [{}])[0].get("created_at")) for e in events)))
+        out.append((box, rec, sig))
+    return out
+
+
+def _run_outside_part(box: str, rec: dict, sig) -> None:
+    try:
+        result = _generate(OUTSIDE_PART_PROMPT, json.dumps(sanitize(rec), default=str))
+        with _lock:
+            _parts[box] = _now_entry(result)
+            _outside_sig[box] = sig
+    except Exception as e:
+        why = _failure(e)
+        logger.warning(f"outside part analysis failed for {box}: {why}")
+        with _lock:
+            _parts[box] = _keep_last_good(_parts.get(box), why)
+
+
+def run_outside() -> int:
+    """REQ-GHA-036 clause 7: an overview of each external system every round, and an analysis
+    of each of its parts written only when what the provider publishes about it changed.
+    Returns the number of part analyses written."""
+    from src.collectors import statuspage
+    jobs = []
+    for p in statuspage.published():
+        product = p.get("product")
+        if not p["read"]:
+            with _lock:
+                _outside[product] = _keep_last_good(_outside.get(product), f"the provider's status could not be read: {p['error']}")
+            continue
+        parts = _published_parts(p)
+        counts = {}
+        for _, rec, _ in parts:
+            counts[rec["provider_status"]] = counts.get(rec["provider_status"], 0) + 1
+        payload = {"service": p["name"], "status_page": p["page"], "components_by_state": counts,
+                   "not_operational": [{"component": r["component"], "group": r["group"], "state": r["provider_status"],
+                                        "since": r["provider_updated"]}
+                                       for _, r, _ in parts if r["provider_status"] != "operational"][:150],
+                   "open_incidents_and_maintenance": [{
+                       "name": e.get("name"), "kind": e.get("_kind"), "status": e.get("status"), "impact": e.get("impact"),
+                       "components": [x.get("name") for x in e.get("components") or []][:30],
+                       "latest_update": ((e.get("incident_updates") or [{}])[0].get("body") or "")[:800],
+                   } for e in p["events"]]}
+        try:
+            result = _generate(OUTSIDE_SYSTEM_PROMPT, json.dumps(sanitize(payload), default=str))
+            with _lock:
+                _outside[product] = _now_entry(result)
+        except Exception as e:
+            why = _failure(e)
+            logger.warning(f"outside overview failed for {p['name']}: {why}")
+            with _lock:
+                _outside[product] = _keep_last_good(_outside.get(product), why)
+        with _lock:
+            jobs += [(box, rec, sig) for box, rec, sig in parts
+                     if not (_outside_sig.get(box) == sig and (_parts.get(box) or {}).get("summary"))]
+    with ThreadPoolExecutor(max_workers=4, thread_name_prefix="outside") as ex:
+        for f in [ex.submit(_run_outside_part, *j) for j in jobs]:
+            try:
+                f.result()
+            except Exception as e:
+                logger.error(f"outside part worker failed: {e}")
+    return len(jobs)
 
 
 def get_part(part_id: str):

@@ -71,15 +71,19 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
   const [showVerifyModal, setShowVerifyModal] = useState(false)
 
   const liveTopology = usePolling(isDemo ? null : '/api/topology', 15000)
-  const liveAnalysis = usePolling(isDemo ? null : '/api/analysis', 30000)
   const manifests = usePolling(isDemo ? null : '/api/manifests', 60000)
   const demo = useDemoData()
 
   const topology = isDemo ? demo.topology : liveTopology
-  const analysis = isDemo ? demo.analysis : liveAnalysis
 
   // Extract projects from manifest files (not org-discovery)
   const manifestData = Array.isArray(manifests?.data) ? manifests.data : []
+  // REQ-GHA-036 clause 7: an external system's own AI overview when it is selected
+  const selectedManifest = manifestData.find(m => systemId(m) === activeProject)
+  const analysisUrl = selectedManifest?.kind === 'outside_view'
+    ? `/api/analysis?system=${encodeURIComponent(selectedManifest.product)}` : '/api/analysis'
+  const liveAnalysis = usePolling(isDemo ? null : analysisUrl, 30000)
+  const analysis = isDemo ? demo.analysis : liveAnalysis
   // REQ-GHA-023 clause 5: "nodes monitored" counts exactly what the canvas draws.
   const canvas = useMemo(() => (
     !isDemo && manifestData.length > 0 && topology.data

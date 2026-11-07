@@ -80,7 +80,7 @@ export function systemCards(manifests, nodes, alerts) {
     const polls = mine.map(n => n.metrics?._last_poll).filter(Number.isFinite)
     const outside = m.kind === 'outside_view'
     cards.push({
-      id, label: m.solution || m.display_name || m.product || 'System',
+      id, product: m.product, label: m.solution || m.display_name || m.product || 'System',
       subtitle: m.display_name && m.display_name !== m.solution ? m.display_name : '',
       outside,
       state: worstStatus(statuses.filter(s => s && !NOT_READ.has(s) && s !== 'idle')) || 'not checked',

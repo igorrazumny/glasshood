@@ -20,9 +20,11 @@ def _is_operator(request: Request) -> bool:
 
 
 @router.get("/api/analysis")
-def get_analysis_endpoint(request: Request):
+def get_analysis_endpoint(request: Request, system: str = None):
     verify_token(request)
-    out = ov.get_system()
+    # REQ-GHA-036 clause 7: an external system's own overview when it is selected
+    outside = ov.get_outside(system) if system else None
+    out = outside if outside is not None else ov.get_system()
     if _is_operator(request):
         out["spend"] = ov.get_spend()
         out["refresh_in_s"] = ov.manual_refresh_allowed()
