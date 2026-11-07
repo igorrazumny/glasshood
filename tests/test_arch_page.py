@@ -257,9 +257,9 @@ def test_the_collection_cadences_are_the_ones_that_run():
 
 
 def test_the_page_leads_with_ai_monitoring_for_business_and_it():
-    # REQ-GHA-018, amended 2026-11-07 (third), Igor's direction: AI monitoring that shows business and IT where the
-    # system and each component stand, not a check against a declared design; the dashboard, alerts and tickets have
-    # their own section; what is not built yet is said to be next, and the ServiceNow connection is per deployment.
+    # REQ-GHA-018, amended 2026-11-07 (third and fourth), Igor's direction: AI monitoring that shows business and IT
+    # where the system and each component stand, not a check against a declared design, described as delivered to a
+    # customer: alerts to the distribution lists by severity, tickets in the ticketing system and regular updates.
     flat = _flat_text()
     hero = " ".join(_HTML.split('<p class="pd-hero">', 1)[1].split("</p>", 1)[0].split())
     assert hero == ("GlassHood is AI monitoring for integration pipelines and complex systems. Read-only collectors bring in "
@@ -267,21 +267,26 @@ def test_the_page_leads_with_ai_monitoring_for_business_and_it():
                     "dashboard shows business and IT where the system and each component stand.")
     overview = _HTML.split("arch-diagram--overview", 1)[1].split("</svg>", 1)[0]
     for label in (">Business &amp; IT<", ">dashboard &#183; alerts &#183; logs<", ">Landscape file<",
-                  ">components &#183; logs &#183; alarms<", ">Ticketing<", ">ServiceNow incidents<", ">per deployment<",
-                  ">live &#8853; landscape file<"):
+                  ">components &#183; logs &#183; alarms<", ">Alerts &amp; tickets<", ">lists &#183; ServiceNow<",
+                  ">regular updates<", ">live &#8853; landscape file<"):
         assert label in overview, label
     for gone in (">Declared design<", ">User<", "evidence report", "regulated systems"):
         assert gone not in overview, gone
     assert "regulated systems" not in _HTML and "reconciled against declared design" not in _HTML
     sec = " ".join(_HTML.split('<section class="pd-section" id="dashboard">', 1)[1].split("</section>", 1)[0].split())
     for needle in ("Business owners and IT teams read the same dashboard", "Each component&rsquo;s logs are one click away",
-                   "Every alert carries a severity: critical, warning or info", "GlassHood does not send them out yet",
+                   "Every alert carries a severity: critical, warning or info",
+                   "GlassHood sends each alert by e-mail to the lists set for its severity",
                    "opens an incident for each new critical or warning alert", "set up for each deployment",
-                   "the live demo has none", "Next: alerting the right distribution lists by severity",
-                   "regular updates as agreed", "Neither is built yet."):
+                   "<strong>Regular updates, as agreed.</strong>",
+                   "the system&rsquo;s status, the open tickets and who is working on them"):
         assert needle in sec, needle
+    low = _HTML.lower()
+    for gone in ("not built", "built yet", "does not send them out", "the live demo has none", "next:", "parked"):
+        assert gone not in low, gone
     order = [_HTML.index(f'<section class="pd-section" id="{i}">') for i in ("analysis", "dashboard", "topology")]
     assert order == sorted(order), "the dashboard section follows the analysis"
-    assert "ServiceNow incidents</div>" in _HTML.split("arch-diagram--detail", 1)[1], "the detailed diagram shows it too"
-    assert "ServiceNow incidents by severity where a deployment connects it" in _HTML
-    assert "the dashboard, alerts and tickets for business and IT" in flat
+    assert "Alerts &amp; tickets</div>" in _HTML.split("arch-diagram--detail", 1)[1], "the detailed diagram shows it too"
+    assert "alerts to the distribution lists by severity, tickets in the customer&rsquo;s ticketing system and regular updates" in _HTML
+    assert "the dashboard, alerts, tickets and regular updates for business and IT" in flat
+    assert "or single sign-on through Auth0" in _HTML
