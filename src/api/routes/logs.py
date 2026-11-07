@@ -141,6 +141,12 @@ def _resolve_node(node_id: str) -> tuple[str, str | None, str | None]:
     found = _find_in_manifests(compiled, node_id)
     if found is not None:
         logs = (found.get("monitoring") or {}).get("logs") or []
+        if logs and logs[0].get("source") == "none":
+            # REQ-GHA-032 clause 10: a part with no log source says why
+            return ("no_logs", None, logs[0].get("reason") or "This part writes no logs GlassHood can read.")
+        if logs and logs[0].get("source") == "azure" and logs[0].get("workspace") and logs[0].get("query"):
+            # REQ-GHA-035: GlassHood's own logs, in its Azure Log Analytics workspace
+            return ("azure_logs", logs[0]["workspace"], logs[0]["query"])
         if logs and logs[0].get("filter") and logs[0].get("project"):
             return ("manifest_logs", logs[0]["project"], logs[0]["filter"])
         return ("manifest_default", GCP_PROJECT_ID, DEFAULT_FILTER)
@@ -261,6 +267,22 @@ async def get_logs(node_id: str, request: Request, lines: int = 100,
                 "error": UNKNOWN_NOTE}
 
     lines = max(1, min(lines, 200))
+    if status == "no_logs":
+        return {"node_id": node_id, "entries": [], "count": 0, "note": resolved_filter}
+    if status == "azure_logs":
+        from src.collectors.azure_resources import query_logs
+        try:
+            loop = asyncio.get_running_loop()
+            entries = await loop.run_in_executor(None, query_logs, project, resolved_filter, 1, lines)
+            if entries:
+                return {"node_id": node_id, "entries": entries, "count": len(entries), "window": "1h"}
+            entries = await loop.run_in_executor(None, query_logs, project, resolved_filter, 24 * 7, lines)
+            return {"node_id": node_id, "entries": entries, "count": len(entries), "window": "7d",
+                    "note": QUIET_NOTE if entries else EMPTY_NOTE}
+        except Exception as e:
+            logger.warning(f"Azure log query failed for {node_id}: {e}")
+            return {"node_id": node_id, "entries": [], "count": 0,
+                    "error": f"GlassHood could not read this part's logs ({type(e).__name__})"}
     try:
         loop = asyncio.get_running_loop()
         entries = await loop.run_in_executor(
