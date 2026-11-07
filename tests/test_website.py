@@ -297,7 +297,9 @@ def test_home_has_the_two_colour_hero_and_cards_with_icons():
                     "watches and only reads them.")
     # No colour wash behind the hero (Igor, 2026-11-05: "fade out, we will remove for GlassHood").
     assert "hero-wash" not in home and "hero-wash" not in _read(_PUB / "assets/site.css")
-    assert home.count('<span class="feature-icon">') == 3
+    # Home's cards carry no icon (REQ-GHA-018, fifth amendment of 2026-11-07: "I just do not see a point in this graphics").
+    cards = home.split('<section class="wrap features"', 1)[1].split("</section>", 1)[0]
+    assert "feature-icon" not in home and "<svg" not in cards and cards.count('class="feature pd-card"') == 3
 
 
 def test_contact_has_labels_and_marks_the_required_fields():
@@ -444,28 +446,13 @@ def test_the_logo_is_always_shown_at_full_strength():
 # REQ-GHA-018 clauses 1 and 14, amended 2026-11-07 (third and fourth): Home in the direction of Igor's one-page summary
 # of 2026-11-07, AI monitoring that shows business and IT where the system and each component stand, described as
 # delivered to a customer (no live, planned or next labels).
-_HOW_IT_WORKS_PARTS = [
-    ("AI reads the logs of every component",
-     "GlassHood reads the measurements and logs of every component in an integration pipeline or other complex system, "
-     "and only reads: it installs nothing in the systems it watches, and toward them every call is list, get or describe, "
-     "made with a short-lived, viewer-only token and no stored keys. Threshold rules and anomaly detection check the "
-     "measurements first, and AI runs on top: every 3 hours it reviews each component's logs and raises its own alarms, "
-     "labelled as found by the AI review. An AI alarm must quote the log lines it rests on, or it is dropped. A signed-in "
-     "operator can ask the AI to investigate one alarm deeper and get a report; that investigation may search the web for "
-     "the error."),
-    ("A dashboard shows where the system and each component stand",
-     "A live map shows every component and every connection with its health, refreshed every 10 minutes, and a short AI "
-     "overview says how the whole system and each component are doing and what needs attention. Each component's logs "
-     "are one click away. Business and IT see the same dashboard, and nothing they do there changes the monitored "
-     "system."),
-    ("Alerts to the right people, and tickets in your ticketing system",
-     "Every alert carries a severity, critical, warning or info, and goes to the distribution lists set for that "
-     "severity. For each critical or warning alert, GlassHood opens a ticket in your ticketing system, for example an "
-     "incident in ServiceNow, with its urgency and impact set from the severity. A critical AI alarm stays until a "
-     "signed-in person acknowledges it."),
-    ("Regular updates, as agreed",
-     "GlassHood sends regular updates as agreed: the system's status, the open tickets and who is working on them, "
-     "with links."),
+# REQ-GHA-018, fifth amendment of 2026-11-07: How it works lists the four points of Igor's deck "9robots Overview and
+# Products" of 2026-11-07, word for word (Home is the short version; the longer texts are on 9robots.ai's GlassHood page).
+_HOW_IT_WORKS_POINTS = [
+    "AI reads the logs of every component in an integration pipeline or other complex system.",
+    "A dashboard shows where the system and each component stand, with direct access to every log.",
+    "Alerts the right distribution lists by severity and opens tickets in your ticketing system (e.g. ServiceNow).",
+    "Sends regular updates as agreed: system status, open tickets and who is working on them, with links.",
 ]
 
 _HOME_CARDS = {
@@ -478,8 +465,8 @@ _HOME_CARDS = {
         "review. A short AI overview says in plain words how the whole system is doing and what needs attention, and each "
         "component has its own. Business owners and IT teams look at the same dashboard, and nothing they do there changes "
         "the monitored system."),
-    "the-problem": ("The problem it solves",
-        "With current tools, business owners cannot see where the system stands, end to end.",
+    "the-problem": ("The pain it solves",
+        "Business owners lack a shared, end-to-end view of integration pipelines and complex systems' health.",
         "With current tools, business owners cannot see where their system stands, end to end. An integration pipeline runs "
         "through many systems, and each is watched by its own team with its own tool, in its own technical terms. When a "
         "connection stops or a message no longer arrives, the first sign is often a wrong result further down the chain, "
@@ -494,14 +481,13 @@ _HOME_CARDS = {
 
 def test_home_answers_what_it_is_the_problem_it_solves_and_how_it_works():
     # Each card can be clicked as a whole and shows the sections further down on Home, as on the architecture page.
-    # How it works restates the architecture page in shorter form: the logs, the dashboard, alerts and tickets, and
-    # what is next.
+    # How it works lists the four points of Igor's deck: the logs, the dashboard, alerts and tickets, regular updates.
     import html as _html
     norm = lambda t: " ".join(_html.unescape(t).split())
     home = _read(_PUB / "index.html")
     assert '<main class="pd-page">' in home and home.count('class="feature pd-card"') == 3
     order = [home.index(f'<a href="#{cid}" class="feature pd-card" data-target="{cid}">') for cid in _HOME_CARDS]
-    assert order == sorted(order), "What it is, then The problem it solves, then How it works"
+    assert order == sorted(order), "What it is, then The pain it solves, then How it works"
     hidden = home.split('<div class="pd-hidden-until-reveal">', 1)[1].split("</main>", 1)[0]
     for cid, (title, text, detail) in _HOME_CARDS.items():
         card = home[home.index(f'data-target="{cid}">'):]
@@ -512,8 +498,8 @@ def test_home_answers_what_it_is_the_problem_it_solves_and_how_it_works():
         if detail:
             assert norm(re.search(r"<p>(.*?)</p>", section.group(1), re.S).group(1)) == detail, cid
     how = re.search(r'<section class="wrap home-detail" id="how-it-works">(.*?)</section>', hidden, re.S).group(1)
-    parts = [(t, norm(p)) for t, p in re.findall(r"<h3>(.*?)</h3>\s*<p>(.*?)</p>", how, re.S)]
-    assert parts == _HOW_IT_WORKS_PARTS
+    assert [norm(li) for li in re.findall(r"<li>(.*?)</li>", how, re.S)] == _HOW_IT_WORKS_POINTS
+    assert "<h3>" not in how
     assert '<a class="button" href="/architecture/">See the architecture &rarr;</a>' in how
     assert "Where we are today" not in home and "system description" not in home.lower()
     # Not a check against a declared design, nor compliance documentation (Igor, 2026-11-07).
