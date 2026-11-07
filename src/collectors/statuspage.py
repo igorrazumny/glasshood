@@ -119,6 +119,23 @@ def outside_systems() -> list:
     return [(name, url, comps) for url, (name, comps) in found.items()]
 
 
+def published(fetch=None) -> list:
+    """What each outside system's provider publishes now, for the AI analysis (REQ-GHA-036
+    clause 7): [{name, product, page, comps {component id: box id}, components, events}]."""
+    from src.api.routes.manifests import _load_manifests
+    product_of = {m.get("solution") or m.get("product"): m.get("product") for m in _load_manifests()
+                  if m.get("kind") == "outside_view"}
+    out = []
+    for name, url, comps in outside_systems():
+        s = summary(url, fetch)
+        data = s["data"] or {}
+        out.append({"name": name, "product": product_of.get(name), "read": bool(s["data"]),
+                    "error": s["error"], "page": (data.get("page") or {}).get("url") or url,
+                    "comps": comps, "components": data.get("components") or [],
+                    "events": _events(data) if s["data"] else []})
+    return out
+
+
 def part_providers() -> dict:
     """{box id: provider name} for every outside-view box."""
     return {box: name for name, _, comps in outside_systems() for box in comps.values()}
