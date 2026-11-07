@@ -545,3 +545,19 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Testable:** Yes (UI + API)
 - **Who builds:** Neo. Granting read access in TestRobin's AWS account and on GlassHood's own Azure resources is an infrastructure change and needs the owner's yes.
 - **Status:** confirmed 2026-11-07, not started.
+
+## REQ-GHA-036: GlassHood also watches public systems it does not control, from what they publish
+
+- **Goal:** The demo shows GlassHood building a useful picture of systems it has no access to, the way a company depends on outside vendors and services.
+- **Why:** Owner, 2026-11-07: monitor our own solutions and a couple of public ones; see how GlassHood builds an internal picture of a system where it has no control and nothing except what it makes available.
+- **Target state:**
+  1. Two public systems are watched: GitHub and Cloudflare, read only from their documented public status APIs (no login), identifying GlassHood and polling no more often than each provider's guidance allows.
+  2. Each one's landscape is built only from what the provider publishes (its listed components and their groups or regions) and is labelled "outside view: built from what <provider> publishes". No internal part is invented.
+  3. Each box shows the provider's reported state, the provider's last update, and when GlassHood last checked; a failed check shows "data unavailable", never healthy.
+  4. An active incident or maintenance becomes an alarm on the components it names, with the provider's own update text and a link to it as the evidence; it ends when the provider marks it resolved. The plain explanation may summarise the provider's words, never invent a cause.
+  5. If a publicly readable integration pipeline can be found (runs published openly, the owner's terms allow watching it, and it is active), it is watched the same way: each run's result, duration and the published run details.
+  6. Public systems appear in the home view next to our own systems (REQ-GHA-035), clearly marked as outside views.
+- **Priority:** P2
+- **Testable:** Yes (API + UI: a provider incident shows as an alarm on the right box with the provider's link and ends when the provider resolves it)
+- **Who builds:** Neo, after the home view from REQ-GHA-035 exists.
+- **Status:** confirmed 2026-11-07, not started.
