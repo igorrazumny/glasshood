@@ -6,12 +6,14 @@ import { useState, useRef, useEffect } from 'react'
 import { ChevronRight, ChevronDown, Pin, PinOff, PanelLeftClose, PanelLeft } from 'lucide-react'
 import PanelEdge from './PanelEdge'
 import { PANEL_TOP } from '../utils/panels'
+import { groupedCards } from '../utils/systems'
 
 const STATUS_DOT = {
   healthy: 'bg-green-400',
   degraded: 'bg-yellow-400',
   error: 'bg-red-400',
   unknown: 'bg-gray-500',
+  'not checked': 'bg-gray-400',
 }
 
 // Derive worst status from children (health rollup)
@@ -70,12 +72,12 @@ function TreeItem({ label, status, active, onClick, indent = 0, count, bold }) {
     >
       <span className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_DOT[status] || STATUS_DOT.unknown}`} />
       <span className="truncate flex-1">{label}</span>
-      {count > 0 && <span className="text-gray-500 dark:text-purple-300 text-xs">{count}</span>}
+      {(typeof count === 'string' ? count : count > 0) && <span className="text-gray-500 dark:text-purple-300 text-xs">{count}</span>}
     </button>
   )
 }
 
-export default function ProjectTree({ projects, activeProject, onSelect, open, pinned, onToggle, onPin, width, onResize }) {
+export default function ProjectTree({ projects, systems, activeProject, onSelect, open, pinned, onToggle, onPin, width, onResize }) {
   const [expanded, setExpanded] = useState({})
   const [resizing, setResizing] = useState(false)
   const [treeCollapsed, setTreeCollapsed] = useState(false)
@@ -184,8 +186,27 @@ export default function ProjectTree({ projects, activeProject, onSelect, open, p
             />
           </div>
 
-          {/* Product groups (collapsible under All Projects) */}
-          {!treeCollapsed && tree.map(item => {
+          {/* REQ-GHA-035 clause 9: 9Robots systems and external systems, each system with its real state */}
+          {!treeCollapsed && systems?.length > 0 && groupedCards(systems).map(({ group, cards }) => {
+            const attention = cards.filter(c => c.state === 'error' || c.state === 'degraded' || c.critical).length
+            const worst = cards.some(c => c.state === 'error') ? 'error'
+              : cards.some(c => c.state === 'degraded') ? 'degraded'
+              : cards.every(c => c.state === 'healthy') ? 'healthy' : 'unknown'
+            return (
+              <div key={group.id}>
+                <TreeItem label={group.label} status={worst} active={activeProject === group.id}
+                  onClick={() => onSelect(group.id)} indent={1} bold
+                  count={attention ? `${attention} need${attention === 1 ? 's' : ''} attention` : undefined} />
+                {cards.map(c => (
+                  <TreeItem key={c.id} label={c.label} status={c.state} active={activeProject === c.id}
+                    onClick={() => onSelect(c.id)} indent={3} />
+                ))}
+              </div>
+            )
+          })}
+
+          {/* Product groups (collapsible under All Projects) — when no system cards are given */}
+          {!treeCollapsed && !(systems?.length > 0) && tree.map(item => {
             const isExpanded = expanded[item.product] !== false // default expanded
             const hasMultipleEnvs = item.envs.length > 1
             return (

@@ -6,6 +6,24 @@ import { worstStatus } from './canvasParts.js'
 
 const NOT_READ = new Set(['not checked', 'not monitored', 'unknown', 'stale'])
 
+// REQ-GHA-035 clause 9: systems monitored from inside vs public systems seen from outside
+export const GROUPS = [
+  { id: 'group-internal', label: '9Robots systems', outside: false },
+  { id: 'group-external', label: 'External systems', outside: true },
+]
+export const isGroupId = id => GROUPS.some(g => g.id === id)
+
+// The cards of one group (or all cards when no group is given)
+export function cardsInGroup(cards, groupId) {
+  const g = GROUPS.find(x => x.id === groupId)
+  return g ? cards.filter(c => c.outside === g.outside) : cards
+}
+
+// [{group, cards}] for the groups that have systems, in display order
+export function groupedCards(cards) {
+  return GROUPS.map(group => ({ group, cards: cardsInGroup(cards, group.id) })).filter(x => x.cards.length)
+}
+
 export const systemId = m => `manifest-${m?.product || 'unknown'}-${m?.environment || 'unknown'}`
 
 // Every box including the ones drawn inside another (container, app, embeddings)
