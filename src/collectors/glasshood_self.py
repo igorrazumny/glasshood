@@ -10,6 +10,8 @@ import time
 
 from src.config.settings import BACKGROUND_POLL_INTERVAL
 
+_STARTED = time.time()   # a task that never runs is measured from GlassHood's own start
+
 COMPONENTS = ("coldvault_read", "landscape_checks", "ai_overview", "ai_review", "public_status", "saved_state")
 
 
@@ -21,7 +23,11 @@ def _fresh(ts, interval: float, what: str) -> tuple:
     """healthy within 2.5 rounds, degraded up to 5 rounds, error beyond: a stopped loop shows."""
     age = _age(ts)
     if age == float("inf"):
-        return "not checked", f"{what} has not run yet"
+        since = time.time() - _STARTED
+        if since <= 2.5 * interval:
+            return "not checked", f"{what} has not run yet (GlassHood started {round(since / 60)} min ago)"
+        return "error", (f"{what} has not run at all since GlassHood started {round(since / 60)} min ago "
+                         f"(every {round(interval / 60)} min)")
     minutes = round(age / 60)
     if age <= 2.5 * interval:
         return "healthy", f"{what} ran {minutes} min ago (every {round(interval / 60)} min)"
@@ -57,6 +63,9 @@ def _judge(name: str) -> tuple:
             return "degraded", f"Daily cap of {spend.get('daily_call_cap')} AI calls reached; overviews wait for tomorrow", figures
         if sysov.get("error") and not sysov.get("summary"):
             return "error", f"AI overview not written: {sysov['error']}", figures
+        if sysov.get("error"):
+            # readers keep the last good overview; the failed refresh is still a problem
+            return "degraded", f"AI overview refresh failed ({sysov['error']}); the last good overview is shown", figures
         s, d = _fresh(sysov.get("analyzed_at"), ov.INTERVAL_S, "The AI overview")
         return s, d, figures
     if name == "ai_review":
