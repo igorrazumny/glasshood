@@ -84,3 +84,21 @@ def test_no_key_means_no_call(openai, monkeypatch):
     with patch("httpx.post") as post, pytest.raises(RuntimeError, match="not configured"):
         ov.call_model("s", "{}")
     post.assert_not_called()
+
+
+def test_log_reads_are_paced_and_a_refusal_is_retried(monkeypatch):
+    calls, slept = [], []
+    answers = [SimpleNamespace(status_code=429, json=lambda: {}),
+               SimpleNamespace(status_code=200, json=lambda: {"entries": [{"textPayload": "x"}]})]
+    monkeypatch.setattr(ov, "_headers", lambda: {})
+    with patch("httpx.post", side_effect=lambda *a, **k: calls.append(1) or answers[len(calls) - 1]):
+        entries = ov._read_entries({}, sleep=slept.append)
+    assert entries == [{"textPayload": "x"}] and len(calls) == 2 and 5 in slept
+
+
+def test_log_reads_give_up_after_repeated_refusals(monkeypatch):
+    monkeypatch.setattr(ov, "_headers", lambda: {})
+    with patch("httpx.post", return_value=SimpleNamespace(status_code=429, json=lambda: {})) as post, \
+            pytest.raises(RuntimeError, match="429"):
+        ov._read_entries({}, sleep=lambda s: None)
+    assert post.call_count == 4
