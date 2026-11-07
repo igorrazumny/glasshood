@@ -13,8 +13,11 @@ OPUS_ERROR = {"timestamp": "2026-11-07T20:26:11.880Z", "severity": "ERROR", "req
               "message": "Claude stream failed: Claude Opus 4.7 - RateLimitError: Error code: 429 - Quota exceeded"}
 OPUS_FALLBACK = {"timestamp": "2026-11-07T20:26:11.881Z", "severity": "INFO", "request_id": "r1",
                  "message": "Fallback: Claude Opus 4.7 failed (Error code: 429 - quota), trying Claude Sonnet 4.6"}
+# As ColdVault writes it: the billing line names the model the user chose, and
+# completed=1 says the question was answered (here by the backup)
 SONNET_BILLING = {"timestamp": "2026-11-07T20:26:15Z", "severity": "INFO", "request_id": "r1",
-                  "message": "billing", "event": "billing", "model": "Claude Sonnet 4.6"}
+                  "message": "billing", "event": "billing", "model": "Claude Opus 4.7",
+                  "completed": 1, "errors": 0}
 
 
 def _lines(*items):
@@ -152,6 +155,21 @@ def test_failures_without_request_ids_are_unknown(monkeypatch):
     _setup(monkeypatch, {"claude-opus-4-7": {"answered": 0, "failed": 1, "timed_out": 0}}, [no_id], [])
     [f] = cm.failures({"claude": "cv-vertex"})
     assert f["severity"] == "warning" and "not known" in f["title"]
+
+
+def test_a_billing_line_that_completed_nothing_is_no_reply(monkeypatch):
+    _setup(monkeypatch, {"claude-opus-4-7": {"answered": 0, "failed": 1, "timed_out": 0}},
+           [OPUS_FALLBACK, OPUS_ERROR], [{**SONNET_BILLING, "completed": 0, "errors": 1}])
+    [f] = cm.failures({"claude": "cv-vertex"})
+    assert f["severity"] == "critical"
+
+
+def test_recovery_without_a_named_backup_says_another_model(monkeypatch):
+    _setup(monkeypatch, {"claude-opus-4-7": {"answered": 0, "failed": 1, "timed_out": 0}},
+           [OPUS_ERROR], [SONNET_BILLING])
+    [f] = cm.failures({"claude": "cv-vertex"})
+    assert f["severity"] == "warning" and f["title"].endswith("another model answered instead")
+    assert "None" not in f["title"] and "None" not in f["explanation"]["what"]
 
 
 def test_one_event_raises_one_alarm_not_two(monkeypatch):
