@@ -166,6 +166,30 @@ def test_an_incident_keeps_every_part_it_names(monkeypatch):
     engine._active.clear()
 
 
+def test_a_provider_alarm_saved_in_the_old_key_format_keeps_its_report_and_ends(monkeypatch):
+    # shadow: provider:<id> saved by #98 with a report, restored after a restart
+    from src.models.alert import Alert
+    _fresh()
+    engine._active.clear()
+    old = Alert(rule_id="provider_incident", kind="alarm", severity="critical", message="m",
+                triggered_at="t", node_id="ex-fra", group="provider:inc1", title="Frankfurt unreachable",
+                report={"status": "done", "executive_summary": "Existing report"})
+    engine._active[("provider:inc1", "ex-fra")] = old
+    engine.restore_alarms(engine.saved_alarms())
+    monkeypatch.setattr(sp, "outside_systems", lambda: [("Example", URL, {"c-fra": "ex-fra"})])
+    # still open: one alarm, under the new key, with its report
+    engine.track_provider_incidents(*sp.incidents(fetch=lambda u: SUMMARY), part_provider=sp.part_providers())
+    alarms = engine.get_alerts()
+    assert [a["group"] for a in alarms] == ["provider:Example:inc1"]
+    assert alarms[0]["report"]["executive_summary"] == "Existing report"
+    # resolved by the provider: it ends
+    _fresh()
+    engine.track_provider_incidents(*sp.incidents(fetch=lambda u: {**SUMMARY, "incidents": []}),
+                                    part_provider=sp.part_providers())
+    assert engine.get_alerts() == []
+    engine._active.clear()
+
+
 def test_a_box_log_is_the_providers_published_updates(monkeypatch):
     _fresh()
     monkeypatch.setattr(sp, "outside_systems", lambda: [("Example", URL, {"c-ams": "ex-ams", "c-fra": "ex-fra"})])
