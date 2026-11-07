@@ -430,3 +430,18 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Testable:** Yes (API + UI; one live run)
 - **Who builds:** Neo.
 - **Status:** implemented 2026-11-06 (AI review every 3 h after the overview; AI alarms and reports are saved to AI_STATE_DIR when it points at a writable folder, otherwise kept in memory). 2026-11-07: writable share glasshood-state mounted at /app/state (controller/deploy/state.sh), AI_STATE_DIR set; planted error lines in ColdVault's logs (log name glasshood-acceptance-test) raised a critical AI alarm quoting a real line, and it survived a restart with the same first-seen time. Outstanding: a signed-in investigation and follow-up, and acknowledging the critical alarm.
+
+## REQ-GHA-030: Every time on screen says which time zone it is in
+
+- **Goal:** A reader always knows which time zone a time on the GlassHood screen is in, and every time is shown in the reader's own time zone unless it is quoted evidence.
+- **Why:** Owner, 2026-11-07: "Updated 12:53" did not say which time zone it was in. Log evidence quoted in an alarm reads 11:49 while the alarm list reads 12:49 for the same moment.
+- **Target state:**
+  1. Every clock time and date GlassHood shows is in the time zone of the reader's device. It carries that zone's short name, for example "12:53 CET".
+  2. A log line quoted as evidence keeps its exact original text, so it still matches the log. The screen says plainly that times in quoted log lines are UTC.
+  3. Times in an investigation report's timeline say which zone they are in.
+  4. Relative ages ("43 min ago") stay as they are.
+  5. No time on screen is shown without its zone.
+- **Priority:** P3
+- **Testable:** Yes (UI tests with a fixed time zone)
+- **Who builds:** Neo.
+- **Status:** confirmed by Igor 2026-11-07 (full text).
