@@ -322,7 +322,9 @@ export default function NodeDetailModal({ node, onClose, isDemo, hideCosts }) {
               </div>
             ) : nodeAnalysis?.analyzed_at == null ? (
               <p className="text-sm text-gray-500 dark:text-purple-300">
-                {nodeAnalysis?.error || 'No overview for this part yet.'}
+                {node.metrics?.provider_status
+                  ? "Outside view: this part's state is the provider's own report, so no AI overview is written for it."
+                  : (nodeAnalysis?.error || 'No overview for this part yet.')}
               </p>
             ) : (
               <p className="text-sm text-gray-600 dark:text-purple-200">{nodeAnalysis?.summary || 'Analysis unavailable'}</p>

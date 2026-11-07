@@ -249,6 +249,12 @@ async def get_logs(node_id: str, request: Request, lines: int = 100,
             f"node_id={node_id!r} — filter+project are derived server-side"
         )
 
+    # REQ-GHA-036: a public system's box shows what its provider publishes about it
+    from src.collectors import statuspage
+    published = statuspage.log_entries(node_id)
+    if published is not None:
+        return {"node_id": node_id, "count": len(published["entries"]), "window": "provider", **published}
+
     status, project, resolved_filter = _resolve_node(node_id)
     if status == "unknown":
         return {"node_id": node_id, "entries": [], "count": 0,

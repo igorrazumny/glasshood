@@ -41,6 +41,9 @@ def _load_manifests() -> list:
                         "product": data.get("product", ""),
                         "project_id": data.get("project_id", ""),
                         "region": data.get("region", ""),
+                        # REQ-GHA-036: outside_view = a public system read only from what it publishes
+                        "kind": data.get("kind", ""),
+                        "source": data.get("source", ""),
                         "environment": env.get("environment", ""),
                         "display_name": env.get("display_name", ""),
                         "order": env.get("order", 0),
