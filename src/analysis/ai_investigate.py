@@ -123,13 +123,13 @@ def _ask(prompt: str, payload: dict, max_tokens: int, search: bool):
     text_in = json.dumps(payload, default=str)
     if search:
         try:
-            text, sources = ov.call_model(prompt, text_in, max_tokens=max_tokens, search=True)
+            text, sources = ov.call_model(prompt, text_in, max_tokens=max_tokens, search=True, deep=True)
             return ov.parse_json(text), sources, bool(sources)  # searched only if it did
         except ov.CapReached:
             raise
         except Exception as e:  # a model or region without web search: investigate without it
             logger.info(f"investigation without web search ({type(e).__name__})")
-    text, _ = ov.call_model(prompt, text_in, max_tokens=max_tokens)
+    text, _ = ov.call_model(prompt, text_in, max_tokens=max_tokens, deep=True)
     return ov.parse_json(text), [], False
 
 

@@ -20,7 +20,15 @@ from src.config.settings import GCP_PROJECT_ID
 
 logger = logging.getLogger(__name__)
 
-MODEL = os.getenv("OVERVIEW_MODEL", "gemini-3.1-flash-lite")
+# REQ-GHA-024 (amended 2026-11-08): the AI runs on OpenAI with the key from GlassHood's Key
+# Vault; Gemini on Vertex stays available by setting AI_PROVIDER=vertex.
+PROVIDER = os.getenv("AI_PROVIDER", "vertex").lower()
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.4-nano")            # overviews (almost all calls)
+OPENAI_MODEL_DEEP = os.getenv("OPENAI_MODEL_DEEP", "gpt-5.4-mini")  # AI log review, Investigate deeper
+OPENAI_PRICES = {  # USD per million tokens (input, output), list prices 2026-11
+    "gpt-5.4-nano": (0.20, 1.25), "gpt-5.4-mini": (0.75, 4.50),
+}
+MODEL = OPENAI_MODEL if PROVIDER == "openai" else os.getenv("OVERVIEW_MODEL", "gemini-3.1-flash-lite")
 LOCATION = os.getenv("OVERVIEW_LOCATION", "global")
 PROJECT = os.getenv("OVERVIEW_PROJECT", GCP_PROJECT_ID)
 INTERVAL_S = int(os.getenv("OVERVIEW_INTERVAL_S", str(3 * 3600)))
@@ -189,10 +197,45 @@ def _monitoring_today() -> dict:
     return {"calls": calls, "in": tokens.get("input", 0), "out": tokens.get("output", 0)}
 
 
-def refresh_durable_spend() -> None:
-    """Fold today's Monitoring totals in; never lowers what is already counted."""
+def _spend_file():
+    d = os.getenv("AI_STATE_DIR", "")
+    return os.path.join(d, "ai_spend.json") if d else None
+
+
+def _file_today() -> dict:
+    """Today's (UTC) calls, tokens and cost on OpenAI, from GlassHood's saved count (the
+    durable part: OpenAI's own usage needs an admin key GlassHood does not hold)."""
+    path = _spend_file()
+    if not path or not os.path.exists(path):
+        return {"calls": 0, "in": 0, "out": 0, "cost": 0.0}
+    with open(path) as f:
+        data = json.load(f)
+    if data.get("day") != _today():
+        return {"calls": 0, "in": 0, "out": 0, "cost": 0.0}
+    return {k: data.get(k, 0) for k in ("calls", "in", "out", "cost")}
+
+
+def _save_spend_file() -> None:
+    path = _spend_file()
+    if not path:
+        return
+    with _lock:
+        snap = {"day": _spend["day"], "calls": _spend["durable_calls"] + _spend["local_calls"],
+                "in": _spend["durable_in"] + _spend["local_in"], "out": _spend["durable_out"] + _spend["local_out"],
+                "cost": round(_spend.get("durable_cost", 0.0) + _spend.get("local_cost", 0.0), 6)}
     try:
-        mon = _monitoring_today()
+        tmp = path + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(snap, f)
+        os.replace(tmp, path)
+    except Exception as e:
+        logger.warning(f"AI spend not saved ({type(e).__name__}): the cap would restart from the last saved count")
+
+
+def refresh_durable_spend() -> None:
+    """Fold today's durable totals in; never lowers what is already counted."""
+    try:
+        mon = _file_today() if PROVIDER == "openai" else _monitoring_today()
         err = None
     except Exception as e:
         mon, err = None, f"today's model usage could not be read ({type(e).__name__})"
@@ -207,7 +250,9 @@ def refresh_durable_spend() -> None:
         _spend["durable_calls"] = max(mon["calls"], _spend["durable_calls"] + _spend["local_calls"])
         _spend["durable_in"] = max(mon["in"], _spend["durable_in"] + _spend["local_in"])
         _spend["durable_out"] = max(mon["out"], _spend["durable_out"] + _spend["local_out"])
-        _spend.update(local_calls=0, local_in=0, local_out=0, durable_read=True, read_error=None)
+        _spend["durable_cost"] = max(float(mon.get("cost", 0.0)),
+                                     _spend.get("durable_cost", 0.0) + _spend.get("local_cost", 0.0))
+        _spend.update(local_calls=0, local_in=0, local_out=0, local_cost=0.0, durable_read=True, read_error=None)
 
 
 def _reserve_call():
@@ -232,13 +277,27 @@ def _record_usage(usage: dict) -> None:
         _spend["local_out"] += tout
 
 
+def _record_openai(model: str, usage: dict) -> None:
+    tin, tout = int(usage.get("input_tokens") or 0), int(usage.get("output_tokens") or 0)
+    pin, pout = OPENAI_PRICES.get(model, (PRICE_IN_PER_M, PRICE_OUT_PER_M))
+    with _lock:
+        _spend["local_in"] += tin
+        _spend["local_out"] += tout
+        _spend["local_cost"] = _spend.get("local_cost", 0.0) + tin / 1e6 * pin + tout / 1e6 * pout
+    _save_spend_file()
+
+
 def get_spend() -> dict:
     with _lock:
         sp = dict(_spend) if _spend.get("day") == _today() else _new_day()
     tin, tout = sp["durable_in"] + sp["local_in"], sp["durable_out"] + sp["local_out"]
+    if PROVIDER == "openai":
+        cost = sp.get("durable_cost", 0.0) + sp.get("local_cost", 0.0)
+    else:
+        cost = tin / 1e6 * PRICE_IN_PER_M + tout / 1e6 * PRICE_OUT_PER_M
     return {"day": sp["day"], "calls": sp["durable_calls"] + sp["local_calls"],
             "input_tokens": tin, "output_tokens": tout,
-            "cost_usd": round(tin / 1e6 * PRICE_IN_PER_M + tout / 1e6 * PRICE_OUT_PER_M, 4),
+            "cost_usd": round(cost, 4),
             "capped": sp["capped"], "usage_read": sp["durable_read"], "read_error": sp["read_error"],
             "daily_call_cap": DAILY_CALL_CAP, "model": MODEL,
             "price_per_m_tokens_usd": {"input": PRICE_IN_PER_M, "output": PRICE_OUT_PER_M}}
@@ -250,13 +309,56 @@ class CapReached(Exception):
 
 # --- Model call ---
 
+def _call_openai(system_prompt: str, user_text: str, max_tokens: int, search: bool, deep: bool) -> tuple:
+    """One OpenAI Responses call. JSON answers (the word 'json' must be in the input for the
+    JSON format); a web search tool when allowed. Reasoning is kept low: these are summaries."""
+    model = OPENAI_MODEL_DEEP if deep else OPENAI_MODEL
+    key = os.getenv("OPENAI_API_KEY", "")
+    if not key:
+        raise RuntimeError("OpenAI key not configured")
+    body = {"model": model, "instructions": system_prompt,
+            "input": "Data (answer in JSON as instructed):\n" + user_text,
+            # reasoning tokens count against this budget, so leave room for the answer
+            "max_output_tokens": max(2000, max_tokens * 3), "reasoning": {"effort": "low"}}
+    if search:
+        body["tools"] = [{"type": "web_search"}]
+    else:
+        body["text"] = {"format": {"type": "json_object"}}
+    r = httpx.post("https://api.openai.com/v1/responses", json=body,
+                   headers={"Authorization": f"Bearer {key}"}, timeout=180 if search else 90)
+    if r.status_code != 200:
+        raise RuntimeError(f"OpenAI HTTP {r.status_code}")
+    data = r.json()
+    _record_openai(model, data.get("usage") or {})
+    text, sources = "", []
+    for item in data.get("output") or []:
+        if item.get("type") == "web_search_call":
+            q = ((item.get("action") or {}).get("query"))
+            if q and len(sources) < 4:
+                sources.append({"query": str(q)[:200]})
+        if item.get("type") == "message":
+            for c in item.get("content") or []:
+                if c.get("type") == "output_text":
+                    text += c.get("text", "")
+                    for a in c.get("annotations") or []:
+                        if a.get("type") == "url_citation" and str(a.get("url", "")).startswith("https://") \
+                                and len(sources) < 12:
+                            sources.append({"title": str(a.get("title", ""))[:200], "uri": a["url"]})
+    return text, sources
+
+
 def call_model(system_prompt: str, user_text: str, max_tokens: int = 600,
-               search: bool = False) -> tuple[str, list]:
-    """One Vertex AI generateContent call within today's cap. Returns the answer's text and,
-    when a web search was allowed and used, the pages it drew on ([{title, uri}])."""
+               search: bool = False, deep: bool = False) -> tuple[str, list]:
+    """One model call within today's cap (OpenAI, or Gemini on Vertex). Returns the answer's
+    text and, when a web search was allowed and used, the pages it drew on ([{title, uri}])."""
     refused = _reserve_call()
     if refused:
         raise CapReached(refused)
+    if PROVIDER == "openai":
+        try:
+            return _call_openai(system_prompt, user_text, max_tokens, search, deep)
+        finally:
+            _save_spend_file()
     host = "aiplatform.googleapis.com" if LOCATION == "global" else f"{LOCATION}-aiplatform.googleapis.com"
     url = (f"https://{host}/v1/projects/{PROJECT}/locations/{LOCATION}"
            f"/publishers/google/models/{MODEL}:generateContent")
