@@ -18,7 +18,7 @@ import { usePolling } from '../hooks/usePolling'
 import { computeManifestLayout } from '../utils/manifestLayout'
 import { canvasNodes } from '../utils/canvasParts.js'
 import { clearToken, apiFetch, apiUrl } from '../utils/api'
-import { loadPanel, savePanel, clampWidth } from '../utils/panels'
+import { loadPanel, savePanel, fitPanels } from '../utils/panels'
 
 function useDemoData() {
   const [topology, setTopology] = useState(null)
@@ -128,9 +128,14 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
-  // A saved width is re-checked against the current window, so the landscape stays visible
-  const leftWidth = clampWidth('left', sidebarWidth, viewport)
-  const rightPanelWidth = clampWidth('right', rightWidth, viewport)
+  // Both widths are fitted together against the current window, so two open panels
+  // always leave the landscape visible (also after the window shrinks)
+  const fitted = fitPanels({
+    left: { open: sidebarOpen && projectNodes.length > 0, width: sidebarWidth },
+    right: { open: rightOpen, width: rightWidth },
+  }, viewport)
+  const leftWidth = fitted.left || sidebarWidth
+  const rightPanelWidth = fitted.right || rightWidth
 
   const toggleSidebar = useCallback(() => setSidebarOpen(v => !v), [])
   const togglePin = useCallback(() => setSidebarPinned(v => !v), [])
