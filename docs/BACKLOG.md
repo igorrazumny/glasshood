@@ -491,7 +491,7 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Priority:** P2
 - **Testable:** Yes (UI + API: for every box on the live landscape the logs call returns lines or a plain reason, none returns "Unknown node", and the button shows on every box)
 - **Who builds:** Neo.
-- **Status:** confirmed 2026-11-07, not started.
+- **Status:** implemented 2026-11-07 (View Logs on every box; a quiet part shows its latest lines of the last 7 days with dates, and an empty window gives a plain reason; ColdVault landscape v11 gives every box its own lines: load balancer requests for the entry boxes, change records for the firewall rules, the app's own lines that mention each outside service; the three alerting boxes removed). Not yet verified.
 
 ## REQ-GHA-033: The side panels can be resized and closed; the alarm list fills the right panel
 
