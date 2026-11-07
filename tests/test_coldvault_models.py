@@ -224,13 +224,29 @@ def test_note_is_shown_even_when_every_outcome_is_known(monkeypatch):
     assert "PermissionError" in f["explanation"]["what"]
 
 
-def test_a_retry_by_the_same_model_is_called_a_retry(monkeypatch):
-    # shadow W1
-    _setup(monkeypatch, {"claude-opus-4-7": {"answered": 1, "failed": 1, "timed_out": 0}},
+def test_a_reply_without_a_switch_line_does_not_name_the_answerer(monkeypatch):
+    # shadow: no switch line does not prove a self-retry; billing names the chosen model
+    _setup(monkeypatch, {"claude-opus-4-7": {"answered": 0, "failed": 1, "timed_out": 0},
+                         "claude-sonnet-4-6": {"answered": 1, "failed": 0, "timed_out": 0}},
            [OPUS_ERROR], [SONNET_BILLING])
     [f] = cm.failures({"claude": "cv-vertex"})
-    assert f["title"].endswith("it answered on a retry") and "None" not in f["title"]
-    assert "itself on a retry" in f["explanation"]["what"] and "in its place" not in f["explanation"]["what"]
+    assert f["severity"] == "warning" and f["title"].endswith("the question got a reply")
+    assert "retry" not in f["explanation"]["what"] and "do not name" in f["explanation"]["what"]
+
+
+def test_each_model_keeps_its_own_outcome_of_a_shared_question(monkeypatch):
+    # shadow: Opus fails -> Sonnet, Sonnet fails, no reply; a later failed read keeps both critical
+    per_model = {"claude-opus-4-7": {"answered": 0, "failed": 1, "timed_out": 0},
+                 "claude-sonnet-4-6": {"answered": 0, "failed": 1, "timed_out": 0}}
+    _setup(monkeypatch, per_model, [SONNET_ERROR, OPUS_FALLBACK, OPUS_ERROR],
+           [{**SONNET_BILLING, "completed": 0, "errors": 2}])
+    assert {f["severity"] for f in cm.failures({"claude": "cv-vertex"})} == {"critical"}
+
+    def broken(*a, **k):
+        raise PermissionError()
+    cm.refresh(_metrics(per_model), READ, read_lines=broken)
+    sev = {f["model"]: f["severity"] for f in cm.failures({"claude": "cv-vertex"})}
+    assert sev == {"claude-opus-4-7": "critical", "claude-sonnet-4-6": "critical"}
 
 
 SONNET_FALLBACK = {"timestamp": _ago(10), "severity": "INFO", "request_id": "r1",
@@ -256,7 +272,7 @@ def test_a_chain_ending_in_a_failure_leaves_the_answerer_unnamed(monkeypatch):
                          "claude-sonnet-4-6": {"answered": 0, "failed": 1, "timed_out": 0}},
            [sonnet_err_only, OPUS_FALLBACK, OPUS_ERROR], [SONNET_BILLING])
     [opus] = [f for f in cm.failures({"claude": "cv-vertex"}) if f["model"] == "claude-opus-4-7"]
-    assert "Sonnet" not in opus["title"] and "another model" in opus["explanation"]["what"].lower()
+    assert "Sonnet" not in opus["title"] and "do not name" in opus["explanation"]["what"]
     assert opus["severity"] == "warning"
 
 

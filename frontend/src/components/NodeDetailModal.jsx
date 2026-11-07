@@ -230,7 +230,8 @@ export default function NodeDetailModal({ node, onClose, isDemo, hideCosts }) {
                                 {failed > 0 && (
                                   <div className="text-xs text-gray-500 dark:text-purple-300">
                                     {[md.reason,
-                                      md.recovered ? `${md.backup || 'another model'} answered ${md.recovered}` : null,
+                                      md.recovered ? (md.backup ? `${md.backup} answered ${md.recovered - (md.unnamed || 0)}` : `${md.recovered} got a reply`) : null,
+                                      md.backup && md.unnamed ? `${md.unnamed} got a reply` : null,
                                       md.unanswered ? `${md.unanswered} got no reply` : null,
                                       md.unknown ? `${md.unknown} with unknown outcome` : null].filter(Boolean).join(' · ')}
                                     {md.last_at ? ` · last ${clock(md.last_at)}` : ''}
