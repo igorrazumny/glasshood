@@ -8,14 +8,28 @@ const NOT_READ = new Set(['not checked', 'not monitored', 'unknown', 'stale'])
 
 export const systemId = m => `manifest-${m?.product || 'unknown'}-${m?.environment || 'unknown'}`
 
-// node id -> system id, from the boxes' project/env tags (set by the backend)
+// Every box including the ones drawn inside another (container, app, embeddings)
+export function allBoxes(nodes) {
+  const out = []
+  const walk = list => { for (const n of list || []) { if (n?.id) { out.push(n); walk(n.children) } } }
+  walk(nodes)
+  return out
+}
+
+// node id -> system id, from the boxes' project/env tags (set by the backend); a box inside
+// another box belongs to the same system as the box it is in
 export function systemOfNodes(nodes, manifests) {
   const byKey = new Map((manifests || []).map(m => [`${m.product}|${m.environment}`, systemId(m)]))
   const out = new Map()
-  for (const n of nodes || []) {
-    const id = byKey.get(`${n.project}|${n.env}`)
-    if (id) out.set(n.id, id)
+  const walk = (list, inherited) => {
+    for (const n of list || []) {
+      if (!n?.id) continue
+      const id = byKey.get(`${n.project}|${n.env}`) || inherited
+      if (id) out.set(n.id, id)
+      walk(n.children, id)
+    }
   }
+  walk(nodes, undefined)
   return out
 }
 
@@ -42,7 +56,7 @@ export function systemCards(manifests, nodes, alerts) {
     const id = systemId(m)
     if (seen.has(id)) continue
     seen.add(id)
-    const mine = (nodes || []).filter(n => owner.get(n.id) === id)
+    const mine = allBoxes(nodes).filter(n => owner.get(n.id) === id)
     const statuses = mine.map(n => n.status)
     const open = (alerts || []).filter(a => owner.get(a.node_id) === id)
     const polls = mine.map(n => n.metrics?._last_poll).filter(Number.isFinite)

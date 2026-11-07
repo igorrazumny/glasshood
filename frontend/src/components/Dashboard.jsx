@@ -175,7 +175,7 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
   const showHome = !isDemo && activeProject === null && cards.length > 1
   // Filter alerts/anomalies by selected system
   const contextNodeIds = activeProject
-    ? new Set(allNodes.filter(n => owner.get(n.id) === activeProject).map(n => n.id))
+    ? new Set([...owner].filter(([, sys]) => sys === activeProject).map(([id]) => id))
     : null
   // The map of one selected system shows only that system
   const mapManifests = activeProject ? manifestData.filter(m => systemId(m) === activeProject) : manifestData
