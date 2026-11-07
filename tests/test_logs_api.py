@@ -84,7 +84,7 @@ class TestLogsApi:
             "node_id": "attacker-injected-node",
             "entries": [],
             "count": 0,
-            "error": "Unknown node",
+            "error": "GlassHood does not know this part, so it cannot look up its logs.",
         }
         mock_query.assert_not_called()
 
@@ -156,7 +156,7 @@ class TestLogsApi:
         assert "google-cloud-logging not installed" in body["error"]
 
     def test_generic_exception_path_returns_failure_error(self):
-        """Other failures from Cloud Logging surface as a 'Log collection failed'
+        """Other failures from Cloud Logging surface as a plain 'could not read'
         message and remain a graceful 200 OK with an error payload."""
         with patch("src.api.routes.logs.verify_token") as mock_verify, \
              patch("src.api.routes.logs._query_logs_with_filter",
@@ -167,8 +167,37 @@ class TestLogsApi:
             r = _client().get("/api/logs/pl-api")
         assert r.status_code == 200
         body = r.json()
-        assert body["error"].startswith("Log collection failed:")
+        assert body["error"].startswith("GlassHood could not read this part's logs:")
         assert "transient gcp blip" in body["error"]
+
+
+class TestQuietPart:
+    """REQ-GHA-032 clause 7: no lines in the last hour → the latest lines from the
+    last 7 days, said in plain words; nothing at all → a plain reason."""
+
+    def _get(self, results):
+        with patch("src.api.routes.logs.verify_token"), \
+             patch("src.api.routes.logs._query_logs_with_filter", side_effect=results) as mock_query, \
+             patch("src.api.routes.logs._resolve_node", return_value=("manifest_logs", "p", "f")):
+            body = _client().get("/api/logs/cv-fw-lb").json()
+        return body, mock_query
+
+    def test_busy_part_shows_the_last_hour_only(self):
+        body, q = self._get([[{"timestamp": "t", "severity": "INFO", "message": "m"}]])
+        assert body["window"] == "1h" and body["count"] == 1 and "note" not in body
+        assert q.call_count == 1
+
+    def test_quiet_part_shows_last_7_days_and_says_so(self):
+        from datetime import timedelta
+        body, q = self._get([[], [{"timestamp": "t", "severity": "NOTICE", "message": "rule changed"}]])
+        assert body["window"] == "7d" and body["count"] == 1
+        assert body["note"].startswith("No log lines in the last hour")
+        assert q.call_args.args[3] == timedelta(days=7)
+        assert q.call_args.args[:2] == ("p", "f")
+
+    def test_silent_part_gives_a_plain_reason(self):
+        body, _ = self._get([[], []])
+        assert body["count"] == 0 and body["note"] == "No log lines for this part in the last 7 days."
 
 
 class TestFilterParenthesization:
@@ -277,7 +306,7 @@ class TestDemoRouteIsStatic:
                 "/api/logs/whatever?log_filter=resource.type=%22bigquery_resource%22"
                 "&log_project=other-project"
             )
-        assert r.json()["error"] == "Unknown node"
+        assert r.json()["error"].startswith("GlassHood does not know this part")
         mock_query.assert_not_called()
 
 
@@ -383,5 +412,5 @@ class TestResolveNodeUnmocked:
                 "&log_project=other-project"
             )
         body = r.json()
-        assert body["error"] == "Unknown node"
+        assert body["error"].startswith("GlassHood does not know this part")
         mock_query.assert_not_called()

@@ -310,21 +310,15 @@ export default function NodeDetailModal({ node, onClose, isDemo, hideCosts }) {
           </div>
         )}
 
-        {/* View Logs button */}
-        {node.source === 'manifest' && !node.monitoring_logs ? (
-          <div className="mt-4 w-full flex items-center justify-center gap-2 bg-surface/30 dark:bg-purple-900/40 border border-border/50 dark:border-purple-700 rounded-lg py-2 text-sm text-gray-500 dark:text-purple-300">
-            <FileText size={14} />
-            No logs configured for this node
-          </div>
-        ) : (
-          <button
-            onClick={() => setShowLogs(true)}
-            className="mt-4 w-full flex items-center justify-center gap-2 bg-surface hover:bg-surface/80 dark:bg-purple-900/40 dark:hover:bg-purple-900/60 border border-border dark:border-purple-700 rounded-lg py-2 text-sm text-gray-700 dark:text-purple-100 hover:text-gray-900 dark:hover:text-white transition-colors"
-          >
-            <FileText size={14} />
-            View Logs
-          </button>
-        )}
+        {/* View Logs button — REQ-GHA-032: on every box; the log window gives a plain
+            reason when there is nothing to show */}
+        <button
+          onClick={() => setShowLogs(true)}
+          className="mt-4 w-full flex items-center justify-center gap-2 bg-surface hover:bg-surface/80 dark:bg-purple-900/40 dark:hover:bg-purple-900/60 border border-border dark:border-purple-700 rounded-lg py-2 text-sm text-gray-700 dark:text-purple-100 hover:text-gray-900 dark:hover:text-white transition-colors"
+        >
+          <FileText size={14} />
+          View Logs
+        </button>
 
         {/* Footer — only show if no live monitoring timer above */}
         {!(node.source === 'manifest' && _hasLiveMetrics(node)) && (

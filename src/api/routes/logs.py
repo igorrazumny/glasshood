@@ -7,6 +7,8 @@
 # REQ-212: when a node exists in the manifest but does not declare
 # monitoring.logs, fall back to the project-scoped gce_instance default so the
 # modal still shows real entries — never an attacker-supplied project.
+# REQ-GHA-032: a part with no lines in the last hour shows its most recent lines
+# from the last 7 days and says so; every empty answer carries a plain reason.
 
 import asyncio
 import logging
@@ -26,7 +28,14 @@ logger = logging.getLogger(__name__)
 DEFAULT_FILTER = 'resource.type="gce_instance"'
 
 
-def _query_logs_with_filter(project: str, log_filter: str, max_entries: int = 100) -> list[dict]:
+QUIET_FALLBACK = timedelta(days=7)
+QUIET_NOTE = "No log lines in the last hour. Showing the most recent lines from the last 7 days."
+EMPTY_NOTE = "No log lines for this part in the last 7 days."
+UNKNOWN_NOTE = "GlassHood does not know this part, so it cannot look up its logs."
+
+
+def _query_logs_with_filter(project: str, log_filter: str, max_entries: int = 100,
+                            window: timedelta = timedelta(hours=1)) -> list[dict]:
     """Query GCP Cloud Logging with an explicit filter and project.
 
     REQ-705: the manifest-supplied filter is wrapped in parentheses so an
@@ -36,7 +45,7 @@ def _query_logs_with_filter(project: str, log_filter: str, max_entries: int = 10
     """
     from google.cloud.logging_v2 import Client
 
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
+    cutoff = datetime.now(timezone.utc) - window
     filter_str = f'({log_filter}) AND timestamp>="{cutoff.isoformat()}"'
 
     client = Client(project=project)
@@ -181,18 +190,24 @@ async def get_logs(node_id: str, request: Request, lines: int = 100,
     status, project, resolved_filter = _resolve_node(node_id)
     if status == "unknown":
         return {"node_id": node_id, "entries": [], "count": 0,
-                "error": "Unknown node"}
+                "error": UNKNOWN_NOTE}
 
     lines = max(1, min(lines, 200))
     try:
         loop = asyncio.get_running_loop()
         entries = await loop.run_in_executor(
             None, _query_logs_with_filter, project, resolved_filter, lines)
-        return {"node_id": node_id, "entries": entries, "count": len(entries)}
+        if entries:
+            return {"node_id": node_id, "entries": entries, "count": len(entries), "window": "1h"}
+        # REQ-GHA-032 clause 7: a quiet part shows its latest lines from the last 7 days
+        entries = await loop.run_in_executor(
+            None, _query_logs_with_filter, project, resolved_filter, lines, QUIET_FALLBACK)
+        return {"node_id": node_id, "entries": entries, "count": len(entries), "window": "7d",
+                "note": QUIET_NOTE if entries else EMPTY_NOTE}
     except ImportError:
         return {"node_id": node_id, "entries": [], "count": 0,
                 "error": "google-cloud-logging not installed"}
     except Exception as e:
         logger.warning(f"Log query failed for {node_id}: {e}")
         return {"node_id": node_id, "entries": [], "count": 0,
-                "error": f"Log collection failed: {str(e)[:100]}"}
+                "error": f"GlassHood could not read this part's logs: {str(e)[:100]}"}

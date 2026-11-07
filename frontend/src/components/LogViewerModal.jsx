@@ -1,10 +1,12 @@
 // File: frontend/src/components/LogViewerModal.jsx
 // Purpose: Full-screen log viewer — fetches real GCP logs (live) or sample data (demo)
+// REQ-GHA-032: a quiet part shows its latest lines of the last 7 days (with the date)
+// and every empty window says why.
 
 import { useState, useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
 import { apiFetch, apiUrl } from '../utils/api'
-import { clock } from '../utils/time'
+import { clock, dateTime } from '../utils/time'
 
 const SEVERITY_COLORS = {
   ERROR: 'text-red-400',
@@ -20,6 +22,8 @@ export default function LogViewerModal({ nodeId, nodeLabel, nodeStatus, isDemo, 
   const [entries, setEntries] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [note, setNote] = useState(null)
+  const [week, setWeek] = useState(false)
   const bottomRef = useRef(null)
 
   useEffect(() => {
@@ -32,6 +36,8 @@ export default function LogViewerModal({ nodeId, nodeLabel, nodeStatus, isDemo, 
     if (!nodeId) return
     setLoading(true)
     setError(null)
+    setNote(null)
+    setWeek(false)
 
     // REQ-704: filter+project are derived server-side from node_id via the
     // compiled manifest. We no longer send log_filter / log_project query
@@ -45,6 +51,8 @@ export default function LogViewerModal({ nodeId, nodeLabel, nodeStatus, isDemo, 
       .then(data => {
         setEntries(data.entries || [])
         if (data.error) setError(data.error)
+        if (data.note) setNote(data.note)
+        setWeek(data.window === '7d')
       })
       .catch(err => setError(err.message))
       .finally(() => setLoading(false))
@@ -86,9 +94,12 @@ export default function LogViewerModal({ nodeId, nodeLabel, nodeStatus, isDemo, 
             <div className="text-gray-500 animate-pulse">Loading logs...</div>
           )}
           {error && (
-            <div className="text-yellow-500 mb-3">Note: {error}</div>
+            <div className="text-yellow-500 mb-3">{error}</div>
           )}
-          {!loading && entries.length === 0 && !error && (
+          {note && (
+            <div className="text-gray-500 dark:text-purple-300 mb-3">{note}</div>
+          )}
+          {!loading && entries.length === 0 && !error && !note && (
             <div className="text-gray-600">No log entries found in the last hour.</div>
           )}
           {entries.map((entry, i) => {
@@ -96,7 +107,7 @@ export default function LogViewerModal({ nodeId, nodeLabel, nodeStatus, isDemo, 
             return (
               <div key={i} className="flex gap-3 py-0.5 hover:bg-surface/50 dark:hover:bg-purple-700/30 leading-relaxed">
                 <span className="text-gray-600 whitespace-nowrap shrink-0">
-                  {clock(entry.timestamp, { seconds: true }) || '--:--:--'}
+                  {(week ? dateTime(entry.timestamp) : clock(entry.timestamp, { seconds: true })) || '--:--:--'}
                 </span>
                 <span className={`${sevColor} w-16 shrink-0`}>{entry.severity}</span>
                 <span className="text-gray-300 whitespace-pre-wrap break-all">{entry.message}</span>
@@ -108,7 +119,7 @@ export default function LogViewerModal({ nodeId, nodeLabel, nodeStatus, isDemo, 
 
         {/* Footer */}
         <div className="mt-2 text-xs text-gray-600 flex justify-between">
-          <span>{entries.length} entries (last 1 hour)</span>
+          <span>{entries.length} entries ({week ? 'last 7 days' : 'last 1 hour'})</span>
           <span>{isDemo ? 'Sample data' : 'GCP Cloud Logging'}</span>
         </div>
       </div>
