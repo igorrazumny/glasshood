@@ -27,7 +27,7 @@ const SEVERITY_STYLE = {
     border: 'border-blue-300 dark:border-blue-400/20' },
 }
 
-export default function AlertPanel({ alerts, resolved, rules, onSelect }) {
+export default function AlertPanel({ alerts, resolved, rules, onSelect, systemOf }) {
   const [showResolved, setShowResolved] = useState(false)
   const notChecked = notCheckedNames(rules)
   if (!alerts?.length && !resolved?.length && !notChecked.length) return null
@@ -70,6 +70,11 @@ export default function AlertPanel({ alerts, resolved, rules, onSelect }) {
                   {alarmTag(alert) && (
                     <span className="text-[10px] font-semibold uppercase mr-1.5 px-1 py-px rounded border border-gray-400 dark:border-purple-400 text-gray-600 dark:text-purple-200">
                       {alarmTag(alert)}
+                    </span>
+                  )}
+                  {systemOf && systemOf(alert) && (
+                    <span className="text-[10px] font-semibold mr-1.5 px-1 py-px rounded bg-gray-200 dark:bg-purple-700 text-gray-700 dark:text-purple-100">
+                      {systemOf(alert)}
                     </span>
                   )}
                   {alarmTitle(alert)}

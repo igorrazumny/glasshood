@@ -79,7 +79,8 @@ class Topology:
         # Only consider active nodes — skip non-live statuses
         # REQ-GHA-023: "not checked" (an outside service GlassHood cannot check) says nothing
         # about health, so it neither greens nor degrades the overall status.
-        skip = ("disconnected", "planned", "deployed", "offline", "disabled", "not checked")
+        # REQ-GHA-034: "idle" (a model provider with no calls this hour) is not a problem either.
+        skip = ("disconnected", "planned", "deployed", "offline", "disabled", "not checked", "idle")
         statuses = [n.status for n in self.nodes if n.status not in skip]
         if not statuses:  # nothing checked (or nothing at all) proves nothing
             self.overall_status = "unknown"

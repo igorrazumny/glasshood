@@ -19,6 +19,8 @@ import { computeManifestLayout } from '../utils/manifestLayout'
 import { canvasNodes } from '../utils/canvasParts.js'
 import { clearToken, apiFetch, apiUrl } from '../utils/api'
 import { loadPanel, savePanel, fitPanels, landscapeInsets } from '../utils/panels'
+import { systemCards, systemOfNodes, portfolioLine, systemId } from '../utils/systems'
+import SystemsHome from './SystemsHome'
 
 function useDemoData() {
   const [topology, setTopology] = useState(null)
@@ -165,19 +167,21 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
   const leftShift = insets.left
   const rightShift = insets.right
 
-  // Filter alerts/anomalies by selected project context
-  const selectedProject = activeProject ? projectNodes.find(p => p.id === activeProject) : null
-  const contextNodeIds = (() => {
-    if (!selectedProject) return null
-    const product = selectedProject.project || ''
-    const env = selectedProject.env || ''
-    const allNodes = topology?.data?.nodes || []
-    return new Set(
-      allNodes
-        .filter(n => n.project === product && (!env || !n.env || n.env === env))
-        .map(n => n.id)
-    )
-  })()
+  // REQ-GHA-035: each landscape file is one system; boxes carry their system (project/env)
+  const allNodes = topology?.data?.nodes || []
+  const owner = systemOfNodes(allNodes, manifestData)
+  const cards = systemCards(manifestData, allNodes, topology?.data?.alerts)
+  const systemLabel = new Map(cards.map(c => [c.id, c.label]))
+  const showHome = !isDemo && activeProject === null && cards.length > 1
+  // Filter alerts/anomalies by selected system
+  const contextNodeIds = activeProject
+    ? new Set(allNodes.filter(n => owner.get(n.id) === activeProject).map(n => n.id))
+    : null
+  // The map of one selected system shows only that system
+  const mapManifests = activeProject ? manifestData.filter(m => systemId(m) === activeProject) : manifestData
+  const mapData = activeProject && topology.data && mapManifests.length
+    ? { ...topology.data, nodes: allNodes.filter(n => owner.get(n.id) === activeProject || !owner.has(n.id)) }
+    : topology.data
   const filteredAlerts = contextNodeIds
     ? (topology.data?.alerts || []).filter(a => contextNodeIds.has(a.node_id))
     : (topology.data?.alerts || [])
@@ -229,6 +233,7 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
         {/* REQ-GHA-027: an anomaly is an alarm on its part (with its classification in the
             detail), so it is not listed a second time in a separate anomaly panel */}
         <AlertPanel alerts={filteredAlerts} resolved={filteredResolved}
+          systemOf={!activeProject && cards.length > 1 ? (a => systemLabel.get(owner.get(a.node_id)) || '') : null}
           rules={topology.data?.alarm_rules} onSelect={setSelectedAlert} />
         <div className="shrink-0">
           <SecurityPanel isDemo={isDemo} />
@@ -237,7 +242,12 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
 
       <div className="flex-1 overflow-hidden transition-all duration-300"
         style={{ paddingLeft: leftShift, paddingRight: rightShift, paddingTop: 8, paddingBottom: 8 }}>
-        <TopologyMap data={topology.data} error={topology.error} isDemo={isDemo} hideCosts={hideCosts} onNodeSelect={setSelectedNode} focusProjectId={activeProject} manifests={manifestData} />
+        {showHome ? (
+          <SystemsHome cards={cards} line={portfolioLine(cards)} onOpen={setActiveProject} />
+        ) : (
+          <TopologyMap key={activeProject || 'all'} data={mapData} error={topology.error} isDemo={isDemo} hideCosts={hideCosts}
+            onNodeSelect={setSelectedNode} focusProjectId={mapManifests.length ? null : activeProject} manifests={mapManifests} />
+        )}
       </div>
 
       <div className="transition-all duration-300" style={{ marginLeft: leftShift, marginRight: rightShift }}>
