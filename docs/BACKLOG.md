@@ -445,7 +445,7 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Priority:** P3
 - **Testable:** Yes (UI tests with a fixed time zone)
 - **Who builds:** Neo.
-- **Status:** confirmed by Igor 2026-11-07 (full text).
+- **Status:** implemented 2026-11-07 (frontend/src/utils/time.js: the device's zone, 24-hour, zone name on every clock time and date; quoted log lines say they are UTC; the report timeline is UTC and says so). Tests run in three zones. Not yet verified.
 
 ## REQ-GHA-031: An AI alarm opens with a plain explanation; the log lines are there on request
 
@@ -462,4 +462,4 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Priority:** P2
 - **Testable:** Yes (API + UI; one live AI alarm)
 - **Who builds:** Neo.
-- **Status:** confirmed by Igor 2026-11-07 (full text).
+- **Status:** implemented 2026-11-07 (the review writes what/suspicion/directions with each problem; the alarm window shows them first, the log lines closed under "View the related log entries", "Details" closed; a discovered server is named by its landscape box). Live check on the next review outstanding.

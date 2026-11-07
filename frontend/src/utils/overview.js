@@ -2,6 +2,8 @@
 // Purpose: REQ-GHA-024 — how an AI overview's time and spend read on screen. The model is
 // not named: GlassHood uses whichever model suits (Igor, 2026-11-06).
 
+import { clock } from './time.js'
+
 export function ago(tsSeconds, now = Date.now()) {
   const s = Math.max(0, Math.round(now / 1000 - tsSeconds))
   if (s < 60) return 'just now'
@@ -12,9 +14,7 @@ export function ago(tsSeconds, now = Date.now()) {
 
 export function overviewStamp(o, now = Date.now()) {
   if (!o?.analyzed_at) return 'Not written yet'
-  const t = new Date(o.analyzed_at * 1000)
-  const hhmm = t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  return `Updated ${hhmm}, ${ago(o.analyzed_at, now)}`
+  return `Updated ${clock(o.analyzed_at * 1000)}, ${ago(o.analyzed_at, now)}`
 }
 
 export function spendLine(sp) {

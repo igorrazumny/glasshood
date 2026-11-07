@@ -5,6 +5,7 @@
 import assert from 'node:assert/strict'
 import { alarmWhen, resolvedWhen, alarmTitle, notCheckedNames, alarmKindLabel, sortAlarms,
   alarmTag, alarmRef, patternLabel, errorText } from './alarms.js'
+import { zoneName } from './time.js'
 
 let failed = 0
 function test(name, fn) {
@@ -12,14 +13,15 @@ function test(name, fn) {
 }
 
 const t = (h, m) => new Date(2026, 10, 6, h, m).toISOString()
+const Z = zoneName(t(10, 46))  // REQ-GHA-030: the reader's zone is named
 
 test('says since when and when last seen', () => {
-  assert.equal(alarmWhen({ first_seen: t(10, 46), last_seen: t(11, 2) }), 'since 10:46 · last seen 11:02')
-  assert.equal(alarmWhen({ first_seen: t(10, 46), last_seen: t(10, 46) }), 'since 10:46')
+  assert.equal(alarmWhen({ first_seen: t(10, 46), last_seen: t(11, 2) }), `since 10:46 ${Z} · last seen 11:02 ${Z}`)
+  assert.equal(alarmWhen({ first_seen: t(10, 46), last_seen: t(10, 46) }), `since 10:46 ${Z}`)
 })
 
 test('gives start and end of a resolved alarm', () => {
-  assert.equal(resolvedWhen({ first_seen: t(9, 5), ended_at: t(9, 40) }), '09:05–09:40')
+  assert.equal(resolvedWhen({ first_seen: t(9, 5), ended_at: t(9, 40) }), `09:05–09:40 ${Z}`)
 })
 
 test('shows the plain title, the technical message only when there is no title', () => {

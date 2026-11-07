@@ -2,6 +2,7 @@
 // Purpose: Detail modal for anomalies — z-score, baseline, confidence explanation
 
 import { X, TrendingUp } from 'lucide-react'
+import { dateTime } from '../utils/time'
 
 function confidenceExplanation(confidence) {
   const pct = Math.round((confidence || 0) * 100)
@@ -114,7 +115,7 @@ export default function AnomalyDetailModal({ anomaly, onClose }) {
           {/* Timestamp */}
           {anomaly.timestamp && (
             <p className="text-xs text-gray-500 dark:text-purple-300">
-              Detected: {new Date(anomaly.timestamp).toLocaleString()}
+              Detected: {dateTime(anomaly.timestamp)}
             </p>
           )}
         </div>

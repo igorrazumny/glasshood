@@ -376,3 +376,86 @@ class TestReviewC2EvidenceIntegrity:
         assert found[1]["evidence"] == [LINE_1] and found[1]["backed_by_logs"] is True
         assert alarm["report"]["quotes_not_in_logs_dropped"] == 2
         assert "FABRICATED" not in json.dumps(alarm["report"])
+
+
+def _explained(**extra):
+    p = _problem("critical")
+    p["problems"][0].update({"what": "Chat answers fail for users because the server times out.",
+                             "suspicion": "Likely the model provider is slow to answer.",
+                             "directions": ["Possibly the network to the provider.", "", 7]}, **extra)
+    return p
+
+
+class TestPlainExplanation:
+    """REQ-GHA-031: the alarm carries a plain explanation, written when it is raised."""
+
+    def test_the_alarm_says_what_is_wrong_the_suspicion_and_where_to_look(self):
+        _review(_explained())
+        [a] = _ai()
+        assert a["explanation"] == {"what": "Chat answers fail for users because the server times out.",
+                                    "suspicion": "Likely the model provider is slow to answer.",
+                                    "directions": ["Possibly the network to the provider."]}
+        assert a["evidence"] == [LINE_1]  # the log lines stay behind it as evidence
+
+    def test_the_prompt_asks_for_hedged_causes_never_facts(self):
+        assert '"suspicion"' in ai_review.REVIEW_PROMPT and "never state a cause as a fact" in ai_review.REVIEW_PROMPT
+
+    def test_without_a_what_there_is_no_explanation_but_the_alarm_stands(self):
+        _review(_problem("warning"))
+        [a] = _ai()
+        assert a["explanation"] is None and a["title"]
+
+    def test_a_later_review_without_explanation_keeps_the_earlier_one(self):
+        _review(_explained())
+        [a] = _ai()
+        _review(_problem("critical", pid=a["group"][3:]))
+        [again] = _ai()
+        assert again["explanation"]["what"].startswith("Chat answers fail")
+
+    def test_the_explanation_survives_a_restart(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(ai_review, "STATE_DIR", str(tmp_path))
+        _review(_explained())
+        eng._active.clear()
+        ai_review.load()
+        [back] = _ai()
+        assert back["explanation"]["suspicion"] == "Likely the model provider is slow to answer."
+
+    def test_explanation_texts_are_bounded_plain_strings(self):
+        _review(_explained(what="x" * 5000, directions=["a", "b", "c", "d"]))
+        [a] = _ai()
+        assert len(a["explanation"]["what"]) == 800 and a["explanation"]["directions"] == ["a", "b", "c"]
+
+    def test_one_review_call_writes_it_no_call_when_opening(self):
+        calls = []
+        with patch.object(ov, "_log_lines", side_effect=lambda *a, **k: [LINE_1]), \
+                patch.object(ov, "call_model", side_effect=lambda *a, **k: calls.append(1) or (json.dumps(_explained()), [])):
+            ai_review.run(TOPOLOGY)
+        [a] = _ai()
+        app, auth = _client()
+        with patch("src.api.routes.alerts.verify_token", side_effect=auth), \
+                patch.object(ov, "call_model", side_effect=AssertionError("no model call on opening")):
+            one = TestClient(app).get("/api/alerts/one", params={"group": a["group"], "node_id": "cv-mig"}).json()
+        assert len(calls) == 1 and one["explanation"]["what"].startswith("Chat answers fail")
+
+
+class TestLandscapeName:
+    """REQ-GHA-031 clause 5: a discovered server is named by its box on the landscape."""
+
+    def test_a_server_inside_a_group_is_named_by_the_group(self, monkeypatch):
+        monkeypatch.setattr(ov, "_manifest_info", lambda: ({}, {"cv-mig": "Confidential VM (MIG)"}))
+        topo = {"nodes": [{"id": "vm-coldvault-mig-xjxr", "label": "coldvault-mig-xjxr",
+                           "metrics": {"_parent": "cv-mig"}},
+                          {"id": "cv-db", "label": "Database"}]}
+        assert ai_review.landscape_names(topo) == {"vm-coldvault-mig-xjxr": "Confidential VM (MIG)"}
+
+    def test_the_alarm_title_uses_the_landscape_name(self, monkeypatch):
+        monkeypatch.setattr(ov, "_manifest_info", lambda: ({}, {"cv-mig": "Confidential VM (MIG)"}))
+        parts = [({"id": "vm-x", "label": "coldvault-mig-xjxr", "status": "healthy"}, 'resource.type="gce_instance"')]
+        monkeypatch.setattr(ov, "_walk_parts", lambda topology: iter(parts))
+        topo = {"nodes": [{"id": "vm-x", "label": "coldvault-mig-xjxr", "metrics": {"_parent": "cv-mig"}}], "edges": []}
+        with patch.object(ov, "_log_lines", side_effect=lambda *a, **k: [LINE_1]), \
+                patch.object(ov, "call_model", side_effect=lambda *a, **k: (json.dumps(_problem(part="vm-x")), [])):
+            ai_review.run(topo)
+        [a] = _ai()
+        assert a["title"] == "Confidential VM (MIG): Chat requests time out"
+        assert "coldvault-mig-xjxr" not in a["title"]

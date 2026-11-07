@@ -39,6 +39,8 @@ class Alert:
     # and the "Investigate deeper" report once one was asked for
     evidence: list = field(default_factory=list)
     report: Optional[dict] = None
+    # REQ-GHA-031: the AI review's plain explanation {what, suspicion, directions}
+    explanation: Optional[dict] = None
 
     @classmethod
     def from_dict(cls, d: dict) -> "Alert":
@@ -69,4 +71,5 @@ class Alert:
             "kind": self.kind,
             "evidence": list(self.evidence),
             "report": self.report,
+            "explanation": self.explanation,
         }

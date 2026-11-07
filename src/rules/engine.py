@@ -249,6 +249,8 @@ def _apply(candidates: list[Alert], checked: set, now: float) -> tuple[list, lis
         for field in ("rule_id", "kind", "severity", "message", "title", "part_label", "metric_name",
                       "metric_value", "threshold", "anomaly_classification", "evidence"):
             setattr(current, field, getattr(top, field))
+        if top.explanation:  # a review that wrote none keeps the earlier one (REQ-GHA-031)
+            current.explanation = top.explanation
         current.last_seen = now_iso
         current.reasons = reasons
     for key in list(_active):
@@ -401,6 +403,7 @@ def track_ai_review(problems: list, reviewed_parts: set, labels: Optional[dict] 
             alert = _candidate(rule, part, labels.get(part), f"Found by AI review: {p['title']}")
             alert.title = f"{labels[part]}: {p['title']}" if part in labels else p["title"]
             alert.evidence = list(p.get("evidence") or [])
+            alert.explanation = p.get("explanation")
             candidates.append(alert)
         _apply(candidates, checked, now)
 
