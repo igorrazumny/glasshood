@@ -56,6 +56,8 @@ for _ in $(seq 1 30); do  # a secret change is refused while the new revision is
   [ "$(az containerapp show -g "$RG" -n "$APP" --query properties.provisioningState -o tsv </dev/null)" = Succeeded ] && break
   sleep 10
 done
+state=$(az containerapp show -g "$RG" -n "$APP" --query properties.provisioningState -o tsv </dev/null)
+[ "$state" = Succeeded ] || { echo "state.sh: the app is '$state', not Succeeded; check the new revision" >&2; exit 1; }
 if az containerapp secret list -g "$RG" -n "$APP" --query "[].name" -o tsv </dev/null | grep -qx platform-key; then
   az containerapp secret remove -g "$RG" -n "$APP" --secret-names platform-key -o none </dev/null
 fi
