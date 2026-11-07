@@ -82,3 +82,39 @@ def test_an_unreadable_provider_keeps_the_last_overview_and_says_why():
 def test_prompts_forbid_invented_causes():
     for prompt in (ov.OUTSIDE_SYSTEM_PROMPT, ov.OUTSIDE_PART_PROMPT):
         assert "Never invent an internal cause" in prompt and "cannot be known from outside" in prompt
+
+
+def test_edited_update_status_or_affected_parts_rewrite_the_analysis():
+    # shadow C2: provider content can change without a new update timestamp
+    _reset()
+    inc = {"id": "i1", "name": "Amsterdam degraded", "_kind": "incident", "status": "investigating", "impact": "minor",
+           "components": [{"id": "c1", "name": "Amsterdam"}],
+           "incident_updates": [{"created_at": "2026-11-07T22:00:00Z", "status": "investigating", "body": "Looking into it."}]}
+    _run(_published(incident=inc), [])
+    assert _run(_published(incident=inc), []) == 0          # unchanged: no call
+    edited = {**inc, "incident_updates": [{**inc["incident_updates"][0], "body": "Correction: only IPv6 traffic."}]}
+    assert _run(_published(incident=edited), []) >= 1
+    monitoring = {**edited, "status": "monitoring"}
+    assert _run(_published(incident=monitoring), []) >= 1
+    wider = {**monitoring, "components": [{"id": "c1", "name": "Amsterdam"}, {"id": "c2", "name": "Frankfurt"}]}
+    assert _run(_published(incident=wider), []) == 2       # Amsterdam's record changed, Frankfurt newly named
+
+
+def test_a_selected_external_system_never_shows_another_systems_overview():
+    # shadow C1
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from src.api.routes.analysis import router
+    _reset()
+    app = FastAPI()
+    app.include_router(router)
+    manifests = [{"product": "coldvault", "kind": ""}, {"product": "cloudflare", "kind": "outside_view"}]
+    with patch("src.api.routes.analysis.verify_token"), \
+         patch("src.api.routes.manifests._load_manifests", return_value=manifests), \
+         patch.object(ov, "get_system", return_value={"summary": "ColdVault is healthy", "score": 9}):
+        c = TestClient(app)
+        body = c.get("/api/analysis?system=cloudflare").json()
+        assert body["summary"] == "" and "not been written yet" in body["error"]
+        assert c.get("/api/analysis?system=nope").status_code == 404
+        assert c.get("/api/analysis?system=coldvault").json()["summary"] == "ColdVault is healthy"
+        assert c.get("/api/analysis").json()["summary"] == "ColdVault is healthy"

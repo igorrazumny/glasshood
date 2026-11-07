@@ -22,9 +22,21 @@ def _is_operator(request: Request) -> bool:
 @router.get("/api/analysis")
 def get_analysis_endpoint(request: Request, system: str = None):
     verify_token(request)
-    # REQ-GHA-036 clause 7: an external system's own overview when it is selected
-    outside = ov.get_outside(system) if system else None
-    out = outside if outside is not None else ov.get_system()
+    # REQ-GHA-036 clause 7: an external system's own overview when it is selected; never
+    # another system's overview in its place
+    if system:
+        from src.api.routes.manifests import _load_manifests
+        kinds = {m.get("product"): m.get("kind") for m in _load_manifests()}
+        if system not in kinds:
+            raise HTTPException(status_code=404, detail=f"Unknown system {system!r}")
+        if kinds[system] == "outside_view":
+            out = ov.get_outside(system) or {
+                "score": None, "summary": "", "issues": [], "recommendations": [], "analyzed_at": None,
+                "stale": True, "error": "The AI overview for this system has not been written yet"}
+        else:
+            out = ov.get_system()
+    else:
+        out = ov.get_system()
     if _is_operator(request):
         out["spend"] = ov.get_spend()
         out["refresh_in_s"] = ov.manual_refresh_allowed()

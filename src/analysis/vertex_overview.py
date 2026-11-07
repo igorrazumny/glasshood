@@ -518,8 +518,9 @@ def _published_parts(p: dict) -> list:
                                for u in (e.get("incident_updates") or [])[:5]],
                    "also_affects": [x.get("name") for x in e.get("components") or [] if x.get("id") != cid][:20],
                } for e in events]}
-        sig = (c.get("status"), c.get("updated_at"),
-               tuple(sorted((e.get("id"), (e.get("incident_updates") or [{}])[0].get("created_at")) for e in events)))
+        # everything the analysis is written from: any change (an edited update, a new
+        # incident status, a changed set of affected parts) rewrites it; nothing else does
+        sig = json.dumps(rec, sort_keys=True, default=str)
         out.append((box, rec, sig))
     return out
 
