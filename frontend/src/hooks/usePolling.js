@@ -11,22 +11,31 @@ export function usePolling(path, intervalMs = 15000) {
   const failCount = useRef(0)
   const timerRef = useRef(null)
 
+  // REQ-GHA-036: when the path changes (another system selected), an answer for the old
+  // path that arrives late is dropped, and the old data is not shown as the new one's
+  const currentPath = useRef(path)
+
   const poll = useCallback(async () => {
     if (!path) return
     try {
       const result = await apiFetch(path)
+      if (currentPath.current !== path) return
       setData(result)
       setError(null)
       setLastUpdated(Date.now())
       failCount.current = 0
     } catch (e) {
+      if (currentPath.current !== path) return
       failCount.current++
       setError(e.message)
     }
   }, [path])
 
   useEffect(() => {
+    currentPath.current = path
+    setData(null)
     if (!path) return
+    let alive = true
     poll() // Initial fetch
 
     const schedule = () => {
@@ -34,13 +43,13 @@ export function usePolling(path, intervalMs = 15000) {
       const delay = intervalMs + backoff
       timerRef.current = setTimeout(async () => {
         await poll()
-        schedule()
+        if (alive) schedule()
       }, delay)
     }
 
     schedule()
-    return () => clearTimeout(timerRef.current)
-  }, [poll, intervalMs])
+    return () => { alive = false; clearTimeout(timerRef.current) }
+  }, [poll, intervalMs, path])
 
   return { data, error, lastUpdated, refresh: poll }
 }
