@@ -233,6 +233,41 @@ def test_a_retry_by_the_same_model_is_called_a_retry(monkeypatch):
     assert "itself on a retry" in f["explanation"]["what"] and "in its place" not in f["explanation"]["what"]
 
 
+SONNET_FALLBACK = {"timestamp": _ago(10), "severity": "INFO", "request_id": "r1",
+                   "message": "Fallback: Claude Sonnet 4.6 failed (Error code: 429 - quota), trying Gemini Flash"}
+SONNET_ERROR = {"timestamp": _ago(10), "severity": "ERROR", "request_id": "r1",
+                "message": "Claude stream failed: Claude Sonnet 4.6 - RateLimitError: Error code: 429"}
+
+
+def test_a_failed_backup_is_never_named_as_the_one_that_answered(monkeypatch):
+    # shadow: Opus fails -> Sonnet; Sonnet fails -> Gemini; Gemini answered
+    _setup(monkeypatch, {"claude-opus-4-7": {"answered": 0, "failed": 1, "timed_out": 0},
+                         "claude-sonnet-4-6": {"answered": 0, "failed": 1, "timed_out": 0},
+                         "gemini-flash": {"answered": 1, "failed": 0, "timed_out": 0}},
+           [SONNET_FALLBACK, SONNET_ERROR, OPUS_FALLBACK, OPUS_ERROR], [SONNET_BILLING])
+    titles = {f["model"]: f["title"] for f in cm.failures({"claude": "cv-vertex"})}
+    assert titles["claude-opus-4-7"].endswith("Gemini Flash answered instead")
+    assert titles["claude-sonnet-4-6"].endswith("Gemini Flash answered instead")
+
+
+def test_a_chain_ending_in_a_failure_leaves_the_answerer_unnamed(monkeypatch):
+    sonnet_err_only = {**SONNET_ERROR}
+    _setup(monkeypatch, {"claude-opus-4-7": {"answered": 0, "failed": 1, "timed_out": 0},
+                         "claude-sonnet-4-6": {"answered": 0, "failed": 1, "timed_out": 0}},
+           [sonnet_err_only, OPUS_FALLBACK, OPUS_ERROR], [SONNET_BILLING])
+    [opus] = [f for f in cm.failures({"claude": "cv-vertex"}) if f["model"] == "claude-opus-4-7"]
+    assert "Sonnet" not in opus["title"] and "another model" in opus["explanation"]["what"].lower()
+    assert opus["severity"] == "warning"
+
+
+def test_a_billing_line_without_a_count_proves_nothing(monkeypatch):
+    shapeless = {k: v for k, v in SONNET_BILLING.items() if k != "completed"}
+    _setup(monkeypatch, {"claude-opus-4-7": {"answered": 0, "failed": 1, "timed_out": 0}},
+           [OPUS_FALLBACK, OPUS_ERROR], [shapeless])
+    [f] = cm.failures({"claude": "cv-vertex"})
+    assert f["severity"] == "warning" and "not known" in f["title"]
+
+
 def test_one_event_raises_one_alarm_not_two(monkeypatch):
     # shadow C3: the provider box's error comes from the model failure; node_error adds no second alarm
     from src.models.topology import Node

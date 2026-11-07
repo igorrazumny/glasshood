@@ -131,6 +131,30 @@ def _events(per_model: dict, lines: list[dict]) -> dict:
             if len(ev["evidence"]) < 20:
                 ev["evidence"].append(line.get("_raw") or msg)
             break
+    # The model that answered a question is the end of its chain of switches: Opus fails,
+    # trying Sonnet; Sonnet fails, trying Gemini -> Gemini. A backup that itself failed on
+    # the same question never counts as the one that answered.
+    failed_on: dict = {}
+    for ev in out.values():
+        for rid in ev["requests"]:
+            failed_on.setdefault(rid, set()).add(_norm(ev["name"]))
+    tried: dict = {}
+    for ev in out.values():
+        for rid, backup in ev["backup_by_request"].items():
+            tried.setdefault(rid, {})[_norm(ev["name"])] = backup
+    for ev in out.values():
+        for rid, backup in list(ev["backup_by_request"].items()):
+            seen, current = set(), backup
+            while _norm(current) in failed_on.get(rid, set()) and _norm(current) not in seen:
+                seen.add(_norm(current))
+                current = tried.get(rid, {}).get(_norm(current))
+                if current is None:
+                    break
+            if current is None or _norm(current) in failed_on.get(rid, set()):
+                del ev["backup_by_request"][rid]   # who answered is not established
+                ev.setdefault("answerer_unknown", set()).add(rid)
+            else:
+                ev["backup_by_request"][rid] = current
     return out
 
 
@@ -157,22 +181,33 @@ def _outcomes(model_id: str, ev: dict, billing: list[dict], looked_up: set) -> d
     or by this model itself on a retry when no backup was tried). A question whose billing
     line was certainly read (looked_up) and is missing or completed nothing got no reply;
     any other question's outcome is unknown. Returns the counts and per-request facts."""
-    completed: dict = {}
+    completed: dict = {}   # request_id -> completed answers; None when the line has no usable count
     for line in billing:
         rid = line.get("request_id")
-        if rid in ev["requests"]:
-            done = line.get("completed")
-            completed[rid] = max(completed.get(rid, 0), done if isinstance(done, int) else 1)
+        if rid not in ev["requests"]:
+            continue
+        done = line.get("completed")
+        if isinstance(done, int) and not isinstance(done, bool):
+            completed[rid] = max(completed.get(rid) or 0, done)
+        else:
+            completed.setdefault(rid, None)   # proves nothing either way
     facts = {}
     for rid in ev["requests"]:
-        if completed.get(rid, 0) > 0:
-            # no backup tried for this question: the model itself answered on a retry
+        seen = rid in completed
+        done = completed.get(rid)
+        if seen and done is None:
+            continue                                   # unknown
+        if seen and done > 0:
             by = ev["backup_by_request"].get(rid)
-            facts[rid] = {"model": model_id, "outcome": "answered" if by else "retried", "answered_by": by}
-        elif rid in looked_up:
+            if by or rid in ev.get("answerer_unknown", set()):
+                outcome = "answered"                   # by the chain's end, or by a model not established
+            else:
+                outcome = "retried"                    # no backup tried: it answered itself on a retry
+            facts[rid] = {"model": model_id, "outcome": outcome, "answered_by": by}
+        elif (seen and done == 0) or (not seen and rid in looked_up):
             facts[rid] = {"model": model_id, "outcome": "no reply", "answered_by": None}
         else:
-            continue
+            continue                                   # unknown
         facts[rid]["at"] = _ts(ev["at_by_request"].get(rid))
     return _counts(facts)
 
@@ -182,7 +217,7 @@ def _counts(facts: dict) -> dict:
     retried = sum(1 for f in facts.values() if f["outcome"] == "retried")
     return {"recovered": len(answered) + retried, "retried": retried,
             "unanswered": sum(1 for f in facts.values() if f["outcome"] == "no reply"),
-            "backups": sorted({f["answered_by"] for f in answered}),
+            "backups": sorted({f["answered_by"] for f in answered if f["answered_by"]}),
             "facts": facts}
 
 
@@ -339,11 +374,11 @@ def failures(provider_parts: dict) -> list:
         if m.get("unanswered"):
             severity, tail = "critical", f"{_plural(m['unanswered'], 'question')} got no reply"
             what += " Those users got no answer."
-        elif m.get("recovered") and not m.get("unknown") and not backup:
+        elif m.get("recovered") and not m.get("unknown") and m.get("retried") == m.get("recovered"):
             severity, tail = "warning", "it answered on a retry"
             what += " Users still got a reply."
         elif m.get("recovered") and not m.get("unknown"):
-            severity, tail = "warning", f"{backup} answered instead"
+            severity, tail = "warning", f"{backup or 'another model'} answered instead"
             what += " Users still got a reply, possibly from a different model than they chose."
         elif m.get("recovered"):
             severity, tail = "warning", (f"{backup} answered some questions in its place" if backup
