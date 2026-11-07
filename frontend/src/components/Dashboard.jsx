@@ -19,7 +19,7 @@ import { computeManifestLayout } from '../utils/manifestLayout'
 import { canvasNodes } from '../utils/canvasParts.js'
 import { clearToken, apiFetch, apiUrl } from '../utils/api'
 import { loadPanel, savePanel, fitPanels, landscapeInsets } from '../utils/panels'
-import { systemCards, systemOfNodes, portfolioLine, systemId } from '../utils/systems'
+import { systemCards, systemOfNodes, portfolioLine, systemId, isGroupId, cardsInGroup } from '../utils/systems'
 import SystemsHome from './SystemsHome'
 
 function useDemoData() {
@@ -172,14 +172,18 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
   const owner = systemOfNodes(allNodes, manifestData)
   const cards = systemCards(manifestData, allNodes, topology?.data?.alerts)
   const systemLabel = new Map(cards.map(c => [c.id, c.label]))
-  const showHome = !isDemo && activeProject === null && cards.length > 1
-  // Filter alerts/anomalies by selected system
+  // REQ-GHA-035 clause 9: a group (9Robots or external systems) shows its systems' cards
+  const groupSelected = isGroupId(activeProject)
+  const homeCards = cardsInGroup(cards, groupSelected ? activeProject : null)
+  const showHome = !isDemo && cards.length > 1 && (activeProject === null || groupSelected)
+  // Filter alerts/anomalies by the selected system or group
+  const inScope = new Set(groupSelected ? homeCards.map(c => c.id) : activeProject ? [activeProject] : [])
   const contextNodeIds = activeProject
-    ? new Set([...owner].filter(([, sys]) => sys === activeProject).map(([id]) => id))
+    ? new Set([...owner].filter(([, sys]) => inScope.has(sys)).map(([id]) => id))
     : null
   // The map of one selected system shows only that system
-  const mapManifests = activeProject ? manifestData.filter(m => systemId(m) === activeProject) : manifestData
-  const mapData = activeProject && topology.data && mapManifests.length
+  const mapManifests = activeProject && !groupSelected ? manifestData.filter(m => systemId(m) === activeProject) : manifestData
+  const mapData = activeProject && !groupSelected && topology.data && mapManifests.length
     ? { ...topology.data, nodes: allNodes.filter(n => owner.get(n.id) === activeProject || !owner.has(n.id)) }
     : topology.data
   const filteredAlerts = contextNodeIds
@@ -213,6 +217,7 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
       {projectNodes.length > 0 && (
         <ProjectTree
           projects={projectNodes}
+          systems={cards}
           activeProject={activeProject}
           onSelect={setActiveProject}
           open={sidebarOpen}
@@ -233,7 +238,7 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
         {/* REQ-GHA-027: an anomaly is an alarm on its part (with its classification in the
             detail), so it is not listed a second time in a separate anomaly panel */}
         <AlertPanel alerts={filteredAlerts} resolved={filteredResolved}
-          systemOf={!activeProject && cards.length > 1 ? (a => systemLabel.get(owner.get(a.node_id)) || '') : null}
+          systemOf={(!activeProject || groupSelected) && cards.length > 1 ? (a => systemLabel.get(owner.get(a.node_id)) || '') : null}
           rules={topology.data?.alarm_rules} onSelect={setSelectedAlert} />
         <div className="shrink-0">
           <SecurityPanel isDemo={isDemo} />
@@ -243,7 +248,7 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
       <div className="flex-1 overflow-hidden transition-all duration-300"
         style={{ paddingLeft: leftShift, paddingRight: rightShift, paddingTop: 8, paddingBottom: 8 }}>
         {showHome ? (
-          <SystemsHome cards={cards} line={portfolioLine(cards)} onOpen={setActiveProject} />
+          <SystemsHome cards={homeCards} line={portfolioLine(homeCards)} onOpen={setActiveProject} />
         ) : (
           <TopologyMap key={activeProject || 'all'} data={mapData} error={topology.error} isDemo={isDemo} hideCosts={hideCosts}
             onNodeSelect={setSelectedNode} focusProjectId={mapManifests.length ? null : activeProject} manifests={mapManifests} />

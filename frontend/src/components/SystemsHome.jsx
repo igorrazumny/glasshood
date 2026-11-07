@@ -4,6 +4,7 @@
 
 import { AlertOctagon, AlertTriangle, Eye } from 'lucide-react'
 import { clock } from '../utils/time'
+import { groupedCards, portfolioLine } from '../utils/systems'
 
 const DOT = {
   healthy: 'bg-green-500', degraded: 'bg-yellow-500', error: 'bg-red-500',
@@ -11,12 +12,28 @@ const DOT = {
 }
 
 export default function SystemsHome({ cards, line, onOpen }) {
+  // REQ-GHA-035 clause 9: 9Robots systems and external systems, each with its own line
   return (
     <div className="h-full overflow-y-auto p-4">
       <div className="mb-4">
         <h2 className="text-lg font-semibold text-gray-800 dark:text-purple-100">Monitored systems</h2>
         <p className="text-sm text-gray-500 dark:text-purple-300">{line}</p>
       </div>
+      {groupedCards(cards).map(({ group, cards: groupCards }) => (
+        <section key={group.id} className="mb-6">
+          <div className="flex items-baseline gap-3 mb-2">
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-600 dark:text-purple-200">{group.label}</h3>
+            <span className="text-xs text-gray-500 dark:text-purple-300">{portfolioLine(groupCards)}</span>
+          </div>
+          <SystemGrid cards={groupCards} onOpen={onOpen} />
+        </section>
+      ))}
+    </div>
+  )
+}
+
+function SystemGrid({ cards, onOpen }) {
+  return (
       <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
         {cards.map(c => (
           <button key={c.id} onClick={() => onOpen(c.id)}
@@ -44,6 +61,5 @@ export default function SystemsHome({ cards, line, onOpen }) {
           </button>
         ))}
       </div>
-    </div>
   )
 }

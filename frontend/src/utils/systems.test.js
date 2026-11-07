@@ -3,7 +3,7 @@
 // Run: node frontend/src/utils/systems.test.js
 
 import assert from 'node:assert/strict'
-import { systemCards, systemOfNodes, portfolioLine, systemId } from './systems.js'
+import { systemCards, systemOfNodes, portfolioLine, systemId, groupedCards, cardsInGroup } from './systems.js'
 
 let failed = 0
 function test(name, fn) {
@@ -75,6 +75,20 @@ test('the portfolio line counts systems that need attention', () => {
   const cards = systemCards(manifests, nodes, alerts)
   assert.equal(portfolioLine(cards), '2 systems · 2 need attention')
   assert.equal(portfolioLine([{ state: 'healthy', critical: 0 }]), '1 system · none needs attention')
+})
+
+test('systems are grouped as 9Robots systems and external systems', () => {
+  const cards = systemCards(manifests, nodes, alerts)
+  const groups = groupedCards(cards)
+  assert.deepEqual(groups.map(g => [g.group.label, g.cards.map(c => c.label)]),
+    [['9Robots systems', ['ColdVault']], ['External systems', ['Cloudflare']]])
+  assert.deepEqual(cardsInGroup(cards, 'group-external').map(c => c.label), ['Cloudflare'])
+  assert.equal(cardsInGroup(cards, null).length, 2)
+})
+
+test('a group with no systems is not shown', () => {
+  const groups = groupedCards(systemCards([manifests[0]], nodes, alerts))
+  assert.deepEqual(groups.map(g => g.group.label), ['9Robots systems'])
 })
 
 if (failed) { console.error(`${failed} failed`); process.exit(1) }
