@@ -4,6 +4,8 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { ChevronRight, ChevronDown, Pin, PinOff, PanelLeftClose, PanelLeft } from 'lucide-react'
+import PanelEdge from './PanelEdge'
+import { PANEL_TOP } from '../utils/panels'
 
 const STATUS_DOT = {
   healthy: 'bg-green-400',
@@ -73,8 +75,9 @@ function TreeItem({ label, status, active, onClick, indent = 0, count, bold }) {
   )
 }
 
-export default function ProjectTree({ projects, activeProject, onSelect, open, pinned, onToggle, onPin }) {
+export default function ProjectTree({ projects, activeProject, onSelect, open, pinned, onToggle, onPin, width, onResize }) {
   const [expanded, setExpanded] = useState({})
+  const [resizing, setResizing] = useState(false)
   const [treeCollapsed, setTreeCollapsed] = useState(false)
   const ref = useRef(null)
 
@@ -106,7 +109,7 @@ export default function ProjectTree({ projects, activeProject, onSelect, open, p
       {!open && (
         <div
           className="fixed left-0 w-4 z-40"
-          style={{ top: '40px', bottom: 0 }}
+          style={{ top: PANEL_TOP, bottom: 0 }}
           onMouseEnter={onToggle}
         />
       )}
@@ -115,22 +118,24 @@ export default function ProjectTree({ projects, activeProject, onSelect, open, p
       {!open && (
         <button
           onClick={onToggle}
-          className="fixed left-0 z-50 w-5 h-10 bg-card dark:bg-purple-800 border-y border-r border-border dark:border-purple-700 rounded-r flex items-center justify-center text-gray-500 hover:text-gray-800 dark:text-purple-300 dark:hover:text-purple-100 transition-colors"
-          style={{ top: '52px' }}
+          className="fixed left-0 z-50 w-7 py-3 bg-card dark:bg-purple-800 border-y border-r border-border dark:border-purple-700 rounded-r-lg shadow flex flex-col items-center gap-2 text-gray-600 hover:text-gray-900 dark:text-purple-200 dark:hover:text-white transition-colors"
+          style={{ top: PANEL_TOP + 12 }}
           title="Show projects"
         >
-          <PanelLeft size={12} />
+          <PanelLeft size={16} />
+          <span className="text-xs font-medium [writing-mode:vertical-rl] rotate-180">Projects</span>
         </button>
       )}
 
       {/* Sidebar panel */}
       <div
         ref={ref}
-        className={`fixed left-0 z-40 bg-card dark:bg-purple-900 border-r border-border dark:border-purple-700 flex flex-col transition-all duration-300 overflow-hidden rounded-r-lg ${
-          open ? 'w-60' : 'w-0'
+        className={`fixed left-0 z-40 bg-card dark:bg-purple-900 border-r border-border dark:border-purple-700 flex flex-col overflow-hidden rounded-r-lg ${
+          resizing ? '' : 'transition-all duration-300'
         }`}
-        style={{ top: '40px', bottom: 0 }}
+        style={{ top: PANEL_TOP, bottom: 0, width: open ? width : 0 }}
       >
+        {open && <PanelEdge side="left" onResize={onResize} onResizing={setResizing} />}
         {/* Pin + hide controls — compact, no label */}
         <div className="flex items-center justify-end px-2 py-1.5 flex-shrink-0">
           <div className="flex items-center gap-1.5">
@@ -143,16 +148,17 @@ export default function ProjectTree({ projects, activeProject, onSelect, open, p
             </button>
             <button
               onClick={onToggle}
-              className="text-gray-500 hover:text-gray-800 dark:text-purple-300 dark:hover:text-purple-100 transition-colors"
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded border border-border dark:border-purple-700 text-xs text-gray-600 hover:text-gray-900 hover:bg-surface dark:text-purple-200 dark:hover:text-white dark:hover:bg-purple-800 transition-colors"
               title="Hide projects"
             >
               <PanelLeftClose size={14} />
+              Hide
             </button>
           </div>
         </div>
 
         {/* Tree content */}
-        <div className="flex-1 overflow-y-auto py-1">
+        <div className="flex-1 overflow-y-auto py-1" style={{ width }}>
           {/* All Projects — collapsible root */}
           <div className="flex items-center">
             <button
