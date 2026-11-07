@@ -123,7 +123,7 @@ def run(topology: dict) -> None:
         payload = ov.sanitize({"parts": parts, "open_problems": open_problems, "logs": lines_by_part})
         # The model sees the sanitised lines, so evidence is checked against those
         shown = payload["logs"]
-        text, _ = ov.call_model(REVIEW_PROMPT, json.dumps(payload, default=str), max_tokens=3000)
+        text, _ = ov.call_model(REVIEW_PROMPT, json.dumps(payload, default=str), max_tokens=3000, deep=True)
         problems = validate(ov.parse_json(text), shown, {p["id"] for p in open_problems})
         engine.track_ai_review(problems, set(shown), labels)
         _status.update(reviewed_at=time.time(), error=None, problems=len(problems), parts=len(shown))

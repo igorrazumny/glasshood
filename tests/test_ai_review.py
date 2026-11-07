@@ -41,7 +41,7 @@ def _review(answer, lines=(LINE_1, LINE_2, LINE_OK)):
     """One review run in which the model gives `answer`; returns what the model was sent."""
     sent = {}
 
-    def model(prompt, text, max_tokens=600, search=False):
+    def model(prompt, text, max_tokens=600, search=False, deep=False):
         sent.update(json.loads(text))
         return json.dumps(answer), []
     with patch.object(ov, "_log_lines", side_effect=lambda flt, *a, **k: list(lines)), \
@@ -172,7 +172,7 @@ def _investigate(answer=REPORT, search_fails=False):
     [a] = _ai()
     calls = []
 
-    def model(prompt, text, max_tokens=600, search=False):
+    def model(prompt, text, max_tokens=600, search=False, deep=False):
         calls.append({"search": search, "payload": json.loads(text)})
         if search and search_fails:
             raise RuntimeError("Vertex AI HTTP 400")
