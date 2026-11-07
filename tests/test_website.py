@@ -460,10 +460,14 @@ _HOW_IT_WORKS_PARTS = {  # Home's cards until 2026-11-06, now parts of How it wo
         "human review. They are unsigned and are not an independent validation or certification; a qualified "
         "person reviews and adopts every artifact."),
 }
+# REQ-GHA-018 amended 2026-11-07: the AI log review raises its own alarms (REQ-GHA-029), in the wording Igor approved.
 _ANALYSIS_PART = ("Deterministic signals first, AI on top",
-    "Every alert comes from a deterministic and statistical tier: threshold rules, anomaly detection over a rolling "
-    "baseline, and a correlator that ties anomalies to operational alerts. AI runs strictly on top and explains them; "
-    "it never raises an alert itself, so every conclusion rests on a signal a person can reproduce without the model.")
+    "The measurements are checked by a deterministic and statistical tier: threshold rules, anomaly detection over a "
+    "rolling baseline, and a correlator that ties anomalies to operational alerts. AI runs on top: it writes the short "
+    "overviews, and every 3 hours it reviews each part's logs and raises its own alarms, kept apart from the others and "
+    "labelled as found by the AI review. An AI alarm must quote the log lines it rests on, or it is dropped, and a "
+    "critical one stays until a signed-in person acknowledges it. A signed-in operator can ask the AI to investigate "
+    "one alarm deeper and get a report; that investigation may search the web for the error.")
 
 # REQ-GHA-018 clauses 1 and 14, amended 2026-11-06 (third), in the wording Igor approved on 2026-11-06.
 _HOME_CARDS = {
@@ -473,8 +477,10 @@ _HOME_CARDS = {
         "GlassHood connects to a running system — today a solution on Google Cloud, read from Azure — and builds one live "
         "picture of it: every part, every connection between them and their health, refreshed every cycle. It merges what "
         "it discovers with the system's declared design, so the gap between the design and what actually runs is visible. "
-        "Rules and anomaly detection raise the alerts; an AI overview then says in a few sentences how the whole system is "
-        "doing and what needs attention, and each part has its own. Operators and business readers see the same dashboard, "
+        "Rules and anomaly detection raise alerts from the measurements, and every 3 hours an AI review reads each part's "
+        "logs and raises its own alarms, labelled as found by the AI review. An AI overview then says in a few sentences how "
+        "the whole system is doing and what needs attention, and each part has its own. Operators and business readers see "
+        "the same dashboard, "
         "and nothing they do there changes the monitored system."),
     "the-problem": ("The problem it solves",
         "In a chain of connected systems, a failure often shows up somewhere else and later, and each team sees only its "

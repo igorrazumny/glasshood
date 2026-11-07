@@ -206,3 +206,40 @@ def test_the_implementation_rows_stack_on_phones():
     # each label sits above its value, so no row is wider than the screen.
     css = (_ARCH / "styles.css").read_text(encoding="utf-8")
     assert "@media(max-width:480px){.impl-item{flex-direction:column;gap:2px}.impl-item>strong{flex:none}}" in css
+
+
+def _flat_text():
+    import html as _html
+    return " ".join(_html.unescape(re.sub(r"<[^>]+>", " ", _HTML)).split())
+
+
+def test_the_ai_is_described_as_it_runs_today():
+    # REQ-GHA-018, amended 2026-11-07: the AI overviews (REQ-GHA-024), the AI log review that raises its own,
+    # labelled alarms (REQ-GHA-029) and Investigate deeper, in the wording Igor approved; no model is named, the
+    # switched-off Platform API is gone, and nothing says the AI never raises an alarm.
+    flat = _flat_text()
+    for needle in ("an AI layer then summarizes the state and reviews the logs",
+                   "every AI alarm quotes the log lines it rests on, so a person can check it",
+                   "a model on Vertex AI, in the monitored Google Cloud project",
+                   "raises its own alarms, a separate kind labelled as found by AI review",
+                   "may search the web for the error, and writes a report with an executive summary",
+                   "the AI prompts are generic", "Deterministic first · AI on top", "AI layer overviews, log review"):
+        assert needle in flat, needle
+    for gone in ("never originates", "narrates on top", "explains only", "produces every signal", "Platform API",
+                 "inference-as-a-service", "prompt profile", "target-tuned", "never raises an alert", "Gemini", "Flash-Lite"):
+        assert gone not in flat, gone
+    assert "with an AI layer on top that writes the overviews and reviews the logs, raising its own labelled alarms" in _HTML
+
+
+def test_glasshood_reads_coldvault_metrics_with_its_own_token():
+    # REQ-GHA-018, amended 2026-11-07 (REQ-GHA-025): ColdVault's metrics with a one-hour identity token of its own and
+    # no key; no ids, account names or addresses of the identity chain on the page.
+    flat = _flat_text()
+    assert "its metrics with a one-hour identity token of GlassHood’s own (below)" in flat
+    assert "ColdVault’s own metrics. Every 10 minutes GlassHood also reads coldvault.ai/api/metrics" in flat
+    assert "GlassHood holds no key or password for ColdVault" in flat
+    assert "health · metrics with a one-hour token · MCP: verify_attestation every 10 min" in flat
+    assert _HTML.count("reads ColdVault's metrics with a one-hour identity token of its own") == 2, "both diagram descriptions"
+    assert "(30 s)" not in flat and "health/metrics API" not in flat
+    for leak in ("glasshood-coldvault", "glasshood-azure-pool", "braintransplant", "iam.gserviceaccount.com"):
+        assert leak not in _HTML.lower(), leak
