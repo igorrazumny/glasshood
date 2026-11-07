@@ -104,7 +104,8 @@ def _read_lines(project: str, log_filter: str, max_entries: int = 200) -> list[d
 
 
 def _events(per_model: dict, lines: list[dict]) -> dict:
-    """Per failing model id: last reason, backup, request ids, time and the evidence lines."""
+    """Per failing model id: last reason, request ids (with the failure time and the
+    backup tried for each), the latest time and the evidence lines."""
     ids = list(per_model)
     out: dict = {}
     for line in lines:
@@ -114,18 +115,18 @@ def _events(per_model: dict, lines: list[dict]) -> dict:
             if not m:
                 continue
             model_id = _id_for(m.group("model"), ids) or _norm(m.group("model"))
-            ev = out.setdefault(model_id, {"name": m.group("model").strip(), "reason": None, "backup": None,
-                                           "requests": set(), "backup_by_request": {},
+            ev = out.setdefault(model_id, {"name": m.group("model").strip(), "reason": None,
+                                           "requests": set(), "backup_by_request": {}, "at_by_request": {},
                                            "last_at": None, "evidence": []})
             # lines are newest first: the first reason and time seen are the latest
             if ev["reason"] is None:
                 ev["reason"] = m.group("reason").strip()
-            if kind == "fallback" and ev["backup"] is None:
-                ev["backup"] = m.group("backup").strip()
-            if line.get("request_id"):
-                ev["requests"].add(line["request_id"])
+            rid = line.get("request_id")
+            if rid:
+                ev["requests"].add(rid)
+                ev["at_by_request"].setdefault(rid, line.get("timestamp"))
                 if kind == "fallback":
-                    ev["backup_by_request"].setdefault(line["request_id"], m.group("backup").strip())
+                    ev["backup_by_request"].setdefault(rid, m.group("backup").strip())
             ev["last_at"] = ev["last_at"] or line.get("timestamp")
             if len(ev["evidence"]) < 20:
                 ev["evidence"].append(line.get("_raw") or msg)
@@ -133,26 +134,56 @@ def _events(per_model: dict, lines: list[dict]) -> dict:
     return out
 
 
-_MAX_REQUESTS = 20  # questions whose outcome is looked up per reading
+_MAX_REQUESTS = 20   # questions whose outcome is looked up per reading
+_MAX_LINES = 200     # lines read per query; a full page may hide older lines
+_HOUR = 3600
+# Request-level outcomes already established: request_id -> {model, outcome, answered_by, at, read_at}.
+# Reused only for questions of the last hour, when a later reading of the lines fails.
+_facts: dict = {}
+
+
+def _ts(value) -> Optional[float]:
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00")).timestamp()
+    except (TypeError, ValueError):
+        return None
 
 
 def _outcomes(model_id: str, ev: dict, billing: list[dict], looked_up: set) -> dict:
     """What happened to each question this model failed, judged per request_id (never
     from hourly totals). ColdVault writes one billing line per question, naming the model
     the user chose, with how many model answers it completed: completed > 0 means the
-    question was answered (by the backup named in that question's switch-to-backup line).
-    A question looked up whose billing line is missing or completed nothing got no reply;
-    any other question's outcome is unknown."""
+    question was answered (by the backup named in that question's switch-to-backup line,
+    or by this model itself on a retry when no backup was tried). A question whose billing
+    line was certainly read (looked_up) and is missing or completed nothing got no reply;
+    any other question's outcome is unknown. Returns the counts and per-request facts."""
     completed: dict = {}
     for line in billing:
         rid = line.get("request_id")
         if rid in ev["requests"]:
             done = line.get("completed")
             completed[rid] = max(completed.get(rid, 0), done if isinstance(done, int) else 1)
-    recovered = {r for r in ev["requests"] if completed.get(r, 0) > 0}
-    unanswered = {r for r in ev["requests"] if r in looked_up and r not in recovered}
-    backups = sorted({ev["backup_by_request"][r] for r in recovered if r in ev.get("backup_by_request", {})})
-    return {"recovered": len(recovered), "unanswered": len(unanswered), "backups": backups}
+    facts = {}
+    for rid in ev["requests"]:
+        if completed.get(rid, 0) > 0:
+            # no backup tried for this question: the model itself answered on a retry
+            by = ev["backup_by_request"].get(rid)
+            facts[rid] = {"model": model_id, "outcome": "answered" if by else "retried", "answered_by": by}
+        elif rid in looked_up:
+            facts[rid] = {"model": model_id, "outcome": "no reply", "answered_by": None}
+        else:
+            continue
+        facts[rid]["at"] = _ts(ev["at_by_request"].get(rid))
+    return _counts(facts)
+
+
+def _counts(facts: dict) -> dict:
+    answered = [f for f in facts.values() if f["outcome"] == "answered"]
+    retried = sum(1 for f in facts.values() if f["outcome"] == "retried")
+    return {"recovered": len(answered) + retried, "retried": retried,
+            "unanswered": sum(1 for f in facts.values() if f["outcome"] == "no reply"),
+            "backups": sorted({f["answered_by"] for f in answered}),
+            "facts": facts}
 
 
 def refresh(metrics: dict, metrics_status: dict, read_lines=_read_lines) -> None:
@@ -173,15 +204,17 @@ def refresh(metrics: dict, metrics_status: dict, read_lines=_read_lines) -> None
         try:
             lines = read_lines(src["project"],
                                f'({src["filter"]}) AND (jsonPayload.message:"stream failed" '
-                               f'OR jsonPayload.message:"Fallback:")')
+                               f'OR jsonPayload.message:"Fallback:")', _MAX_LINES)
             events = _events(per_model, lines)
             requests = sorted({r for ev in events.values() for r in ev["requests"]})[:_MAX_REQUESTS]
             if requests:
                 ors = " OR ".join(f'jsonPayload.message:"{r}"' for r in requests)
-                billing = [l for l in read_lines(src["project"],
-                                                 f'({src["filter"]}) AND jsonPayload.message:"billing" AND ({ors})')
-                           if l.get("event") == "billing" or l.get("message") == "billing"]
-                looked_up = set(requests)
+                raw = read_lines(src["project"],
+                                 f'({src["filter"]}) AND jsonPayload.message:"billing" AND ({ors})', _MAX_LINES)
+                billing = [l for l in raw if l.get("event") == "billing" or l.get("message") == "billing"]
+                # A full page may hide older billing lines: then only the questions whose
+                # billing line was seen count as looked up, the rest stay unknown
+                looked_up = set(requests) if len(raw) < _MAX_LINES else {l.get("request_id") for l in billing}
         except Exception as e:
             events, billing, looked_up = {}, [], set()
             lines_reason = f"ColdVault's log lines were not read ({type(e).__name__})"
@@ -189,8 +222,11 @@ def refresh(metrics: dict, metrics_status: dict, read_lines=_read_lines) -> None
     elif failing:
         lines_reason = "no log source for model lines in the landscape file"
 
+    hour_ago = checked_at - _HOUR
     with _lock:
         previous = dict(_state.get("models") or {})
+        for rid in [r for r, f in _facts.items() if (f.get("at") or 0) < hour_ago]:
+            del _facts[rid]
     models = {}
     for model_id, c in per_model.items():
         failed = c.get("failed", 0) + c.get("timed_out", 0)
@@ -201,20 +237,30 @@ def refresh(metrics: dict, metrics_status: dict, read_lines=_read_lines) -> None
             ev = events.get(model_id)
             old = previous.get(model_id) or {}
             if ev:
+                out = _outcomes(model_id, ev, billing, looked_up)
+                with _lock:
+                    for rid, f in out["facts"].items():
+                        _facts[rid] = {**f, "read_at": checked_at}
                 entry.update(name=ev["name"], reason=plain_reason(ev["reason"]) if ev["reason"] else "no reason given",
-                             last_at=ev["last_at"], evidence=ev["evidence"], outcome_note="",
-                             **_outcomes(model_id, ev, billing, looked_up))
-            elif lines_reason and (old.get("recovered") or old.get("unanswered")):
-                # The lines could not be read now: keep what the earlier reading established
-                entry.update({k: old.get(k) for k in ("name", "reason", "last_at", "evidence",
-                                                      "recovered", "unanswered", "backups")},
-                             outcome_note=f"{lines_reason}; outcome from the earlier reading")
+                             last_at=ev["last_at"], evidence=ev["evidence"], outcome_note="", **out)
             else:
-                entry.update(name=old.get("name") or model_id, reason=old.get("reason") or "no reason found in the log lines",
+                # Lines not read now: only questions of the last hour established by an earlier
+                # reading are reused, as earlier facts; nothing is assigned to newer failures
+                with _lock:
+                    kept = {r: f for r, f in _facts.items()
+                            if f["model"] == model_id and (f.get("at") or 0) >= hour_ago}
+                out = _counts(kept)
+                note = lines_reason or "no failure lines found for this model"
+                if kept:
+                    read_at = max(f["read_at"] for f in kept.values())
+                    note += (f"; {_plural(len(kept), 'outcome')} from the reading at "
+                             f"{datetime.fromtimestamp(read_at, timezone.utc).strftime('%H:%M')} UTC")
+                entry.update(name=old.get("name") or model_id,
+                             reason=old.get("reason") or "no reason found in the log lines",
                              last_at=old.get("last_at"), evidence=old.get("evidence") or [],
-                             recovered=0, unanswered=0, backups=[],
-                             outcome_note=lines_reason or "no failure lines found for this model")
-            entry["unknown"] = max(0, failed - (entry.get("recovered") or 0) - (entry.get("unanswered") or 0))
+                             outcome_note=note, **out)
+            entry.pop("facts", None)
+            entry["unknown"] = max(0, failed - entry["recovered"] - entry["unanswered"])
             entry["backup"] = ", ".join(entry.get("backups") or []) or None
         models[model_id] = entry
     with _lock:
@@ -257,14 +303,18 @@ def _plural(n: int, word: str) -> str:
 def _outcome_words(m: dict) -> str:
     """What happened to the questions this model failed, from per-question evidence."""
     parts = []
-    if m.get("recovered"):
-        parts.append(f"{m.get('backup') or 'another model'} answered {_plural(m['recovered'], 'question')} in its place")
+    by_backup = (m.get("recovered") or 0) - (m.get("retried") or 0)
+    if by_backup:
+        parts.append(f"{m.get('backup') or 'another model'} answered {_plural(by_backup, 'question')} in its place")
+    if m.get("retried"):
+        parts.append(f"it answered {_plural(m['retried'], 'question')} itself on a retry")
     if m.get("unanswered"):
         parts.append(f"{_plural(m['unanswered'], 'question')} got no reply from any model")
     if m.get("unknown"):
-        parts.append(f"for {_plural(m['unknown'], 'failed call')} it is not known whether another model answered"
-                     + (f" ({m['outcome_note']})" if m.get("outcome_note") else ""))
-    return "; ".join(parts)
+        parts.append(f"for {_plural(m['unknown'], 'failed call')} it is not known whether another model answered")
+    words = "; ".join(parts)
+    # The note (lines not read, outcomes from an earlier reading) is shown whenever there is one
+    return f"{words} ({m['outcome_note']})" if m.get("outcome_note") else words
 
 
 def _model_sentence(m: dict) -> str:
@@ -289,11 +339,15 @@ def failures(provider_parts: dict) -> list:
         if m.get("unanswered"):
             severity, tail = "critical", f"{_plural(m['unanswered'], 'question')} got no reply"
             what += " Those users got no answer."
+        elif m.get("recovered") and not m.get("unknown") and not backup:
+            severity, tail = "warning", "it answered on a retry"
+            what += " Users still got a reply."
         elif m.get("recovered") and not m.get("unknown"):
-            severity, tail = "warning", f"{backup or 'another model'} answered instead"
+            severity, tail = "warning", f"{backup} answered instead"
             what += " Users still got a reply, possibly from a different model than they chose."
         elif m.get("recovered"):
-            severity, tail = "warning", f"{backup or 'another model'} answered some questions in its place"
+            severity, tail = "warning", (f"{backup} answered some questions in its place" if backup
+                                         else "some questions were answered on a retry")
         else:
             severity, tail = "warning", "whether another model answered is not known"
         suspicion, directions = _where_to_look(reason, name)
