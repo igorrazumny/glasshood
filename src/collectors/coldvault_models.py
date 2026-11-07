@@ -115,7 +115,8 @@ def _events(per_model: dict, lines: list[dict]) -> dict:
                 continue
             model_id = _id_for(m.group("model"), ids) or _norm(m.group("model"))
             ev = out.setdefault(model_id, {"name": m.group("model").strip(), "reason": None, "backup": None,
-                                           "requests": set(), "last_at": None, "evidence": []})
+                                           "requests": set(), "backup_by_request": {},
+                                           "last_at": None, "evidence": []})
             # lines are newest first: the first reason and time seen are the latest
             if ev["reason"] is None:
                 ev["reason"] = m.group("reason").strip()
@@ -123,6 +124,8 @@ def _events(per_model: dict, lines: list[dict]) -> dict:
                 ev["backup"] = m.group("backup").strip()
             if line.get("request_id"):
                 ev["requests"].add(line["request_id"])
+                if kind == "fallback":
+                    ev["backup_by_request"].setdefault(line["request_id"], m.group("backup").strip())
             ev["last_at"] = ev["last_at"] or line.get("timestamp")
             if len(ev["evidence"]) < 20:
                 ev["evidence"].append(line.get("_raw") or msg)
@@ -135,16 +138,20 @@ _MAX_REQUESTS = 20  # questions whose outcome is looked up per reading
 
 def _outcomes(model_id: str, ev: dict, billing: list[dict], looked_up: set) -> dict:
     """What happened to each question this model failed, judged per request_id (never
-    from hourly totals): answered by a model (its billing line for that question), not
-    answered (looked up, and no model's billing line), or unknown (not looked up)."""
-    answered_by: dict = {}
+    from hourly totals). ColdVault writes one billing line per question, naming the model
+    the user chose, with how many model answers it completed: completed > 0 means the
+    question was answered (by the backup named in that question's switch-to-backup line).
+    A question looked up whose billing line is missing or completed nothing got no reply;
+    any other question's outcome is unknown."""
+    completed: dict = {}
     for line in billing:
         rid = line.get("request_id")
-        if rid in ev["requests"] and line.get("model"):
-            answered_by.setdefault(rid, line["model"])
-    recovered = {r for r in ev["requests"] if r in answered_by}
-    unanswered = {r for r in ev["requests"] if r in looked_up and r not in answered_by}
-    backups = sorted({m for m in answered_by.values() if _id_for(m, [model_id]) is None})
+        if rid in ev["requests"]:
+            done = line.get("completed")
+            completed[rid] = max(completed.get(rid, 0), done if isinstance(done, int) else 1)
+    recovered = {r for r in ev["requests"] if completed.get(r, 0) > 0}
+    unanswered = {r for r in ev["requests"] if r in looked_up and r not in recovered}
+    backups = sorted({ev["backup_by_request"][r] for r in recovered if r in ev.get("backup_by_request", {})})
     return {"recovered": len(recovered), "unanswered": len(unanswered), "backups": backups}
 
 
@@ -283,10 +290,10 @@ def failures(provider_parts: dict) -> list:
             severity, tail = "critical", f"{_plural(m['unanswered'], 'question')} got no reply"
             what += " Those users got no answer."
         elif m.get("recovered") and not m.get("unknown"):
-            severity, tail = "warning", f"{backup} answered instead"
+            severity, tail = "warning", f"{backup or 'another model'} answered instead"
             what += " Users still got a reply, possibly from a different model than they chose."
         elif m.get("recovered"):
-            severity, tail = "warning", f"{backup} answered some questions in its place"
+            severity, tail = "warning", f"{backup or 'another model'} answered some questions in its place"
         else:
             severity, tail = "warning", "whether another model answered is not known"
         suspicion, directions = _where_to_look(reason, name)
