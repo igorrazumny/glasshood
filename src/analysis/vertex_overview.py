@@ -428,6 +428,31 @@ def _entry_text(e: dict) -> str:
     return f"{e.get('timestamp', '')[:19]} {e.get('severity', 'DEFAULT')} {str(msg)[:LINE_CHARS]}"
 
 
+# Google allows about 60 log reads a minute per project; the overview's workers share
+# one pace and retry a refusal (HTTP 429) after a growing wait
+LOG_READ_GAP_S = float(os.getenv("LOG_READ_GAP_S", "1.2"))
+_log_gate = threading.Lock()
+_last_log_read = [0.0]
+
+
+def _read_entries(body: dict, sleep=time.sleep) -> list:
+    for attempt, wait in enumerate((0, 5, 15, 30)):
+        if wait:
+            sleep(wait)
+        with _log_gate:
+            gap = LOG_READ_GAP_S - (time.monotonic() - _last_log_read[0])
+            if gap > 0:
+                sleep(gap)
+            _last_log_read[0] = time.monotonic()
+        r = httpx.post("https://logging.googleapis.com/v2/entries:list", headers=_headers(), timeout=30, json=body)
+        if r.status_code == 429 and attempt < 3:
+            continue
+        if r.status_code != 200:
+            raise RuntimeError(f"Cloud Logging HTTP {r.status_code}")
+        return r.json().get("entries", [])
+    raise RuntimeError("Cloud Logging HTTP 429")
+
+
 def _log_lines(log_filter: str, warn_n: int, sample_n: int, project: str = "",
                since_s: int = None) -> list:
     """Recent warning/error lines plus a small sample of other lines, newest first."""
@@ -438,12 +463,9 @@ def _log_lines(log_filter: str, warn_n: int, sample_n: int, project: str = "",
         if n <= 0:
             continue
         # Errors (unreachable API, credential refresh) propagate to the overview's own error boundary.
-        r = httpx.post("https://logging.googleapis.com/v2/entries:list", headers=_headers(), timeout=30,
-                       json={"resourceNames": [f"projects/{project or PROJECT}"], "filter": flt,
-                             "orderBy": "timestamp desc", "pageSize": n})
-        if r.status_code != 200:
-            raise RuntimeError(f"Cloud Logging HTTP {r.status_code}")
-        out += [_entry_text(e) for e in r.json().get("entries", [])]
+        entries = _read_entries({"resourceNames": [f"projects/{project or PROJECT}"], "filter": flt,
+                                 "orderBy": "timestamp desc", "pageSize": n})
+        out += [_entry_text(e) for e in entries]
     return out
 
 
