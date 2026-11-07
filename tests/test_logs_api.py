@@ -442,3 +442,41 @@ class TestResolveNodeUnmocked:
         body = r.json()
         assert body["error"].startswith("GlassHood does not know this part")
         mock_query.assert_not_called()
+
+
+class TestDiscoveredVmChildren:
+    """REQ-GHA-032: the boxes inside a discovered VM (container, app, embeddings)
+    resolve from that VM's cache entry and its template, never from the browser."""
+
+    TEMPLATE = [{
+        "id_suffix": "-docker",
+        "monitoring": {"logs": [{"project": "p", "filter": 'instance="{vm_name}" AND container="/app"'}]},
+        "children": [
+            {"id_suffix": "-api",
+             "monitoring": {"logs": [{"project": "p", "filter": 'instance="{vm_name}" AND severity'}]}},
+            {"id_suffix": "-embeddings", "status": "not checked"},
+        ],
+    }]
+
+    def _resolve(self, node_id):
+        from src.api.routes.logs import _resolve_node
+        cache = {"vm-cv-mig-ab12": {"_parent": "cv-mig", "instance_id": "123"}}
+        with patch("src.api.routes.manifests._load_manifests", return_value=[]), \
+             patch("src.manifest_compiler.compile_all", return_value=[]), \
+             patch("src.collectors.manifest_metrics.get_node_status", side_effect=cache.get), \
+             patch("src.collectors.manifest_metrics.get_all_statuses", return_value=cache), \
+             patch("src.collectors.manifest_metrics.get_children_template", return_value=self.TEMPLATE):
+            return _resolve_node(node_id)
+
+    def test_container_box(self):
+        assert self._resolve("vm-cv-mig-ab12-docker") == ("discovered_vm", "p", 'instance="cv-mig-ab12" AND container="/app"')
+
+    def test_app_box(self):
+        assert self._resolve("vm-cv-mig-ab12-api") == ("discovered_vm", "p", 'instance="cv-mig-ab12" AND severity')
+
+    def test_embeddings_box_shows_the_container_it_runs_in(self):
+        assert self._resolve("vm-cv-mig-ab12-embeddings") == ("discovered_vm", "p", 'instance="cv-mig-ab12" AND container="/app"')
+
+    def test_child_of_an_unknown_vm_stays_unknown(self):
+        assert self._resolve("vm-other-vm-docker") == ("unknown", None, None)
+        assert self._resolve("vm-cv-mig-ab12-nothing") == ("unknown", None, None)
