@@ -130,18 +130,22 @@ def _events(per_model: dict, lines: list[dict]) -> dict:
     return out
 
 
-def _answered_elsewhere(model_id: str, ev: dict, per_model: dict, billing: list[dict]) -> Optional[str]:
-    """The model that answered a question this model failed, or None (users got no reply)."""
+_MAX_REQUESTS = 20  # questions whose outcome is looked up per reading
+
+
+def _outcomes(model_id: str, ev: dict, billing: list[dict], looked_up: set) -> dict:
+    """What happened to each question this model failed, judged per request_id (never
+    from hourly totals): answered by a model (its billing line for that question), not
+    answered (looked up, and no model's billing line), or unknown (not looked up)."""
+    answered_by: dict = {}
     for line in billing:
-        other = line.get("model")
-        if line.get("request_id") in ev["requests"] and other and _id_for(other, [model_id]) is None:
-            return other
-    backup = ev.get("backup")
-    if backup:
-        backup_id = _id_for(backup, per_model)
-        if backup_id and (per_model.get(backup_id) or {}).get("answered", 0) > 0:
-            return backup
-    return None
+        rid = line.get("request_id")
+        if rid in ev["requests"] and line.get("model"):
+            answered_by.setdefault(rid, line["model"])
+    recovered = {r for r in ev["requests"] if r in answered_by}
+    unanswered = {r for r in ev["requests"] if r in looked_up and r not in answered_by}
+    backups = sorted({m for m in answered_by.values() if _id_for(m, [model_id]) is None})
+    return {"recovered": len(recovered), "unanswered": len(unanswered), "backups": backups}
 
 
 def refresh(metrics: dict, metrics_status: dict, read_lines=_read_lines) -> None:
@@ -156,7 +160,7 @@ def refresh(metrics: dict, metrics_status: dict, read_lines=_read_lines) -> None
         return
 
     failing = [m for m, c in per_model.items() if (c.get("failed", 0) + c.get("timed_out", 0)) > 0]
-    events, billing, lines_reason = {}, [], ""
+    events, billing, looked_up, lines_reason = {}, [], set(), ""
     src = _source() if failing else None
     if failing and src:
         try:
@@ -164,18 +168,22 @@ def refresh(metrics: dict, metrics_status: dict, read_lines=_read_lines) -> None
                                f'({src["filter"]}) AND (jsonPayload.message:"stream failed" '
                                f'OR jsonPayload.message:"Fallback:")')
             events = _events(per_model, lines)
-            requests = sorted({r for ev in events.values() for r in ev["requests"]})[:20]
+            requests = sorted({r for ev in events.values() for r in ev["requests"]})[:_MAX_REQUESTS]
             if requests:
                 ors = " OR ".join(f'jsonPayload.message:"{r}"' for r in requests)
                 billing = [l for l in read_lines(src["project"],
                                                  f'({src["filter"]}) AND jsonPayload.message:"billing" AND ({ors})')
                            if l.get("event") == "billing" or l.get("message") == "billing"]
+                looked_up = set(requests)
         except Exception as e:
+            events, billing, looked_up = {}, [], set()
             lines_reason = f"ColdVault's log lines were not read ({type(e).__name__})"
             logger.warning(f"model failures: {lines_reason}: {e}")
     elif failing:
         lines_reason = "no log source for model lines in the landscape file"
 
+    with _lock:
+        previous = dict(_state.get("models") or {})
     models = {}
     for model_id, c in per_model.items():
         failed = c.get("failed", 0) + c.get("timed_out", 0)
@@ -183,11 +191,24 @@ def refresh(metrics: dict, metrics_status: dict, read_lines=_read_lines) -> None
                  "answered": c.get("answered", 0), "failed": c.get("failed", 0),
                  "timed_out": c.get("timed_out", 0)}
         if failed:
-            ev = events.get(model_id) or {}
-            entry.update(name=ev.get("name") or model_id,
-                         reason=plain_reason(ev.get("reason")) if ev.get("reason") else (lines_reason or "no reason found in the log lines"),
-                         backup=_answered_elsewhere(model_id, ev, per_model, billing) if ev else None,
-                         last_at=ev.get("last_at"), evidence=ev.get("evidence") or [])
+            ev = events.get(model_id)
+            old = previous.get(model_id) or {}
+            if ev:
+                entry.update(name=ev["name"], reason=plain_reason(ev["reason"]) if ev["reason"] else "no reason given",
+                             last_at=ev["last_at"], evidence=ev["evidence"], outcome_note="",
+                             **_outcomes(model_id, ev, billing, looked_up))
+            elif lines_reason and (old.get("recovered") or old.get("unanswered")):
+                # The lines could not be read now: keep what the earlier reading established
+                entry.update({k: old.get(k) for k in ("name", "reason", "last_at", "evidence",
+                                                      "recovered", "unanswered", "backups")},
+                             outcome_note=f"{lines_reason}; outcome from the earlier reading")
+            else:
+                entry.update(name=old.get("name") or model_id, reason=old.get("reason") or "no reason found in the log lines",
+                             last_at=old.get("last_at"), evidence=old.get("evidence") or [],
+                             recovered=0, unanswered=0, backups=[],
+                             outcome_note=lines_reason or "no failure lines found for this model")
+            entry["unknown"] = max(0, failed - (entry.get("recovered") or 0) - (entry.get("unanswered") or 0))
+            entry["backup"] = ", ".join(entry.get("backups") or []) or None
         models[model_id] = entry
     with _lock:
         _state.update(read=True, reason="", checked_at=checked_at, models=models)
@@ -212,7 +233,7 @@ def box(providers: list) -> dict:
     failing = [m for m in models if m["failed"] + m["timed_out"] > 0]
     if not failing:
         status = "healthy"
-    elif any(not m.get("backup") for m in failing):
+    elif any(m.get("unanswered") for m in failing):
         status = "error"
     else:
         status = "degraded"
@@ -222,15 +243,32 @@ def box(providers: list) -> dict:
             "check_description": desc}
 
 
+def _plural(n: int, word: str) -> str:
+    return f"{n} {word}{'s' if n != 1 else ''}"
+
+
+def _outcome_words(m: dict) -> str:
+    """What happened to the questions this model failed, from per-question evidence."""
+    parts = []
+    if m.get("recovered"):
+        parts.append(f"{m.get('backup') or 'another model'} answered {_plural(m['recovered'], 'question')} in its place")
+    if m.get("unanswered"):
+        parts.append(f"{_plural(m['unanswered'], 'question')} got no reply from any model")
+    if m.get("unknown"):
+        parts.append(f"for {_plural(m['unknown'], 'failed call')} it is not known whether another model answered"
+                     + (f" ({m['outcome_note']})" if m.get("outcome_note") else ""))
+    return "; ".join(parts)
+
+
 def _model_sentence(m: dict) -> str:
     n = m["failed"] + m["timed_out"]
-    s = f"{m.get('name') or m['id']} failed {n} time{'s' if n != 1 else ''} in the last hour ({m.get('reason')})"
-    s += f"; {m['backup']} answered in its place." if m.get("backup") else "; no other model answered."
-    return s
+    return (f"{m.get('name') or m['id']} failed {_plural(n, 'time')} in the last hour ({m.get('reason')}); "
+            f"{_outcome_words(m)}.")
 
 
 def failures(provider_parts: dict) -> list:
-    """One entry per failing model for the alarm engine: part, severity, title, explanation."""
+    """One entry per failing model for the alarm engine: part, severity, title, explanation.
+    Critical only when a question is known to have got no reply; a warning otherwise."""
     s = snapshot()
     out = []
     for m in s["models"].values():
@@ -239,16 +277,22 @@ def failures(provider_parts: dict) -> list:
         if not n or not part:
             continue
         name, backup, reason = m.get("name") or m["id"], m.get("backup"), m.get("reason")
-        if backup:
-            what = (f"{name} failed {n} time{'s' if n != 1 else ''} in the last hour ({reason}). "
-                    f"{backup} answered in its place, so users still got a reply, possibly from a different model than they chose.")
+        words = _outcome_words(m)
+        what = f"{name} failed {_plural(n, 'time')} in the last hour ({reason}). {words[:1].upper()}{words[1:]}."
+        if m.get("unanswered"):
+            severity, tail = "critical", f"{_plural(m['unanswered'], 'question')} got no reply"
+            what += " Those users got no answer."
+        elif m.get("recovered") and not m.get("unknown"):
+            severity, tail = "warning", f"{backup} answered instead"
+            what += " Users still got a reply, possibly from a different model than they chose."
+        elif m.get("recovered"):
+            severity, tail = "warning", f"{backup} answered some questions in its place"
         else:
-            what = (f"{name} failed {n} time{'s' if n != 1 else ''} in the last hour ({reason}) "
-                    f"and no other model answered, so those questions got no reply.")
+            severity, tail = "warning", "whether another model answered is not known"
         suspicion, directions = _where_to_look(reason, name)
         out.append({
-            "model": m["id"], "part": part, "severity": "warning" if backup else "critical",
-            "title": f"{name} is failing" + (f"; {backup} answered instead" if backup else "; no other model answered"),
+            "model": m["id"], "part": part, "severity": severity,
+            "title": f"{name} is failing; {tail}",
             "explanation": {"what": what, "suspicion": suspicion, "directions": directions},
             "evidence": m.get("evidence") or [],
         })
