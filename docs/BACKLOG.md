@@ -446,3 +446,20 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Testable:** Yes (UI tests with a fixed time zone)
 - **Who builds:** Neo.
 - **Status:** confirmed by Igor 2026-11-07 (full text).
+
+## REQ-GHA-031: An AI alarm opens with a plain explanation; the log lines are there on request
+
+- **Goal:** A business reader who opens an alarm found by the AI review understands what is happening and where the investigation should look, without reading log lines. People who want the evidence can open it.
+- **Why:** Owner, 2026-11-07: the alarm window opens with raw log lines, which a business reader can't use. It needs a description of what this is about, the directions for investigation or the main suspicion, and the log entries only when someone opens them.
+- **Target state:**
+  1. Right under the title, the alarm says in plain words what is going wrong, what it affects (which part, and which users or functions where the logs show it) and how serious it is.
+  2. It then says where to look: the main suspicion, when the logs point to one, and other possible directions, each in a sentence. Words such as "likely" or "possible" show how sure it is. A suspicion is never stated as a fact.
+  3. The log lines behind the alarm are closed by default, under "View the related log entries". Opened, they show exactly as today, as the evidence.
+  4. The section "Technical details" is called "Details" and stays closed by default.
+  5. The title and the text name the part as it appears on the landscape (for example "ColdVault app"), not an internal id such as "coldvault-mig-xjxr".
+  6. The AI review writes this explanation when it raises the alarm. Opening the alarm costs nothing extra. The text is plain data and stays within the daily cost cap.
+  7. Alarms from rules and anomaly detection are unchanged.
+- **Priority:** P2
+- **Testable:** Yes (API + UI; one live AI alarm)
+- **Who builds:** Neo.
+- **Status:** confirmed by Igor 2026-11-07 (full text).
