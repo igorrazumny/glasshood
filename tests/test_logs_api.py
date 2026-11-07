@@ -200,6 +200,34 @@ class TestQuietPart:
         assert body["count"] == 0 and body["note"] == "No log lines for this part in the last 7 days."
 
 
+class TestReadableLines:
+    """REQ-GHA-032: load balancer requests and change records read as one plain line."""
+
+    def _entry(self, payload=None, http_request=None):
+        from types import SimpleNamespace
+        return SimpleNamespace(payload=payload, http_request=http_request, timestamp="t", severity="INFO")
+
+    def test_load_balancer_request(self):
+        from src.api.routes.logs import _readable
+        line = _readable(self._entry({"statusDetails": "response_sent_by_backend"},
+                                     {"requestMethod": "GET", "status": 200, "requestUrl": "https://coldvault.ai/api/health",
+                                      "latency": "0.012s", "remoteIp": "1.2.3.4"}))
+        assert line == "GET 200 https://coldvault.ai/api/health · 0.012s · from 1.2.3.4"
+
+    def test_change_record(self):
+        from src.api.routes.logs import _readable
+        line = _readable(self._entry({"methodName": "v1.compute.firewalls.patch",
+                                      "authenticationInfo": {"principalEmail": "admin@example.com"},
+                                      "resourceName": "projects/p/global/firewalls/coldvault-allow-lb"}))
+        assert line == "v1.compute.firewalls.patch by admin@example.com on projects/p/global/firewalls/coldvault-allow-lb"
+
+    def test_text_and_message_lines_unchanged(self):
+        from src.api.routes.logs import _readable
+        assert _readable(self._entry("plain text")) == "plain text"
+        assert _readable(self._entry({"message": "app line"})) == "app line"
+        assert _readable(self._entry(None)) == ""
+
+
 class TestFilterParenthesization:
     """REQ-705: the manifest filter is wrapped in parens before the
     AND timestamp>=... clause so OR clauses inside the manifest filter
