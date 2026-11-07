@@ -287,13 +287,14 @@ def test_the_architecture_page_carries_the_site_masthead_on_both_hosts():
 
 def test_home_has_the_two_colour_hero_and_cards_with_icons():
     home = _read(_PUB / "index.html")
-    # REQ-GHA-018 clauses 1 and 14, amended 2026-11-06 (third): the hero says what GlassHood is, in Igor's approved words.
+    # REQ-GHA-018 clauses 1 and 14, amended 2026-11-07 (third): the hero says what GlassHood is, as in Igor's summary.
     assert ('<h1 class="hero-title"><span class="hero-title-first">AI monitoring for integration pipelines</span> '
-            '<span class="hero-title-rest">and the complex systems around them.</span></h1>') in home
+            '<span class="hero-title-rest">and complex systems.</span></h1>') in home
     hero = " ".join(home.split('<p class="hero-text">', 1)[1].split("</p>", 1)[0].split())
-    assert hero == ("GlassHood watches the systems in an integration pipeline and the connections between them, live, and shows "
-                    "them on one dashboard: every part on a live map, checked against the declared design, with alerts and a short "
-                    "AI overview of what needs attention. It installs nothing in the systems it watches and only reads them.")
+    assert hero == ("GlassHood shows business and IT where an integration pipeline or other complex system stands, end to end "
+                    "and down to each component. AI reads the logs of every component, and a dashboard shows the state of the "
+                    "whole system and of each part, with its logs one click away. GlassHood installs nothing in the systems it "
+                    "watches and only reads them.")
     # No colour wash behind the hero (Igor, 2026-11-05: "fade out, we will remove for GlassHood").
     assert "hero-wash" not in home and "hero-wash" not in _read(_PUB / "assets/site.css")
     assert home.count('<span class="feature-icon">') == 3
@@ -440,66 +441,61 @@ def test_the_logo_is_always_shown_at_full_strength():
             assert not (":hover" in sel and " img" in sel), sel
 
 
-_HOW_IT_WORKS_PARTS = {  # Home's cards until 2026-11-06, now parts of How it works
-    "read-only": ("Read-only by design",
-        "GlassHood installs nothing in the system it watches. Toward the monitored cloud project, every call is "
-        "list, get or describe; nothing creates, changes or deletes anything there. Read-only is enforced twice: "
-        "by that call surface, and by the identity itself, a short-lived, viewer-only federated token with no "
-        "stored keys. Even a full compromise of the engine cannot write to the monitored cloud project, and there "
-        "is no stored cloud key to steal."),
-    "live-topology": ("Live topology against declared design",
-        "Auto-discovery alone misses nodes it cannot enumerate and carries no intended state; a declarative "
-        "manifest alone goes stale the moment it is written. GlassHood merges both: live discovery is overlaid "
-        "with declarative YAML manifests into a single graph, rebuilt with fresh metrics every cycle. Because "
-        "observed reality and declared intent sit in one model, the gap between what was designed and what is "
-        "actually running is visible, and change between cycles is tracked."),
-    "compliance": ("Compliance as a byproduct of observation",
-        "Compliance is not a pre-baked attestation. Reports are generated on demand from what the engine actually "
-        "observed (rule alerts, CVE findings and anomalies), with a per-subsystem ALCOA+ audit trail: the evidence "
-        "is the observation. The reports are aligned to EU GMP Annex 11, ALCOA+ and 21 CFR Part 11 and support "
-        "human review. They are unsigned and are not an independent validation or certification; a qualified "
-        "person reviews and adopts every artifact."),
-}
-# REQ-GHA-018 amended 2026-11-07: the AI log review raises its own alarms (REQ-GHA-029), in the wording Igor approved.
-_ANALYSIS_PART = ("Deterministic signals first, AI on top",
-    "The measurements are checked by a deterministic and statistical tier: threshold rules, anomaly detection over a "
-    "rolling baseline, and a correlator that ties anomalies to operational alerts. AI runs on top: it writes the short "
-    "overviews, and every 3 hours it reviews each part's logs and raises its own alarms, kept apart from the others and "
-    "labelled as found by the AI review. An AI alarm must quote the log lines it rests on, or it is dropped, and a "
-    "critical one stays until a signed-in person acknowledges it. A signed-in operator can ask the AI to investigate "
-    "one alarm deeper and get a report; that investigation may search the web for the error.")
+# REQ-GHA-018 clauses 1 and 14, amended 2026-11-07 (third): Home in the direction of Igor's one-page summary of
+# 2026-11-07, AI monitoring that shows business and IT where the system and each component stand; what is not built
+# yet is said to be next.
+_HOW_IT_WORKS_PARTS = [
+    ("AI reads the logs of every component",
+     "GlassHood reads the measurements and logs of every component in an integration pipeline or other complex system, "
+     "and only reads: it installs nothing in the systems it watches, and toward them every call is list, get or describe, "
+     "made with a short-lived, viewer-only token and no stored keys. Threshold rules and anomaly detection check the "
+     "measurements first, and AI runs on top: every 3 hours it reviews each component's logs and raises its own alarms, "
+     "labelled as found by the AI review. An AI alarm must quote the log lines it rests on, or it is dropped. A signed-in "
+     "operator can ask the AI to investigate one alarm deeper and get a report; that investigation may search the web for "
+     "the error."),
+    ("A dashboard shows where the system and each component stand",
+     "A live map shows every component and every connection with its health, refreshed every 10 minutes, and a short AI "
+     "overview says how the whole system and each component are doing and what needs attention. Each component's logs "
+     "are one click away. Business and IT see the same dashboard, and nothing they do there changes the monitored "
+     "system."),
+    ("Alerts by severity, and tickets in ServiceNow",
+     "Every alert carries a severity: critical, warning or info. A critical AI alarm stays until a signed-in person "
+     "acknowledges it. GlassHood can also open an incident in ServiceNow for each critical or warning alert, with its "
+     "urgency and impact set from the severity; this connection is set up for each deployment, and the live demo has "
+     "none."),
+    ("Next: distribution lists and regular updates",
+     "Today alerts show on the dashboard. Next, GlassHood is to alert the right distribution lists by severity and to "
+     "send regular updates as agreed: the system's status, the open tickets and who is working on them, with links."),
+]
 
-# REQ-GHA-018 clauses 1 and 14, amended 2026-11-06 (third), in the wording Igor approved on 2026-11-06.
 _HOME_CARDS = {
     "what-it-is": ("What it is",
-        "AI monitoring, with dashboards, of integration pipelines and other complex systems: one live view of every part, "
-        "every connection and its health.",
-        "GlassHood connects to a running system — today a solution on Google Cloud, read from Azure — and builds one live "
-        "picture of it: every part, every connection between them and their health, refreshed every cycle. It merges what "
-        "it discovers with the system's declared design, so the gap between the design and what actually runs is visible. "
-        "Rules and anomaly detection raise alerts from the measurements, and every 3 hours an AI review reads each part's "
-        "logs and raises its own alarms, labelled as found by the AI review. An AI overview then says in a few sentences how "
-        "the whole system is doing and what needs attention, and each part has its own. Operators and business readers see "
-        "the same dashboard, "
-        "and nothing they do there changes the monitored system."),
+        "AI monitoring and dashboard services for business and IT, down to each component.",
+        "GlassHood is AI monitoring with dashboards, for business and IT alike. It connects to a running integration "
+        "pipeline or other complex system — today a solution on Google Cloud, read from Azure — and shows where the whole "
+        "system and each of its components stand, live. Rules and anomaly detection raise alerts from the measurements, and "
+        "every 3 hours an AI review reads each component's logs and raises its own alarms, labelled as found by the AI "
+        "review. A short AI overview says in plain words how the whole system is doing and what needs attention, and each "
+        "component has its own. Business owners and IT teams look at the same dashboard, and nothing they do there changes "
+        "the monitored system."),
     "the-problem": ("The problem it solves",
-        "In a chain of connected systems, a failure often shows up somewhere else and later, and each team sees only its "
-        "own part.",
-        "Integration pipelines fail quietly. A connection stops, a message no longer arrives, a service is replaced and an "
-        "interface is left behind, and the first sign is often a wrong result further down the chain. Each team watches its "
-        "own system with its own tool, so nobody sees the whole chain at once, and the design on paper drifts away from what "
-        "actually runs. GlassHood puts the whole chain in one view, compares it with the declared design, and points at the "
-        "part where it breaks."),
+        "With current tools, business owners cannot see where the system stands, end to end.",
+        "With current tools, business owners cannot see where their system stands, end to end. An integration pipeline runs "
+        "through many systems, and each is watched by its own team with its own tool, in its own technical terms. When a "
+        "connection stops or a message no longer arrives, the first sign is often a wrong result further down the chain, "
+        "and the business owner learns of it late and second-hand. GlassHood puts the whole chain in one view that business "
+        "and IT read together, down to each component, and points at the part where it breaks."),
     "how-it-works": ("How it works",
-        "Read-only collectors, one live model checked against the design, deterministic signals first with AI on top, and "
-        "compliance evidence from what it observed.",
+        "AI reads the logs of every component, and a dashboard shows where the system and each component stand, with their "
+        "logs one click away and alerts by severity.",
         None),
 }
 
 
 def test_home_answers_what_it_is_the_problem_it_solves_and_how_it_works():
     # Each card can be clicked as a whole and shows the sections further down on Home, as on the architecture page.
-    # How it works restates the architecture page in its order (collection, topology, analysis, compliance).
+    # How it works restates the architecture page in shorter form: the logs, the dashboard, alerts and tickets, and
+    # what is next.
     import html as _html
     norm = lambda t: " ".join(_html.unescape(t).split())
     home = _read(_PUB / "index.html")
@@ -517,10 +513,12 @@ def test_home_answers_what_it_is_the_problem_it_solves_and_how_it_works():
             assert norm(re.search(r"<p>(.*?)</p>", section.group(1), re.S).group(1)) == detail, cid
     how = re.search(r'<section class="wrap home-detail" id="how-it-works">(.*?)</section>', hidden, re.S).group(1)
     parts = [(t, norm(p)) for t, p in re.findall(r"<h3>(.*?)</h3>\s*<p>(.*?)</p>", how, re.S)]
-    expected = [_HOW_IT_WORKS_PARTS["read-only"], _HOW_IT_WORKS_PARTS["live-topology"], _ANALYSIS_PART, _HOW_IT_WORKS_PARTS["compliance"]]
-    assert parts == expected
+    assert parts == _HOW_IT_WORKS_PARTS
     assert '<a class="button" href="/architecture/">See the architecture &rarr;</a>' in how
     assert "Where we are today" not in home and "system description" not in home.lower()
+    # Not a check against a declared design, nor compliance documentation (Igor, 2026-11-07).
+    for gone in ("declared design", "design on paper", "compliance", "annex 11", "cross-cloud ai infrastructure"):
+        assert gone not in home.lower(), gone
     assert home.count("Click to read the section &rarr;") == 3
     assert home.rstrip().endswith('<script src="/architecture/app.js"></script>\n</body>\n</html>')
     css = _read(_PUB / "assets/site.css")
@@ -543,3 +541,25 @@ def test_the_top_cards_turn_glasshood_blue_when_pointed_at():
         rules = re.findall(r"([^{}]+)\{([^{}]*)\}", re.sub(r"/\*.*?\*/", "", css, flags=re.S))
         card_rules = [body for sel, body in rules if "pd-card" in sel]
         assert card_rules and not any("orange" in body for body in card_rules)
+
+
+_TAGLINE = "AI monitoring for integration pipelines and complex systems"
+
+
+@pytest.mark.parametrize("page", _NAV_PAGES + (_ARCH / "index.html",), ids=lambda p: str(p.relative_to(ROOT)))
+def test_every_footer_says_what_glasshood_is(page):
+    # REQ-GHA-018, amended 2026-11-07 (third): the footer line of every page names GlassHood's direction.
+    html = _read(page)
+    brand = html.split('<div class="site-footer-brand">', 1)[1].split("</div>", 1)[0]
+    assert f"<p>{_TAGLINE}</p>" in brand
+    assert "Cross-Cloud AI Infrastructure Monitoring" not in html
+
+
+def test_home_title_and_description_say_what_glasshood_is():
+    # REQ-GHA-018, amended 2026-11-07 (third): Home's title and description say the same as the footer line.
+    home = _read(_PUB / "index.html")
+    assert f"<title>GlassHood — {_TAGLINE}</title>" in home
+    assert f'<meta property="og:title" content="GlassHood — {_TAGLINE}">' in home
+    desc = re.search(r'<meta name="description" content="([^"]+)">', home).group(1)
+    assert desc == f"{_TAGLINE}: dashboard services for business and IT, down to each component."
+    assert f'<meta property="og:description" content="{desc}">' in home
