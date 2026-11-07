@@ -3,7 +3,7 @@
 // Run: node frontend/src/utils/panels.test.js
 
 import assert from 'node:assert/strict'
-import { PANELS, MIN_LANDSCAPE, clampWidth, fitPanels, loadPanel, savePanel, dragWidth } from './panels.js'
+import { PANELS, MIN_LANDSCAPE, OVERLAY_BELOW, landscapeInsets, clampWidth, fitPanels, loadPanel, savePanel, dragWidth } from './panels.js'
 
 let failed = 0
 function test(name, fn) {
@@ -82,6 +82,19 @@ test('blocked or broken storage still gives a working panel', () => {
   savePanel('right', { open: true, width: 400 }, broken)
   const s = memory(); s.setItem('glasshood.panel.left', '{not json')
   assert.deepEqual(loadPanel('left', s), { open: true, width: PANELS.left.width })
+})
+
+test('on a phone open panels lie over the landscape, which keeps the full width', () => {
+  const w = fitPanels({ left: { open: true, width: 400 }, right: { open: true, width: 400 } }, 390)
+  assert.deepEqual(landscapeInsets(w, 390), { left: 8, right: 8 })
+})
+
+test('on a desktop the landscape is inset by each open pinned panel', () => {
+  assert.deepEqual(landscapeInsets({ left: 240, right: 320 }, 1440), { left: 248, right: 328 })
+  assert.deepEqual(landscapeInsets({ left: 0, right: 320 }, 1440), { left: 8, right: 328 })
+  const w = fitPanels({ left: { open: true, width: 999 }, right: { open: true, width: 999 } }, OVERLAY_BELOW)
+  const i = landscapeInsets(w, OVERLAY_BELOW)
+  assert.ok(OVERLAY_BELOW - i.left - i.right >= MIN_LANDSCAPE)
 })
 
 test('storage that throws when merely touched still gives a working panel', () => {

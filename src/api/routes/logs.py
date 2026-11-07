@@ -57,17 +57,43 @@ def _query_logs_with_filter(project: str, log_filter: str, max_entries: int = 10
 
     results = []
     for entry in entries:
-        payload = ""
-        if isinstance(entry.payload, dict):
-            payload = entry.payload.get("message", str(entry.payload))
-        elif entry.payload:
-            payload = str(entry.payload)
         results.append({
             "timestamp": str(entry.timestamp),
             "severity": entry.severity or "DEFAULT",
-            "message": payload[:500],
+            "message": _readable(entry)[:500],
         })
     return results
+
+
+def _readable(entry) -> str:
+    """One plain line per log entry (REQ-GHA-032).
+
+    A load balancer request reads "GET 200 https://… · 0.012s · from 1.2.3.4"
+    and a change record reads "v1.compute.firewalls.patch by someone@… on
+    projects/…/firewalls/x"; other entries keep their message text as before.
+    """
+    http = getattr(entry, "http_request", None) or {}
+    if isinstance(http, dict) and (http.get("requestMethod") or http.get("requestUrl")):
+        parts = [" ".join(str(x) for x in (http.get("requestMethod"), http.get("status"),
+                                          http.get("requestUrl")) if x)]
+        if http.get("latency"):
+            parts.append(str(http["latency"]))
+        if http.get("remoteIp"):
+            parts.append(f"from {http['remoteIp']}")
+        return " · ".join(parts)
+    payload = entry.payload
+    if isinstance(payload, dict):
+        if payload.get("methodName"):
+            who = (payload.get("authenticationInfo") or {}).get("principalEmail") or "unknown caller"
+            line = f"{payload['methodName']} by {who}"
+            if payload.get("resourceName"):
+                line += f" on {payload['resourceName']}"
+            status = payload.get("status") or {}
+            if isinstance(status, dict) and status.get("message"):
+                line += f" ({status['message']})"
+            return line
+        return str(payload.get("message", payload))
+    return str(payload) if payload else ""
 
 
 def _walk_node(node: dict, target_id: str) -> dict | None:
