@@ -119,6 +119,11 @@ def outside_systems() -> list:
     return [(name, url, comps) for url, (name, comps) in found.items()]
 
 
+def part_providers() -> dict:
+    """{box id: provider name} for every outside-view box."""
+    return {box: name for name, _, comps in outside_systems() for box in comps.values()}
+
+
 def incidents(fetch=None) -> tuple:
     """(alarm entries, names of the providers read) for every outside system: one alarm per
     incident or maintenance, on the first box it names, keeping every box it names; the

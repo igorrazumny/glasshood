@@ -437,7 +437,21 @@ def track_model_failures(failures: list, read: bool, labels: Optional[dict] = No
         _apply(candidates, checked, time.time())
 
 
-def track_provider_incidents(entries: list, read: set, labels: Optional[dict] = None) -> None:
+def _bind_legacy_provider_keys(part_provider: dict) -> None:
+    """Alarms saved before provider names were part of the key (provider:<id>) are bound to
+    the provider that owns their part, keeping report, acknowledgement and first seen."""
+    for key in [k for k in _active if str(k[0]).startswith("provider:") and str(k[0]).count(":") == 1]:
+        name = part_provider.get(key[1])
+        if not name:
+            continue
+        alert = _active.pop(key)
+        new_key = (f"provider:{name}:{str(key[0]).split(':', 1)[1]}", key[1])
+        alert.group = new_key[0]
+        _active.setdefault(new_key, alert)
+
+
+def track_provider_incidents(entries: list, read: set, labels: Optional[dict] = None,
+                             part_provider: Optional[dict] = None) -> None:
     """A public system's published incident or maintenance as one alarm on the first part it
     names (REQ-GHA-036 clause 4), keeping every part it names. It ends when its provider,
     read this time, no longer lists it as open; a provider not read (absent from `read`)
@@ -445,6 +459,7 @@ def track_provider_incidents(entries: list, read: set, labels: Optional[dict] = 
     labels = labels or {}
     read = set(read or ())
     with _lock:
+        _bind_legacy_provider_keys(part_provider or {})
         checked = {k for k in _active if str(k[0]).startswith("provider:")
                    and str(k[0]).split(":", 2)[1] in read}
         candidates = []

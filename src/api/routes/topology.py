@@ -324,7 +324,7 @@ def _build_topology() -> dict:
     from src.rules.engine import track_provider_incidents
     try:
         provider_events, providers_read = statuspage.incidents()
-        track_provider_incidents(provider_events, providers_read, part_labels)
+        track_provider_incidents(provider_events, providers_read, part_labels, statuspage.part_providers())
     except Exception as e:
         logger.warning(f"provider incidents not read: {e}")
     outside = _outside_products()
