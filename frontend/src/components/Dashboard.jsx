@@ -18,7 +18,7 @@ import { usePolling } from '../hooks/usePolling'
 import { computeManifestLayout } from '../utils/manifestLayout'
 import { canvasNodes } from '../utils/canvasParts.js'
 import { clearToken, apiFetch, apiUrl } from '../utils/api'
-import { loadPanel, savePanel, fitPanels } from '../utils/panels'
+import { loadPanel, savePanel, fitPanels, landscapeInsets } from '../utils/panels'
 
 function useDemoData() {
   const [topology, setTopology] = useState(null)
@@ -157,8 +157,13 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
 
   // Dynamic padding for main content — both panels are fixed overlays
   // REQ-GHA-033 clause 3: the landscape uses exactly the space the panels leave free
-  const leftShift = sidebarOpen && sidebarPinned && projectNodes.length > 0 ? leftWidth + 8 : 8
-  const rightShift = rightOpen && rightPinned ? rightPanelWidth + 8 : 8
+  // On a phone the panels lie over the landscape (REQ-GHA-033 clause 6)
+  const insets = landscapeInsets({
+    left: sidebarOpen && sidebarPinned && projectNodes.length > 0 ? leftWidth : 0,
+    right: rightOpen && rightPinned ? rightPanelWidth : 0,
+  }, viewport)
+  const leftShift = insets.left
+  const rightShift = insets.right
 
   // Filter alerts/anomalies by selected project context
   const selectedProject = activeProject ? projectNodes.find(p => p.id === activeProject) : null

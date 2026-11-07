@@ -37,6 +37,17 @@ export function fitPanels({ left, right }, viewport) {
   return { left: l, right: r }
 }
 
+// Below this width the two panels and the landscape do not fit side by side
+// (a phone): open panels then lie over the landscape instead of pushing it aside.
+export const OVERLAY_BELOW = PANELS.left.min + PANELS.right.min + MIN_LANDSCAPE + GUTTERS
+
+// How far the landscape is inset from each side: the width of each open, pinned
+// panel plus a gutter, or just the gutter when panels lie over it.
+export function landscapeInsets({ left, right }, viewport) {
+  if (viewport < OVERLAY_BELOW) return { left: 8, right: 8 }
+  return { left: left ? left + 8 : 8, right: right ? right + 8 : 8 }
+}
+
 const key = side => `glasshood.panel.${side}`
 
 // Saved state, or the default when nothing is saved or storage is blocked
