@@ -113,6 +113,10 @@ def _check_node_rule(rule: dict, node: Node,
     if not metric_name:
         return False, None
 
+    # A rule may name the exact parts it is for (REQ-GHA-035: GlassHood's own work boxes)
+    if rule.get("parts") and node.id not in rule["parts"]:
+        return False, None
+
     # Filter by node type if specified
     allowed_types = rule.get("node_types")
     if allowed_types and node.type not in allowed_types:
