@@ -2,6 +2,7 @@
 # Purpose: GET /api/topology — assembled from discovery + YAML + collector enrichment
 
 import logging
+import time
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Request
@@ -283,6 +284,10 @@ def _build_topology() -> dict:
             source=mdata["_parent"], target=node_id, label="", status="healthy"
         ))
 
+    # REQ-GHA-035 clause 8: GlassHood's own work is judged now, not at the last poll,
+    # so a stopped loop shows as stopped
+    _refresh_self(nodes)
+
     # REQ-GHA-035: every box names the system (landscape file) it belongs to
     _tag_systems(nodes)
 
@@ -396,6 +401,24 @@ def _build_topology() -> dict:
     _apply_anomaly_classification(result, anomaly_list)
 
     return result
+
+
+def _refresh_self(nodes: list) -> None:
+    try:
+        from src.api.routes.manifests import _load_manifests
+        from src.collectors.glasshood_self import component
+        wanted = {n["id"]: ((n.get("monitoring") or {}).get("probe") or {}).get("component")
+                  for m in _load_manifests() for n in m.get("nodes", []) or []
+                  if ((n.get("monitoring") or {}).get("probe") or {}).get("type") == "glasshood_self"}
+    except Exception as e:
+        logger.debug(f"self check skipped: {e}")
+        return
+    for node in nodes:
+        if node.id in wanted:
+            r = component(wanted[node.id] or "")
+            node.status = r["status"]
+            node.metrics.update({**r["metrics"], "_check_description": r["check_description"],
+                                 "_last_poll": time.time()})
 
 
 def _outside_products() -> set:

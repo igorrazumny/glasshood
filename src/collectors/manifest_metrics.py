@@ -462,6 +462,14 @@ def _poll_node(node_config: dict) -> dict:
         if probe_type in _RESOURCE_PROBES:
             # REQ-GHA-023: a real part of the monitored project, read with read-only roles.
             return {"node_id": node_id, **_RESOURCE_PROBES[probe_type](probe_config)}
+        if probe_type == "azure_resource":
+            # REQ-GHA-035: one of GlassHood's own Azure resources, read with its own identity
+            from src.collectors.azure_resources import box as azure_box
+            return {"node_id": node_id, **azure_box(probe_config)}
+        if probe_type == "glasshood_self":
+            # REQ-GHA-035 clause 8: one of GlassHood's own collectors or AI tasks
+            from src.collectors.glasshood_self import component
+            return {"node_id": node_id, **component(probe_config.get("component", ""))}
         if probe_type == "statuspage":
             # REQ-GHA-036: a public system's component, from the provider's own status page
             from src.collectors.statuspage import box as statuspage_box
