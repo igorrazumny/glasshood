@@ -60,21 +60,18 @@
 
   <!-- The explainer goes here once it exists (REQ-GHA-018 clause 1). -->
 
-  <section class="wrap features" aria-label="What GlassHood is, the problem it solves and how it works">
+  <section class="wrap features" aria-label="What GlassHood is, the pain it solves and how it works">
     <a href="#what-it-is" class="feature pd-card" data-target="what-it-is">
-      <span class="feature-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></svg></span>
       <h2 class="feature-title">What it is</h2>
       <p class="feature-text">AI monitoring and dashboard services for business and IT, down to each component.</p>
       <span class="pd-card-overlay" aria-hidden="true"><span class="pd-card-overlay-text">Click to read the section &rarr;</span></span>
     </a>
     <a href="#the-problem" class="feature pd-card" data-target="the-problem">
-      <span class="feature-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></span>
-      <h2 class="feature-title">The problem it solves</h2>
-      <p class="feature-text">With current tools, business owners cannot see where the system stands, end to end.</p>
+      <h2 class="feature-title">The pain it solves</h2>
+      <p class="feature-text">Business owners lack a shared, end-to-end view of integration pipelines and complex systems' health.</p>
       <span class="pd-card-overlay" aria-hidden="true"><span class="pd-card-overlay-text">Click to read the section &rarr;</span></span>
     </a>
     <a href="#how-it-works" class="feature pd-card" data-target="how-it-works">
-      <span class="feature-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="6" height="6" rx="1"/><rect x="15" y="15" width="6" height="6" rx="1"/><path d="M6 9v3a3 3 0 0 0 3 3h6"/></svg></span>
       <h2 class="feature-title">How it works</h2>
       <p class="feature-text">AI reads the logs of every component, a dashboard shows where the system and each component stand, and
         alerts, tickets and regular updates reach the right people.</p>
@@ -83,10 +80,10 @@
   </section>
 
   <!-- Opened by the cards above (/architecture/app.js, as on the architecture page). Home answers what GlassHood is,
-       the problem it solves and how it works (REQ-GHA-018 clauses 1 and 14), in the direction of Igor's one-page
-       summary of 2026-11-07 (amended 2026-11-07, third and fourth): AI monitoring that shows business and IT where
-       the system and each component stand, described as delivered to a customer. How it works restates the
-       architecture page in shorter form. -->
+       the pain it solves and how it works (REQ-GHA-018 clauses 1 and 14), as the short version in the words of
+       Igor's deck of 2026-11-07 (amended 2026-11-07, fifth): AI monitoring that shows business and IT where the
+       system and each component stand, described as delivered to a customer. The longer texts are on 9robots.ai's
+       GlassHood page; the architecture page is the deep dive. -->
   <div class="pd-hidden-until-reveal">
     <section class="wrap home-detail" id="what-it-is">
       <h2>What it is</h2>
@@ -99,7 +96,7 @@
         they do there changes the monitored system.</p>
     </section>
     <section class="wrap home-detail" id="the-problem">
-      <h2>The problem it solves</h2>
+      <h2>The pain it solves</h2>
       <p>With current tools, business owners cannot see where their system stands, end to end. An integration pipeline
         runs through many systems, and each is watched by its own team with its own tool, in its own technical terms.
         When a connection stops or a message no longer arrives, the first sign is often a wrong result further down the
@@ -108,27 +105,12 @@
     </section>
     <section class="wrap home-detail" id="how-it-works">
       <h2>How it works</h2>
-      <h3>AI reads the logs of every component</h3>
-      <p>GlassHood reads the measurements and logs of every component in an integration pipeline or other complex
-        system, and only reads: it installs nothing in the systems it watches, and toward them every call is list, get
-        or describe, made with a short-lived, viewer-only token and no stored keys. Threshold rules and anomaly
-        detection check the measurements first, and AI runs on top: every 3 hours it reviews each component's logs and
-        raises its own alarms, labelled as found by the AI review. An AI alarm must quote the log lines it rests on, or
-        it is dropped. A signed-in operator can ask the AI to investigate one alarm deeper and get a report; that
-        investigation may search the web for the error.</p>
-      <h3>A dashboard shows where the system and each component stand</h3>
-      <p>A live map shows every component and every connection with its health, refreshed every 10 minutes, and a short
-        AI overview says how the whole system and each component are doing and what needs attention. Each component's
-        logs are one click away. Business and IT see the same dashboard, and nothing they do there changes the
-        monitored system.</p>
-      <h3>Alerts to the right people, and tickets in your ticketing system</h3>
-      <p>Every alert carries a severity, critical, warning or info, and goes to the distribution lists set for that
-        severity. For each critical or warning alert, GlassHood opens a ticket in your ticketing system, for example an
-        incident in ServiceNow, with its urgency and impact set from the severity. A critical AI alarm stays until a
-        signed-in person acknowledges it.</p>
-      <h3>Regular updates, as agreed</h3>
-      <p>GlassHood sends regular updates as agreed: the system's status, the open tickets and who is working on them,
-        with links.</p>
+      <ul>
+        <li>AI reads the logs of every component in an integration pipeline or other complex system.</li>
+        <li>A dashboard shows where the system and each component stand, with direct access to every log.</li>
+        <li>Alerts the right distribution lists by severity and opens tickets in your ticketing system (e.g. ServiceNow).</li>
+        <li>Sends regular updates as agreed: system status, open tickets and who is working on them, with links.</li>
+      </ul>
       <div class="cta home-detail-cta">
         <a class="button" href="/architecture/">See the architecture &rarr;</a>
       </div>
