@@ -527,3 +527,21 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Testable:** Yes (UI + API: with ColdVault reporting one model failing and another answering, GlassHood shows a warning on the right provider box naming both models and the reason, and clears it after an hour with no failures)
 - **Who builds:** Neo.
 - **Status:** implemented 2026-11-07 (src/collectors/coldvault_models.py reads requests.per_model after each metrics read and, when a model failed, ColdVault's failure, switch-to-backup and billing lines tied by request_id; provider boxes use probe type coldvault_models; a failing model is a warning when another model answered that question, critical when none did, and ends when the hour has no failures; the box details list each model's calls). Not yet verified.
+
+## REQ-GHA-035: GlassHood monitors several real systems: ColdVault, TestRobin and GlassHood itself
+
+- **Goal:** A visitor sees GlassHood watching several real, live systems side by side and can go from the whole picture down to one system and one box.
+- **Why:** Owner, 2026-11-07: the only thing worth demoing is real monitoring of what we run; with several systems a visitor can picture their own pipelines and systems watched the same way.
+- **Target state:**
+  1. GlassHood monitors three live systems: ColdVault (as today), TestRobin, and GlassHood itself. Each has its own landscape file (outside the repo) with its parts, its logs and its own alarms.
+  2. A home view shows all systems next to each other, each with its state in one plain line and its open alarms by severity.
+  3. An overview across all systems: the AI overview and the alarm list cover every system together, and each alarm names its system.
+  4. Selecting one system shows only that system's landscape, its AI overview and its alarms.
+  5. Clicking a box shows that box's details and its own logs, as today (REQ-GHA-032).
+  6. GlassHood only reads each system, through that system's own read-only access without stored keys, as for ColdVault. Nothing is installed in or changed inside the monitored systems except granting that read-only access.
+  7. A system or part GlassHood cannot read says so in plain words and is never shown as healthy.
+  8. GlassHood's view of itself shows a problem in GlassHood (for example its collectors failing or its AI review not running) as an alarm on its own landscape.
+- **Priority:** P2
+- **Testable:** Yes (UI + API)
+- **Who builds:** Neo. Granting read access in TestRobin's AWS account and on GlassHood's own Azure resources is an infrastructure change and needs the owner's yes.
+- **Status:** confirmed 2026-11-07, not started.
