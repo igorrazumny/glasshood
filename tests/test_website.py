@@ -441,9 +441,9 @@ def test_the_logo_is_always_shown_at_full_strength():
             assert not (":hover" in sel and " img" in sel), sel
 
 
-# REQ-GHA-018 clauses 1 and 14, amended 2026-11-07 (third): Home in the direction of Igor's one-page summary of
-# 2026-11-07, AI monitoring that shows business and IT where the system and each component stand; what is not built
-# yet is said to be next.
+# REQ-GHA-018 clauses 1 and 14, amended 2026-11-07 (third and fourth): Home in the direction of Igor's one-page summary
+# of 2026-11-07, AI monitoring that shows business and IT where the system and each component stand, described as
+# delivered to a customer (no live, planned or next labels).
 _HOW_IT_WORKS_PARTS = [
     ("AI reads the logs of every component",
      "GlassHood reads the measurements and logs of every component in an integration pipeline or other complex system, "
@@ -458,14 +458,14 @@ _HOW_IT_WORKS_PARTS = [
      "overview says how the whole system and each component are doing and what needs attention. Each component's logs "
      "are one click away. Business and IT see the same dashboard, and nothing they do there changes the monitored "
      "system."),
-    ("Alerts by severity, and tickets in ServiceNow",
-     "Every alert carries a severity: critical, warning or info. A critical AI alarm stays until a signed-in person "
-     "acknowledges it. GlassHood can also open an incident in ServiceNow for each critical or warning alert, with its "
-     "urgency and impact set from the severity; this connection is set up for each deployment, and the live demo has "
-     "none."),
-    ("Next: distribution lists and regular updates",
-     "Today alerts show on the dashboard. Next, GlassHood is to alert the right distribution lists by severity and to "
-     "send regular updates as agreed: the system's status, the open tickets and who is working on them, with links."),
+    ("Alerts to the right people, and tickets in your ticketing system",
+     "Every alert carries a severity, critical, warning or info, and goes to the distribution lists set for that "
+     "severity. For each critical or warning alert, GlassHood opens a ticket in your ticketing system, for example an "
+     "incident in ServiceNow, with its urgency and impact set from the severity. A critical AI alarm stays until a "
+     "signed-in person acknowledges it."),
+    ("Regular updates, as agreed",
+     "GlassHood sends regular updates as agreed: the system's status, the open tickets and who is working on them, "
+     "with links."),
 ]
 
 _HOME_CARDS = {
@@ -486,8 +486,8 @@ _HOME_CARDS = {
         "and the business owner learns of it late and second-hand. GlassHood puts the whole chain in one view that business "
         "and IT read together, down to each component, and points at the part where it breaks."),
     "how-it-works": ("How it works",
-        "AI reads the logs of every component, and a dashboard shows where the system and each component stand, with their "
-        "logs one click away and alerts by severity.",
+        "AI reads the logs of every component, a dashboard shows where the system and each component stand, and alerts, "
+        "tickets and regular updates reach the right people.",
         None),
 }
 
@@ -517,7 +517,8 @@ def test_home_answers_what_it_is_the_problem_it_solves_and_how_it_works():
     assert '<a class="button" href="/architecture/">See the architecture &rarr;</a>' in how
     assert "Where we are today" not in home and "system description" not in home.lower()
     # Not a check against a declared design, nor compliance documentation (Igor, 2026-11-07).
-    for gone in ("declared design", "design on paper", "compliance", "annex 11", "cross-cloud ai infrastructure"):
+    for gone in ("declared design", "design on paper", "compliance", "annex 11", "cross-cloud ai infrastructure",
+                 "next:", "not built", "the live demo has none"):
         assert gone not in home.lower(), gone
     assert home.count("Click to read the section &rarr;") == 3
     assert home.rstrip().endswith('<script src="/architecture/app.js"></script>\n</body>\n</html>')

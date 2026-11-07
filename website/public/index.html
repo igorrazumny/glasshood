@@ -76,17 +76,17 @@
     <a href="#how-it-works" class="feature pd-card" data-target="how-it-works">
       <span class="feature-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="6" height="6" rx="1"/><rect x="15" y="15" width="6" height="6" rx="1"/><path d="M6 9v3a3 3 0 0 0 3 3h6"/></svg></span>
       <h2 class="feature-title">How it works</h2>
-      <p class="feature-text">AI reads the logs of every component, and a dashboard shows where the system and each component stand, with
-        their logs one click away and alerts by severity.</p>
+      <p class="feature-text">AI reads the logs of every component, a dashboard shows where the system and each component stand, and
+        alerts, tickets and regular updates reach the right people.</p>
       <span class="pd-card-overlay" aria-hidden="true"><span class="pd-card-overlay-text">Click to read the section &rarr;</span></span>
     </a>
   </section>
 
   <!-- Opened by the cards above (/architecture/app.js, as on the architecture page). Home answers what GlassHood is,
        the problem it solves and how it works (REQ-GHA-018 clauses 1 and 14), in the direction of Igor's one-page
-       summary of 2026-11-07 (amended 2026-11-07, third): AI monitoring that shows business and IT where the system
-       and each component stand. How it works restates the architecture page in shorter form; what is not built yet
-       is said to be next. -->
+       summary of 2026-11-07 (amended 2026-11-07, third and fourth): AI monitoring that shows business and IT where
+       the system and each component stand, described as delivered to a customer. How it works restates the
+       architecture page in shorter form. -->
   <div class="pd-hidden-until-reveal">
     <section class="wrap home-detail" id="what-it-is">
       <h2>What it is</h2>
@@ -121,15 +121,14 @@
         AI overview says how the whole system and each component are doing and what needs attention. Each component's
         logs are one click away. Business and IT see the same dashboard, and nothing they do there changes the
         monitored system.</p>
-      <h3>Alerts by severity, and tickets in ServiceNow</h3>
-      <p>Every alert carries a severity: critical, warning or info. A critical AI alarm stays until a signed-in person
-        acknowledges it. GlassHood can also open an incident in ServiceNow for each critical or warning alert, with its
-        urgency and impact set from the severity; this connection is set up for each deployment, and the live demo has
-        none.</p>
-      <h3>Next: distribution lists and regular updates</h3>
-      <p>Today alerts show on the dashboard. Next, GlassHood is to alert the right distribution lists by severity and to
-        send regular updates as agreed: the system's status, the open tickets and who is working on them, with
-        links.</p>
+      <h3>Alerts to the right people, and tickets in your ticketing system</h3>
+      <p>Every alert carries a severity, critical, warning or info, and goes to the distribution lists set for that
+        severity. For each critical or warning alert, GlassHood opens a ticket in your ticketing system, for example an
+        incident in ServiceNow, with its urgency and impact set from the severity. A critical AI alarm stays until a
+        signed-in person acknowledges it.</p>
+      <h3>Regular updates, as agreed</h3>
+      <p>GlassHood sends regular updates as agreed: the system's status, the open tickets and who is working on them,
+        with links.</p>
       <div class="cta home-detail-cta">
         <a class="button" href="/architecture/">See the architecture &rarr;</a>
       </div>
