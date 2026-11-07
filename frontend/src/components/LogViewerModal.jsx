@@ -24,6 +24,7 @@ export default function LogViewerModal({ nodeId, nodeLabel, nodeStatus, isDemo, 
   const [error, setError] = useState(null)
   const [note, setNote] = useState(null)
   const [week, setWeek] = useState(false)
+  const [provider, setProvider] = useState(false)
   const bottomRef = useRef(null)
 
   useEffect(() => {
@@ -52,7 +53,8 @@ export default function LogViewerModal({ nodeId, nodeLabel, nodeStatus, isDemo, 
         setEntries(data.entries || [])
         if (data.error) setError(data.error)
         if (data.note) setNote(data.note)
-        setWeek(data.window === '7d')
+        setWeek(data.window === '7d' || data.window === 'provider')
+        setProvider(data.window === 'provider')
       })
       .catch(err => setError(err.message))
       .finally(() => setLoading(false))
@@ -119,8 +121,8 @@ export default function LogViewerModal({ nodeId, nodeLabel, nodeStatus, isDemo, 
 
         {/* Footer */}
         <div className="mt-2 text-xs text-gray-600 flex justify-between">
-          <span>{entries.length} entries ({week ? 'last 7 days' : 'last 1 hour'})</span>
-          <span>{isDemo ? 'Sample data' : 'GCP Cloud Logging'}</span>
+          <span>{entries.length} entries ({provider ? 'published by the provider' : week ? 'last 7 days' : 'last 1 hour'})</span>
+          <span>{isDemo ? 'Sample data' : provider ? "Provider's public status page" : 'Cloud logs'}</span>
         </div>
       </div>
     </div>

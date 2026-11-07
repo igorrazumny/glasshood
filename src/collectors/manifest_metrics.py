@@ -462,6 +462,10 @@ def _poll_node(node_config: dict) -> dict:
         if probe_type in _RESOURCE_PROBES:
             # REQ-GHA-023: a real part of the monitored project, read with read-only roles.
             return {"node_id": node_id, **_RESOURCE_PROBES[probe_type](probe_config)}
+        if probe_type == "statuspage":
+            # REQ-GHA-036: a public system's component, from the provider's own status page
+            from src.collectors.statuspage import box as statuspage_box
+            return {"node_id": node_id, **statuspage_box(probe_config)}
         if probe_type == "coldvault_models":
             # REQ-GHA-034: the provider's models as ColdVault reported their calls
             from src.collectors.coldvault_models import box

@@ -354,10 +354,23 @@ def _manifest_info():
     return filters, labels
 
 
+def _outside_products() -> set:
+    try:
+        from src.api.routes.manifests import _load_manifests
+        return {m.get("product") for m in _load_manifests() if m.get("kind") == "outside_view"}
+    except Exception:
+        return set()
+
+
 def _walk_parts(topology: dict):
-    """(record, log filter) for every top-level node and every nested child."""
+    """(record, log filter) for every top-level node and every nested child. Boxes of a
+    public system's outside view are left out: their state is the provider's own, and an
+    AI call per box would cost hundreds of calls for nothing new (REQ-GHA-036)."""
     filters, labels = _manifest_info()
+    outside = _outside_products()
     for n in topology.get("nodes", []):
+        if outside and n.get("project") in outside:
+            continue
         logs = ((n.get("monitoring") or {}).get("logs") or [])
         parent_filter = filters.get((n.get("metrics") or {}).get("_parent") or "", "")
         rec = _part_record(n)

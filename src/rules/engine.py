@@ -337,7 +337,7 @@ def evaluate_rules(nodes: list, snapshot: dict,
             # condition left: its alarms end (findings and AI review alarms follow their own checks).
             checked |= {k for k in _active
                         if k[1] is not None and k[1] not in present
-                        and not str(k[0]).startswith(("finding:", "ai:"))}
+                        and not str(k[0]).startswith(("finding:", "ai:", "model:", "provider:"))}
         new_alerts, resolved = _apply(candidates, checked, now)
         active = list(_active.values())
 
@@ -433,6 +433,27 @@ def track_model_failures(failures: list, read: bool, labels: Optional[dict] = No
             alert.title = f"{labels[part]}: {f['title']}" if part in labels else f["title"]
             alert.explanation = f.get("explanation")
             alert.evidence = list(f.get("evidence") or [])
+            candidates.append(alert)
+        _apply(candidates, checked, time.time())
+
+
+def track_provider_incidents(entries: list, read: bool, labels: Optional[dict] = None) -> None:
+    """A public system's published incident or maintenance as one alarm on the first part it
+    names (REQ-GHA-036 clause 4). It ends when the provider no longer lists it as open; when
+    a provider could not be read nothing changes."""
+    labels = labels or {}
+    with _lock:
+        checked = {k for k in _active if str(k[0]).startswith("provider:")} if read else set()
+        candidates = []
+        for e in entries:
+            rule = {"id": "provider_incident", "group": f"provider:{e['id']}", "severity": e["severity"],
+                    "kind": "alarm", "description": "Reported by the provider"}
+            part = e["part"]
+            checked.add((rule["group"], part))
+            alert = _candidate(rule, part, labels.get(part), f"Provider reports: {e['title']}")
+            alert.title = e["title"]
+            alert.explanation = e.get("explanation")
+            alert.evidence = list(e.get("evidence") or [])
             candidates.append(alert)
         _apply(candidates, checked, time.time())
 

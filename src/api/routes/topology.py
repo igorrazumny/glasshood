@@ -283,6 +283,9 @@ def _build_topology() -> dict:
             source=mdata["_parent"], target=node_id, label="", status="healthy"
         ))
 
+    # REQ-GHA-035: every box names the system (landscape file) it belongs to
+    _tag_systems(nodes)
+
     # Create edges from connects_to declarations on children (REQ-702)
     child_ids = set()
     for node in nodes:
@@ -316,12 +319,21 @@ def _build_topology() -> dict:
     from src.rules.engine import track_model_failures
     track_model_failures(coldvault_models.failures(coldvault_models.provider_parts()),
                          coldvault_models.snapshot()["read"], part_labels)
+    # REQ-GHA-036: public systems raise alarms only from what their provider publishes
+    from src.collectors import statuspage
+    from src.rules.engine import track_provider_incidents
+    try:
+        provider_events, providers_read = statuspage.incidents()
+        track_provider_incidents(provider_events, providers_read, part_labels)
+    except Exception as e:
+        logger.warning(f"provider incidents not read: {e}")
+    outside = _outside_products()
     # Only metrics with a reading can end an alarm: a failed query is not a recovery
     anomaly_parts = {m: p for m, p in (monitoring_stats.get("parts") or {}).items()
                      if monitoring_stats.get(m) is not None}
     if logging_stats.get("part") and logging_stats.get("error_count_15m") is not None:
         anomaly_parts["error_count_15m"] = logging_stats["part"]
-    alerts = evaluate_rules(nodes, {
+    alerts = evaluate_rules([n for n in nodes if n.project not in outside], {
         "monitoring": monitoring_stats,
         "logging": logging_stats,
         "security": security_stats,
@@ -361,6 +373,12 @@ def _build_topology() -> dict:
 
     topology = Topology(nodes=nodes, edges=edges)
     topology.update_overall_status()
+    # REQ-GHA-036: a public system's outage is the provider's, not ours; the overall
+    # status is that of the systems GlassHood monitors from inside
+    if outside:
+        own = Topology(nodes=[n for n in nodes if n.project not in outside], edges=[])
+        own.update_overall_status()
+        topology.overall_status = own.overall_status
     result = topology.to_dict()
 
     result["topology_diff"] = get_diff()
@@ -378,6 +396,34 @@ def _build_topology() -> dict:
     _apply_anomaly_classification(result, anomaly_list)
 
     return result
+
+
+def _outside_products() -> set:
+    """Products whose landscape is an outside view (REQ-GHA-036): no status rule applies to them."""
+    try:
+        from src.api.routes.manifests import _load_manifests
+        return {m.get("product") for m in _load_manifests() if m.get("kind") == "outside_view"}
+    except Exception:
+        return set()
+
+
+def _tag_systems(nodes: list) -> None:
+    """Set project/env on every landscape box from the landscape file it comes from; a
+    discovered server takes its parent box's system. Boxes of no landscape stay empty."""
+    try:
+        from src.api.routes.manifests import _load_manifests
+        owner = {}
+        for m in _load_manifests():
+            for n in m.get("nodes", []) or []:
+                if n.get("id"):
+                    owner.setdefault(n["id"], (m.get("product", ""), m.get("environment", "")))
+    except Exception as e:
+        logger.debug(f"systems not tagged: {e}")
+        return
+    for node in nodes:
+        sys_ = owner.get(node.id) or owner.get((node.metrics or {}).get("_parent") or "")
+        if sys_ and not node.project:
+            node.project, node.env = sys_
 
 
 def _manifest_labels() -> dict:
