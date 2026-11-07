@@ -4,6 +4,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
 import { apiFetch, apiUrl } from '../utils/api'
+import { clock } from '../utils/time'
 
 const SEVERITY_COLORS = {
   ERROR: 'text-red-400',
@@ -95,7 +96,7 @@ export default function LogViewerModal({ nodeId, nodeLabel, nodeStatus, isDemo, 
             return (
               <div key={i} className="flex gap-3 py-0.5 hover:bg-surface/50 dark:hover:bg-purple-700/30 leading-relaxed">
                 <span className="text-gray-600 whitespace-nowrap shrink-0">
-                  {entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString() : '--:--:--'}
+                  {clock(entry.timestamp, { seconds: true }) || '--:--:--'}
                 </span>
                 <span className={`${sevColor} w-16 shrink-0`}>{entry.severity}</span>
                 <span className="text-gray-300 whitespace-pre-wrap break-all">{entry.message}</span>

@@ -32,7 +32,7 @@ You get the alarm, the part's log lines from the last 24 hours (warnings and err
 log lines of the parts connected to it. You may search the web for the exact error to see whether it
 is a known, common problem; say so only if a source supports it.
 Work out what happened, in what order, whether it is still going on, happened once, or comes back.
-Copy evidence lines exactly as given. Refer to parts by their label. Times as given in the lines.
+Copy evidence lines exactly as given. Refer to parts by their label. Times in UTC, as given in the lines.
 Answer in JSON only:
 {"executive_summary": "three or four plain sentences: what, impact, ongoing or not, what to do",
  "findings": [{"what": "...", "evidence": ["<log line>", ...]}],
