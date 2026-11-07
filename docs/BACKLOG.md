@@ -542,6 +542,7 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
   6. GlassHood only reads each system, through that system's own read-only access without stored keys, as for ColdVault. Nothing is installed in or changed inside the monitored systems except granting that read-only access.
   7. A system or part GlassHood cannot read says so in plain words and is never shown as healthy.
   8. GlassHood's view of itself shows a problem in GlassHood (for example its collectors failing or its AI review not running) as an alarm on its own landscape.
+  9. (Amended 2026-11-08, owner-confirmed) The projects panel and the home view show the systems in two groups: "9Robots systems" (the systems GlassHood monitors from inside: ColdVault, GlassHood, TestRobin) and "External systems" (public systems watched only from what they publish: GitHub, Cloudflare). Each group shows how many of its systems need attention. A system's group follows from its landscape file (an outside view is external, every other one a 9Robots system). Selecting a group shows only that group's systems, their alarms and their overview; selecting one system works as before.
 - **Priority:** P2
 - **Testable:** Yes (UI + API)
 - **Who builds:** Neo. Granting read access in TestRobin's AWS account and on GlassHood's own Azure resources is an infrastructure change and needs the owner's yes.
