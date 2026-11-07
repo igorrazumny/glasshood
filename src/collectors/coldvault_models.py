@@ -161,7 +161,8 @@ def _events(per_model: dict, lines: list[dict]) -> dict:
 _MAX_REQUESTS = 20   # questions whose outcome is looked up per reading
 _MAX_LINES = 200     # lines read per query; a full page may hide older lines
 _HOUR = 3600
-# Request-level outcomes already established: request_id -> {model, outcome, answered_by, at, read_at}.
+# Request-level outcomes already established, one per model and question (a question can fail
+# on several models in a chain): (model_id, request_id) -> {model, outcome, answered_by, at, read_at}.
 # Reused only for questions of the last hour, when a later reading of the lines fails.
 _facts: dict = {}
 
@@ -177,8 +178,8 @@ def _outcomes(model_id: str, ev: dict, billing: list[dict], looked_up: set) -> d
     """What happened to each question this model failed, judged per request_id (never
     from hourly totals). ColdVault writes one billing line per question, naming the model
     the user chose, with how many model answers it completed: completed > 0 means the
-    question was answered (by the backup named in that question's switch-to-backup line,
-    or by this model itself on a retry when no backup was tried). A question whose billing
+    question was answered: by the end of that question's chain of switches when its lines
+    name one, otherwise by a model the lines do not establish. A question whose billing
     line was certainly read (looked_up) and is missing or completed nothing got no reply;
     any other question's outcome is unknown. Returns the counts and per-request facts."""
     completed: dict = {}   # request_id -> completed answers; None when the line has no usable count
@@ -198,12 +199,10 @@ def _outcomes(model_id: str, ev: dict, billing: list[dict], looked_up: set) -> d
         if seen and done is None:
             continue                                   # unknown
         if seen and done > 0:
-            by = ev["backup_by_request"].get(rid)
-            if by or rid in ev.get("answerer_unknown", set()):
-                outcome = "answered"                   # by the chain's end, or by a model not established
-            else:
-                outcome = "retried"                    # no backup tried: it answered itself on a retry
-            facts[rid] = {"model": model_id, "outcome": outcome, "answered_by": by}
+            # the billing line names the chosen model, so without a switch line the
+            # answering model is not established (never inferred to be a retry)
+            facts[rid] = {"model": model_id, "outcome": "answered",
+                          "answered_by": ev["backup_by_request"].get(rid)}
         elif (seen and done == 0) or (not seen and rid in looked_up):
             facts[rid] = {"model": model_id, "outcome": "no reply", "answered_by": None}
         else:
@@ -214,8 +213,7 @@ def _outcomes(model_id: str, ev: dict, billing: list[dict], looked_up: set) -> d
 
 def _counts(facts: dict) -> dict:
     answered = [f for f in facts.values() if f["outcome"] == "answered"]
-    retried = sum(1 for f in facts.values() if f["outcome"] == "retried")
-    return {"recovered": len(answered) + retried, "retried": retried,
+    return {"recovered": len(answered), "unnamed": sum(1 for f in answered if not f["answered_by"]),
             "unanswered": sum(1 for f in facts.values() if f["outcome"] == "no reply"),
             "backups": sorted({f["answered_by"] for f in answered if f["answered_by"]}),
             "facts": facts}
@@ -260,8 +258,8 @@ def refresh(metrics: dict, metrics_status: dict, read_lines=_read_lines) -> None
     hour_ago = checked_at - _HOUR
     with _lock:
         previous = dict(_state.get("models") or {})
-        for rid in [r for r, f in _facts.items() if (f.get("at") or 0) < hour_ago]:
-            del _facts[rid]
+        for key in [k for k, f in _facts.items() if (f.get("at") or 0) < hour_ago]:
+            del _facts[key]
     models = {}
     for model_id, c in per_model.items():
         failed = c.get("failed", 0) + c.get("timed_out", 0)
@@ -275,15 +273,15 @@ def refresh(metrics: dict, metrics_status: dict, read_lines=_read_lines) -> None
                 out = _outcomes(model_id, ev, billing, looked_up)
                 with _lock:
                     for rid, f in out["facts"].items():
-                        _facts[rid] = {**f, "read_at": checked_at}
+                        _facts[(model_id, rid)] = {**f, "read_at": checked_at}
                 entry.update(name=ev["name"], reason=plain_reason(ev["reason"]) if ev["reason"] else "no reason given",
                              last_at=ev["last_at"], evidence=ev["evidence"], outcome_note="", **out)
             else:
                 # Lines not read now: only questions of the last hour established by an earlier
                 # reading are reused, as earlier facts; nothing is assigned to newer failures
                 with _lock:
-                    kept = {r: f for r, f in _facts.items()
-                            if f["model"] == model_id and (f.get("at") or 0) >= hour_ago}
+                    kept = {k[1]: f for k, f in _facts.items()
+                            if k[0] == model_id and (f.get("at") or 0) >= hour_ago}
                 out = _counts(kept)
                 note = lines_reason or "no failure lines found for this model"
                 if kept:
@@ -338,11 +336,11 @@ def _plural(n: int, word: str) -> str:
 def _outcome_words(m: dict) -> str:
     """What happened to the questions this model failed, from per-question evidence."""
     parts = []
-    by_backup = (m.get("recovered") or 0) - (m.get("retried") or 0)
-    if by_backup:
-        parts.append(f"{m.get('backup') or 'another model'} answered {_plural(by_backup, 'question')} in its place")
-    if m.get("retried"):
-        parts.append(f"it answered {_plural(m['retried'], 'question')} itself on a retry")
+    named = (m.get("recovered") or 0) - (m.get("unnamed") or 0)
+    if named:
+        parts.append(f"{m.get('backup')} answered {_plural(named, 'question')} in its place")
+    if m.get("unnamed"):
+        parts.append(f"{_plural(m['unnamed'], 'question')} got a reply from a model the log lines do not name")
     if m.get("unanswered"):
         parts.append(f"{_plural(m['unanswered'], 'question')} got no reply from any model")
     if m.get("unknown"):
@@ -374,15 +372,13 @@ def failures(provider_parts: dict) -> list:
         if m.get("unanswered"):
             severity, tail = "critical", f"{_plural(m['unanswered'], 'question')} got no reply"
             what += " Those users got no answer."
-        elif m.get("recovered") and not m.get("unknown") and m.get("retried") == m.get("recovered"):
-            severity, tail = "warning", "it answered on a retry"
-            what += " Users still got a reply."
         elif m.get("recovered") and not m.get("unknown"):
-            severity, tail = "warning", f"{backup or 'another model'} answered instead"
+            severity = "warning"
+            tail = f"{backup} answered instead" if backup and not m.get("unnamed") else "the question got a reply"
             what += " Users still got a reply, possibly from a different model than they chose."
         elif m.get("recovered"):
             severity, tail = "warning", (f"{backup} answered some questions in its place" if backup
-                                         else "some questions were answered on a retry")
+                                         else "some questions got a reply")
         else:
             severity, tail = "warning", "whether another model answered is not known"
         suspicion, directions = _where_to_look(reason, name)
