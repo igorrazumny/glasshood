@@ -37,10 +37,16 @@ that is "not checked" is not a problem. Do not invent problems the lines do not 
 Severity: "critical" only when users are affected now or data can be lost; otherwise "warning".
 If a problem is the same as an open one, return that open problem's id; otherwise id is null.
 Write titles in plain words for a business reader, at most 12 words, without the part's name.
+For each problem also explain it to a business reader, in plain words without log jargon, naming
+parts by their label: "what" says what is going wrong, what it affects (the part, and which users
+or functions where the lines show it) and how serious it is; "suspicion" is the most likely cause
+when the lines point to one, otherwise empty; "directions" are up to 3 other possible causes or
+places to look, one sentence each. Say "likely" or "possible": never state a cause as a fact.
 Copy evidence lines exactly as given, at most 5 per problem.
 Answer in JSON only:
 {"problems": [{"id": null, "part": "<part id>", "severity": "critical"|"warning",
- "title": "...", "evidence": ["<log line>", ...]}]}
+ "title": "...", "what": "...", "suspicion": "...", "directions": ["...", ...],
+ "evidence": ["<log line>", ...]}]}
 Return {"problems": []} when there is nothing real."""
 
 
@@ -69,7 +75,29 @@ def validate(answer, lines_by_part: dict, open_ids: set) -> list:
             continue
         seen.add((pid, part))
         out.append({"id": pid, "part": part, "severity": severity,
-                    "title": title.strip()[:160], "evidence": evidence})
+                    "title": title.strip()[:160], "evidence": evidence, "explanation": _explanation(p)})
+    return out
+
+
+def _explanation(p: dict):
+    """REQ-GHA-031: the plain explanation written with the alarm; None without a "what"."""
+    text = lambda v, n: v.strip()[:n] if isinstance(v, str) else ""  # noqa: E731
+    what = text(p.get("what"), 800)
+    if not what:
+        return None
+    directions = [text(d, 300) for d in (p.get("directions") or []) if text(d, 300)][:3]
+    return {"what": what, "suspicion": text(p.get("suspicion"), 400), "directions": directions}
+
+
+def landscape_names(topology: dict) -> dict:
+    """REQ-GHA-031 clause 5: a discovered server sits on the landscape inside its group's box
+    (for example "Confidential VM (MIG)"); name it by that box, not by its machine name."""
+    _, manifest_labels = ov._manifest_info()
+    out = {}
+    for n in topology.get("nodes") or []:
+        parent = (n.get("metrics") or {}).get("_parent")
+        if n.get("id") and parent in manifest_labels:
+            out[n["id"]] = manifest_labels[parent]
     return out
 
 
@@ -82,9 +110,10 @@ def run(topology: dict) -> None:
     """One review of every part that has a log location."""
     try:
         parts, lines_by_part, labels = [], {}, {}
+        shown_as = landscape_names(topology)
         for rec, log_filter in ov._walk_parts(topology):
-            labels[rec["id"]] = rec["label"]
-            parts.append({"id": rec["id"], "label": rec["label"], "status": rec["status"]})
+            labels[rec["id"]] = shown_as.get(rec["id"], rec["label"])
+            parts.append({"id": rec["id"], "label": labels[rec["id"]], "status": rec["status"]})
             if log_filter:
                 lines_by_part[rec["id"]] = ov._log_lines(log_filter, WARN_LINES_PER_PART, SAMPLE_LINES_PER_PART)
         if not lines_by_part:
@@ -94,7 +123,7 @@ def run(topology: dict) -> None:
         payload = ov.sanitize({"parts": parts, "open_problems": open_problems, "logs": lines_by_part})
         # The model sees the sanitised lines, so evidence is checked against those
         shown = payload["logs"]
-        text, _ = ov.call_model(REVIEW_PROMPT, json.dumps(payload, default=str), max_tokens=1500)
+        text, _ = ov.call_model(REVIEW_PROMPT, json.dumps(payload, default=str), max_tokens=3000)
         problems = validate(ov.parse_json(text), shown, {p["id"] for p in open_problems})
         engine.track_ai_review(problems, set(shown), labels)
         _status.update(reviewed_at=time.time(), error=None, problems=len(problems), parts=len(shown))

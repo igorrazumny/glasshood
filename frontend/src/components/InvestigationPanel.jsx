@@ -7,13 +7,14 @@ import { useEffect, useState } from 'react'
 import { Search, RefreshCw, ExternalLink } from 'lucide-react'
 import { apiFetch } from '../utils/api'
 import { alarmRef, patternLabel, errorText } from '../utils/alarms'
+import { dateTime } from '../utils/time'
 
 const BOX = 'rounded-lg p-3 bg-surface dark:bg-purple-900/50 border border-border dark:border-purple-700'
 const HEAD = 'text-xs font-semibold text-gray-500 dark:text-purple-300 uppercase'
 const TEXT = 'text-sm text-gray-700 dark:text-purple-100 mt-1 leading-relaxed'
 const BUTTON = 'w-full py-2 rounded-lg border border-blue-600 dark:border-blue-400 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-500/10 disabled:opacity-50 text-sm font-medium transition-colors flex items-center justify-center gap-2'
 
-const hhmm = iso => (iso ? new Date(iso).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '')
+const hhmm = iso => dateTime(iso)  // REQ-GHA-030: the reader's zone, named
 
 function Section({ title, children }) {
   return (
@@ -32,7 +33,7 @@ function Report({ report }) {
         <p className="text-sm text-gray-800 dark:text-purple-100 mt-1 leading-relaxed">{report.executive_summary}</p>
       </div>
       {report.findings?.length > 0 && (
-        <Section title="What was found">
+        <Section title="What was found (log times in UTC)">
           {report.findings.map((f, i) => (
             <div key={i} className="mt-2">
               <p className="text-sm text-gray-800 dark:text-purple-100">{f.what}</p>
@@ -50,7 +51,7 @@ function Report({ report }) {
         <Section title="What is happening"><p className={TEXT}>{report.what_is_happening}</p></Section>
       )}
       {report.timeline?.length > 0 && (
-        <Section title="Timeline">
+        <Section title="Timeline (UTC, as in the logs)">
           <ul className="mt-1 space-y-0.5">
             {report.timeline.map((t, i) => (
               <li key={i} className="text-sm text-gray-700 dark:text-purple-100">

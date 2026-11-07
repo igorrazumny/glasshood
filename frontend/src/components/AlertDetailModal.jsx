@@ -6,6 +6,7 @@ import { X, AlertTriangle, AlertOctagon, Info, CheckCircle, Shield } from 'lucid
 import { apiFetch } from '../utils/api'
 import { alarmTitle, alarmWhen, alarmKindLabel, alarmTag, alarmRef } from '../utils/alarms'
 import InvestigationPanel from './InvestigationPanel'
+import { dateTime } from '../utils/time'
 
 // REQ-009: severity styles pair light (bg-100 + text-700 + border-300) with
 // dark (bg-500/10 + text-400 + border-500/30) so the icon + badge read on
@@ -61,6 +62,7 @@ export default function AlertDetailModal({ alert, onClose, currentUser = '' }) {
 
   if (!alert) return null
   const canAct = fresh ? fresh.can_act : null  // null: not known yet
+  const ex = (fresh || alert).explanation  // REQ-GHA-031
 
   const style = SEVERITY_STYLE[alert.severity] || SEVERITY_STYLE.info
   const Icon = style.icon
@@ -138,6 +140,34 @@ export default function AlertDetailModal({ alert, onClose, currentUser = '' }) {
               ? ' A critical one stays until someone acknowledges it.' : ' It ends when the review no longer sees it.'}
           </p>
         )}
+        {/* REQ-GHA-031: what is happening and where to look, in plain words, before any log line */}
+        {alert.kind === 'ai' && ex?.what && (
+          <div className="space-y-3 mb-3">
+            <div className={`rounded-lg p-3 ${style.bg} border ${style.border}`}>
+              <span className="text-xs font-semibold text-gray-500 dark:text-purple-300 uppercase">What is happening</span>
+              <p className="text-sm text-gray-800 dark:text-purple-100 mt-1 leading-relaxed">{ex.what}</p>
+            </div>
+            {(ex.suspicion || ex.directions?.length > 0) && (
+              <div className="rounded-lg p-3 bg-surface dark:bg-purple-900/50 border border-border dark:border-purple-700">
+                <span className="text-xs font-semibold text-gray-500 dark:text-purple-300 uppercase">Where to look</span>
+                {ex.suspicion && (
+                  <p className="text-sm text-gray-700 dark:text-purple-100 mt-1 leading-relaxed">
+                    <strong>Main suspicion:</strong> {ex.suspicion}
+                  </p>
+                )}
+                {ex.directions?.length > 0 && (
+                  <ul className="mt-1 space-y-0.5">
+                    {ex.directions.map((d, i) => (
+                      <li key={i} className="text-sm text-gray-700 dark:text-purple-100 flex items-start gap-2">
+                        <span className="text-gray-500 dark:text-purple-300">{'>'}</span><span>{d}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Anomaly alerts: rich classified presentation */}
         {isAnomaly && ac ? (
@@ -198,7 +228,7 @@ export default function AlertDetailModal({ alert, onClose, currentUser = '' }) {
                 </div>
                 <div className="flex items-center justify-between text-xs text-gray-500 dark:text-purple-300">
                   <span>First seen</span>
-                  <span>{alert.first_seen ? new Date(alert.first_seen).toLocaleString() : '-'}</span>
+                  <span>{dateTime(alert.first_seen) || '-'}</span>
                 </div>
               </div>
             </details>
@@ -238,14 +268,20 @@ export default function AlertDetailModal({ alert, onClose, currentUser = '' }) {
               </div>
             )}
 
-            {/* REQ-GHA-029: the log lines the AI review saw */}
+            {/* REQ-GHA-029/031: the log lines the AI review saw, the evidence, closed by default */}
             {alert.evidence?.length > 0 && (
-              <div className="rounded-lg p-3 bg-surface dark:bg-purple-900/50 border border-border dark:border-purple-700">
-                <span className="text-xs font-semibold text-gray-500 dark:text-purple-300 uppercase">What the logs say</span>
-                {alert.evidence.map((e, i) => (
-                  <p key={i} className="text-[11px] font-mono text-gray-600 dark:text-purple-200 break-words mt-1">{e}</p>
-                ))}
-              </div>
+              <details className="rounded-lg bg-surface dark:bg-purple-900/50 border border-border dark:border-purple-700">
+                <summary className="p-3 text-xs font-semibold text-gray-500 dark:text-purple-300 uppercase cursor-pointer hover:text-gray-700 dark:hover:text-purple-200">
+                  View the related log entries ({alert.evidence.length})
+                </summary>
+                <div className="px-3 pb-3">
+                  {/* REQ-GHA-030 clause 2: quoted lines keep their own time, which is UTC */}
+                  <p className="text-[11px] text-gray-500 dark:text-purple-300">Times in these log lines are UTC.</p>
+                  {alert.evidence.map((e, i) => (
+                    <p key={i} className="text-[11px] font-mono text-gray-600 dark:text-purple-200 break-words mt-1">{e}</p>
+                  ))}
+                </div>
+              </details>
             )}
 
             {/* Recommended action */}
@@ -256,10 +292,10 @@ export default function AlertDetailModal({ alert, onClose, currentUser = '' }) {
               </div>
             )}
 
-            {/* Technical details — collapsible */}
+            {/* Technical details — collapsible ("Details" on an AI alarm, REQ-GHA-031) */}
             <details className="rounded-lg bg-surface dark:bg-purple-900/50 border border-border dark:border-purple-700">
               <summary className="p-3 text-xs font-semibold text-gray-500 dark:text-purple-300 uppercase cursor-pointer hover:text-gray-700 dark:hover:text-purple-200">
-                Technical Details
+                {alert.kind === 'ai' ? 'Details' : 'Technical Details'}
               </summary>
               <div className="px-3 pb-3 space-y-1 text-xs text-gray-600 dark:text-purple-200">
                 {(alert.reasons?.length ? alert.reasons : [alert.message]).map((r, i) => (
