@@ -219,12 +219,16 @@
         </p>
         <p>In this use case &mdash; monitoring a solution on Google Cloud &mdash; the collectors read:</p>
         <ul class="tight">
-          <li><strong>Asset / topology discovery</strong> &mdash; enumerates the target&rsquo;s compute resources to build the topology graph (~5&nbsp;min).</li>
-          <li><strong>Monitoring metrics</strong> &mdash; load-balancer latency, request count, VM CPU (60&nbsp;s).</li>
-          <li><strong>Error logs</strong> &mdash; error-severity entries in a rolling 15-minute window (60&nbsp;s).</li>
-          <li><strong>Storage stats</strong> &mdash; object count, size and versioning of a data bucket (~5&nbsp;min).</li>
+          <li><strong>Asset / topology discovery</strong> &mdash; enumerates the target&rsquo;s compute resources to build the topology graph, every 10&nbsp;minutes.</li>
+          <li><strong>Monitoring metrics</strong> &mdash; load-balancer latency, request count over the last hour and VM CPU, every 10&nbsp;minutes.</li>
+          <li><strong>Error logs</strong> &mdash; every 10&nbsp;minutes, each read covering the last 15&nbsp;minutes of error-severity entries, so the windows overlap and nothing between reads is missed.</li>
+          <li><strong>Storage stats</strong> &mdash; object count, size and versioning of a data bucket, every 10&nbsp;minutes.</li>
           <li><strong>The target app&rsquo;s own health and metrics API</strong> &mdash; over HTTPS, every 10 minutes: its health check anonymously, and its metrics with a one-hour identity token of GlassHood&rsquo;s own (below).</li>
         </ul>
+        <p>
+          Every collector runs on one shared 10-minute interval, and so do the per-part checks from the landscape file;
+          the AI overview and the AI log review run every 3 hours.
+        </p>
         <p>
           <strong>ColdVault&rsquo;s own metrics.</strong> Every 10 minutes GlassHood also reads coldvault.ai/api/metrics with an
           identity token of its own, valid for at most one hour and only for that address. Its Azure identity is exchanged

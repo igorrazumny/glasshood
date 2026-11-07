@@ -243,3 +243,13 @@ def test_glasshood_reads_coldvault_metrics_with_its_own_token():
     assert "(30 s)" not in flat and "health/metrics API" not in flat
     for leak in ("glasshood-coldvault", "glasshood-azure-pool", "braintransplant", "iam.gserviceaccount.com"):
         assert leak not in _HTML.lower(), leak
+
+
+def test_the_collection_cadences_are_the_ones_that_run():
+    # REQ-GHA-018, amended 2026-11-07 (second): one shared 10-minute interval for every collector (REQ-GHA-016);
+    # the AI overview and the AI log review every 3 hours.
+    sec = _HTML.split('<section class="pd-section" id="collection">', 1)[1].split("</section>", 1)[0]
+    assert "(60&nbsp;s)" not in sec and "(~5&nbsp;min)" not in sec and "(30&nbsp;s)" not in sec
+    assert sec.count("every 10&nbsp;minutes") == 4
+    assert "Every collector runs on one shared 10-minute interval" in " ".join(sec.split())
+    assert "the AI overview and the AI log review run every 3 hours" in " ".join(sec.split())
