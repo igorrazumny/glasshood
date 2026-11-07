@@ -2,20 +2,25 @@
 # Purpose: REQ-GHA-034 — a failing AI model, and the backup that answered for it, is visible
 
 import json
+from datetime import datetime, timedelta, timezone
 
 from src.collectors import coldvault_models as cm
+
+
+def _ago(minutes):
+    return (datetime.now(timezone.utc) - timedelta(minutes=minutes)).isoformat()
 from src.rules import engine
 
 READ = {"read": True, "reason": ""}
 
-OPUS_ERROR = {"timestamp": "2026-11-07T20:26:11.880Z", "severity": "ERROR", "request_id": "r1",
+OPUS_ERROR = {"timestamp": _ago(10), "severity": "ERROR", "request_id": "r1",
               "logger": "src.llm.providers.claude_streaming",
               "message": "Claude stream failed: Claude Opus 4.7 - RateLimitError: Error code: 429 - Quota exceeded"}
-OPUS_FALLBACK = {"timestamp": "2026-11-07T20:26:11.881Z", "severity": "INFO", "request_id": "r1",
+OPUS_FALLBACK = {"timestamp": _ago(10), "severity": "INFO", "request_id": "r1",
                  "message": "Fallback: Claude Opus 4.7 failed (Error code: 429 - quota), trying Claude Sonnet 4.6"}
 # As ColdVault writes it: the billing line names the model the user chose, and
 # completed=1 says the question was answered (here by the backup)
-SONNET_BILLING = {"timestamp": "2026-11-07T20:26:15Z", "severity": "INFO", "request_id": "r1",
+SONNET_BILLING = {"timestamp": _ago(9), "severity": "INFO", "request_id": "r1",
                   "message": "billing", "event": "billing", "model": "Claude Opus 4.7",
                   "completed": 1, "errors": 0}
 
@@ -36,6 +41,7 @@ def _metrics(per_model):
 
 def _setup(monkeypatch, per_model, failure_lines=(), billing_lines=()):
     monkeypatch.setattr(cm, "_source", lambda: {"project": "p", "filter": "app"})
+    cm._facts.clear()
     cm.refresh(_metrics(per_model), READ, read_lines=_reader(failure_lines, billing_lines))
 
 
@@ -99,7 +105,7 @@ def test_reasons_in_plain_words():
     assert cm.plain_reason("") == "no reason given"
 
 
-OPUS_ERROR_R2 = {**OPUS_ERROR, "request_id": "r2", "timestamp": "2026-11-07T20:30:00Z"}
+OPUS_ERROR_R2 = {**OPUS_ERROR, "request_id": "r2", "timestamp": _ago(5)}
 SONNET_UNRELATED = {**SONNET_BILLING, "request_id": "unrelated-r9"}
 TWO_FAILED = {"claude-opus-4-7": {"answered": 0, "failed": 2, "timed_out": 0},
               "claude-sonnet-4-6": {"answered": 1, "failed": 0, "timed_out": 0}}
@@ -127,6 +133,7 @@ def test_unreadable_lines_never_claim_no_reply(monkeypatch):
     monkeypatch.setattr(cm, "_source", lambda: {"project": "p", "filter": "app"})
     with cm._lock:
         cm._state["models"] = {}
+    cm._facts.clear()
 
     def broken(*a, **k):
         raise PermissionError("denied")
@@ -164,12 +171,66 @@ def test_a_billing_line_that_completed_nothing_is_no_reply(monkeypatch):
     assert f["severity"] == "critical"
 
 
-def test_recovery_without_a_named_backup_says_another_model(monkeypatch):
+def test_a_full_page_of_billing_lines_leaves_missing_questions_unknown(monkeypatch):
+    # shadow C2a: 200 lines returned may hide r1's billing line; r1 is unknown, not "no reply"
+    filler = [{**SONNET_BILLING, "request_id": "r2", "message": "billing", "event": "billing"}] * 200
+    _setup(monkeypatch, TWO_FAILED, [OPUS_ERROR_R2, OPUS_FALLBACK, OPUS_ERROR], filler)
+    [f] = cm.failures({"claude": "cv-vertex"})
+    assert f["severity"] == "warning" and "got no reply" not in f["explanation"]["what"]
+    m = cm.snapshot()["models"]["claude-opus-4-7"]
+    assert (m["recovered"], m["unanswered"], m["unknown"]) == (1, 0, 1)
+
+
+def test_old_outcomes_are_not_reused_for_newer_failures(monkeypatch):
+    # shadow C2b: outcomes of questions older than an hour are not applied to this hour
+    old_fail = {**OPUS_FALLBACK, "timestamp": _ago(130)}
+    old_err = {**OPUS_ERROR, "timestamp": _ago(130)}
     _setup(monkeypatch, {"claude-opus-4-7": {"answered": 0, "failed": 1, "timed_out": 0}},
+           [old_fail, old_err], [SONNET_BILLING])
+
+    def broken(*a, **k):
+        raise PermissionError()
+    cm.refresh(_metrics({"claude-opus-4-7": {"answered": 0, "failed": 1, "timed_out": 0}}), READ, read_lines=broken)
+    m = cm.snapshot()["models"]["claude-opus-4-7"]
+    assert (m["recovered"], m["unanswered"], m["unknown"]) == (0, 0, 1)
+    [f] = cm.failures({"claude": "cv-vertex"})
+    assert "not known" in f["title"] and "answered" not in f["title"].split(";")[1].replace("whether another model answered", "")
+
+
+def test_earlier_outcomes_cover_only_their_own_questions_and_say_so(monkeypatch):
+    _setup(monkeypatch, {"claude-opus-4-7": {"answered": 0, "failed": 1, "timed_out": 0}},
+           [OPUS_FALLBACK, OPUS_ERROR], [SONNET_BILLING])
+
+    def broken(*a, **k):
+        raise PermissionError()
+    # the hour now holds three failures; only one was established earlier
+    cm.refresh(_metrics({"claude-opus-4-7": {"answered": 0, "failed": 3, "timed_out": 0}}), READ, read_lines=broken)
+    m = cm.snapshot()["models"]["claude-opus-4-7"]
+    assert (m["recovered"], m["unknown"]) == (1, 2)
+    assert "from the reading at" in m["outcome_note"]
+    [f] = cm.failures({"claude": "cv-vertex"})
+    assert "from the reading at" in f["explanation"]["what"] and f["severity"] == "warning"
+
+
+def test_note_is_shown_even_when_every_outcome_is_known(monkeypatch):
+    _setup(monkeypatch, {"claude-opus-4-7": {"answered": 0, "failed": 1, "timed_out": 0}},
+           [OPUS_FALLBACK, OPUS_ERROR], [SONNET_BILLING])
+
+    def broken(*a, **k):
+        raise PermissionError()
+    cm.refresh(_metrics({"claude-opus-4-7": {"answered": 0, "failed": 1, "timed_out": 0}}), READ, read_lines=broken)
+    [f] = cm.failures({"claude": "cv-vertex"})
+    assert "Claude Sonnet 4.6 answered instead" in f["title"]
+    assert "PermissionError" in f["explanation"]["what"]
+
+
+def test_a_retry_by_the_same_model_is_called_a_retry(monkeypatch):
+    # shadow W1
+    _setup(monkeypatch, {"claude-opus-4-7": {"answered": 1, "failed": 1, "timed_out": 0}},
            [OPUS_ERROR], [SONNET_BILLING])
     [f] = cm.failures({"claude": "cv-vertex"})
-    assert f["severity"] == "warning" and f["title"].endswith("another model answered instead")
-    assert "None" not in f["title"] and "None" not in f["explanation"]["what"]
+    assert f["title"].endswith("it answered on a retry") and "None" not in f["title"]
+    assert "itself on a retry" in f["explanation"]["what"] and "in its place" not in f["explanation"]["what"]
 
 
 def test_one_event_raises_one_alarm_not_two(monkeypatch):
