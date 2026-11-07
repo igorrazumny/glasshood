@@ -186,7 +186,43 @@ def _resolve_node(node_id: str) -> tuple[str, str | None, str | None]:
         # Known runtime node but no template logs → safe project-scoped default.
         return ("manifest_default", GCP_PROJECT_ID, DEFAULT_FILTER)
 
+    # 3) A box inside a discovered VM (its container, app, embeddings): only the VM
+    #    itself is in the discovery cache, so resolve the child from that VM's own
+    #    cache entry and its parent's children_template (REQ-GHA-032). A child
+    #    without its own logs shows the lines of the box it runs in.
+    found = _resolve_vm_child(node_id)
+    if found:
+        return found
+
     return ("unknown", None, None)
+
+
+def _resolve_vm_child(node_id: str):
+    from src.collectors import manifest_metrics
+
+    for vm_id, cached in manifest_metrics.get_all_statuses().items():
+        if not (vm_id.startswith("vm-") and node_id.startswith(vm_id + "-") and cached.get("_parent")):
+            continue
+        template = manifest_metrics.get_children_template(cached["_parent"]) or []
+        tree = manifest_metrics.resolve_children_template(
+            template, vm_id[3:], cached.get("instance_id", ""))
+
+        def walk(nodes, inherited):
+            for n in nodes:
+                logs = (n.get("monitoring") or {}).get("logs") or []
+                own = logs[0] if logs and logs[0].get("filter") and logs[0].get("project") else None
+                cfg = own or inherited
+                if n.get("id") == node_id:
+                    return cfg
+                hit = walk(n.get("children") or [], cfg)
+                if hit:
+                    return hit
+            return None
+
+        cfg = walk(tree, None)
+        if cfg:
+            return ("discovered_vm", cfg["project"], cfg["filter"])
+    return None
 
 
 @router.get("/api/logs/{node_id}")
