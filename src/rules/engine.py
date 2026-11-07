@@ -314,7 +314,14 @@ def evaluate_rules(nodes: list, snapshot: dict,
                 if alert:
                     candidates.append(alert)
             else:  # node scope
+                # REQ-GHA-027 clause 2 / REQ-GHA-034: a provider box whose status comes from a
+                # failing model already has that model's alarm; its status rule adds no second one
+                model_parts = {k[1] for k in _active if str(k[0]).startswith("model:")}
                 for node in nodes:
+                    if node.id in model_parts and rule.get("condition", {}).get("metric") == "status":
+                        checked.add((_group(rule), node.id))
+                        rule_checked = True
+                        continue
                     node_checked, alert = _check_node_rule(rule, node, labels.get(node.id))
                     if node_checked:
                         checked.add((_group(rule), node.id))
