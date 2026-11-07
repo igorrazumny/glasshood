@@ -3,7 +3,7 @@
 // Run: node frontend/src/utils/panels.test.js
 
 import assert from 'node:assert/strict'
-import { PANELS, clampWidth, loadPanel, savePanel, dragWidth } from './panels.js'
+import { PANELS, MIN_LANDSCAPE, clampWidth, fitPanels, loadPanel, savePanel, dragWidth } from './panels.js'
 
 let failed = 0
 function test(name, fn) {
@@ -20,9 +20,37 @@ test('a width is never below the readable minimum', () => {
   assert.equal(clampWidth('left', 10, 1440), PANELS.left.min)
 })
 
-test('a width never takes more than half the window', () => {
-  assert.equal(clampWidth('right', 2000, 1200), 600)
+test('one open panel always leaves the landscape its room', () => {
+  assert.equal(clampWidth('right', 2000, 1000), 1000 - MIN_LANDSCAPE - 16)
   assert.equal(clampWidth('right', 2000, 2560), PANELS.right.max)
+})
+
+test('two wide panels on a 1000px window still leave the landscape visible', () => {
+  for (const vw of [1000, 1024, 1280]) {
+    const w = fitPanels({ left: { open: true, width: 500 }, right: { open: true, width: 500 } }, vw)
+    const landscape = vw - (w.left + 8) - (w.right + 8)
+    assert.ok(landscape >= MIN_LANDSCAPE, `${vw}px: landscape ${landscape}`)
+    assert.ok(w.left >= PANELS.left.min && w.right >= PANELS.right.min)
+  }
+})
+
+test('saved wide panels are fitted again after the window shrinks', () => {
+  const s = memory()
+  savePanel('left', { open: true, width: 520 }, s)
+  savePanel('right', { open: true, width: 760 }, s)
+  const w = fitPanels({ left: loadPanel('left', s), right: loadPanel('right', s) }, 1024)
+  assert.ok(1024 - w.left - w.right - 16 >= MIN_LANDSCAPE)
+})
+
+test('a closed panel takes no room and gives it to the other', () => {
+  const w = fitPanels({ left: { open: false, width: 300 }, right: { open: true, width: 760 } }, 1440)
+  assert.equal(w.left, 0)
+  assert.equal(w.right, PANELS.right.max)
+})
+
+test('on a phone the panels keep their minimum and open over the landscape', () => {
+  const w = fitPanels({ left: { open: true, width: 400 }, right: { open: true, width: 400 } }, 390)
+  assert.deepEqual(w, { left: PANELS.left.min, right: PANELS.right.min })
 })
 
 test('a width inside the limits is kept', () => {
@@ -54,6 +82,17 @@ test('blocked or broken storage still gives a working panel', () => {
   savePanel('right', { open: true, width: 400 }, broken)
   const s = memory(); s.setItem('glasshood.panel.left', '{not json')
   assert.deepEqual(loadPanel('left', s), { open: true, width: PANELS.left.width })
+})
+
+test('storage that throws when merely touched still gives a working panel', () => {
+  const desc = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, get() { throw new Error('SecurityError') } })
+  try {
+    assert.deepEqual(loadPanel('right'), { open: true, width: PANELS.right.width })
+    savePanel('right', { open: true, width: 400 })
+  } finally {
+    if (desc) Object.defineProperty(globalThis, 'localStorage', desc); else delete globalThis.localStorage
+  }
 })
 
 if (failed) { console.error(`${failed} failed`); process.exit(1) }
