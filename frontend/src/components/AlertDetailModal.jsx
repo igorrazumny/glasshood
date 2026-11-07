@@ -140,8 +140,8 @@ export default function AlertDetailModal({ alert, onClose, currentUser = '' }) {
               ? ' A critical one stays until someone acknowledges it.' : ' It ends when the review no longer sees it.'}
           </p>
         )}
-        {/* REQ-GHA-031: what is happening and where to look, in plain words, before any log line */}
-        {alert.kind === 'ai' && ex?.what && (
+        {/* REQ-GHA-031/034: what is happening and where to look, in plain words, before any log line */}
+        {ex?.what && (
           <div className="space-y-3 mb-3">
             <div className={`rounded-lg p-3 ${style.bg} border ${style.border}`}>
               <span className="text-xs font-semibold text-gray-500 dark:text-purple-300 uppercase">What is happening</span>

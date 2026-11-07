@@ -311,6 +311,11 @@ def _build_topology() -> dict:
     from src.collectors.gcp_resources import get_findings
     part_labels = _manifest_labels()
     track_findings(get_findings(), nodes, part_labels)
+    # REQ-GHA-034: a failing AI model is an alarm on its provider's box
+    from src.collectors import coldvault_models
+    from src.rules.engine import track_model_failures
+    track_model_failures(coldvault_models.failures(coldvault_models.provider_parts()),
+                         coldvault_models.snapshot()["read"], part_labels)
     # Only metrics with a reading can end an alarm: a failed query is not a recovery
     anomaly_parts = {m: p for m, p in (monitoring_stats.get("parts") or {}).items()
                      if monitoring_stats.get(m) is not None}

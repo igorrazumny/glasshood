@@ -36,6 +36,7 @@ const STATUS_COLORS = {
   dynamic: 'var(--status-inactive)',
   'not monitored': 'var(--status-inactive)',
   'not checked': 'var(--status-inactive)',  // REQ-GHA-023: outside service GlassHood cannot check
+  idle: 'var(--status-inactive)',  // REQ-GHA-034: a model provider with no calls in the last hour
 }
 
 // Cross-file invariant guard: the structural tests expect these hex values
@@ -56,6 +57,7 @@ const STATUS_COLORS_HEX_REFERENCE = {
   dynamic: '#94a3b8',
   'not monitored': '#94a3b8',
   'not checked': '#94a3b8',
+  idle: '#94a3b8',
 }
 
 // REQ-008: when status is healthy/deployed, the node border is a quiet slate.

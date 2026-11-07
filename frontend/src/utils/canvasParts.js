@@ -74,7 +74,7 @@ export function statsNodes(topology, canvas) {
 // a member's stronger error still wins. Statuses that carry no health are ignored.
 // Same ranking the canvas used before (unlisted statuses rank with unknown).
 const GROUP_PRIORITY = { healthy: 0, unknown: 1, disabled: 1, degraded: 2, error: 3 }
-const NO_HEALTH = new Set(['not monitored', 'not checked'])
+const NO_HEALTH = new Set(['not monitored', 'not checked', 'idle'])
 
 export function worstStatus(statuses) {
   let worst = null

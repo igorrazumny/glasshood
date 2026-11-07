@@ -42,6 +42,14 @@ async def poll_once():
     # Metrics: GlassHood's own short-lived identity token, no key (REQ-GHA-025)
     await _poll_metrics()
 
+    # REQ-GHA-034: which models failed, why, and who answered instead
+    try:
+        from src.collectors import coldvault_models
+        await asyncio.get_running_loop().run_in_executor(
+            None, coldvault_models.refresh, _metrics, dict(_metrics_status))
+    except Exception as e:
+        logger.warning(f"ColdVault model failures not read: {e}")
+
     _last_poll = time.time()
     _last_error = ""
 

@@ -6,6 +6,7 @@ import { X, FileText, Brain, AlertTriangle, CheckCircle, RefreshCw, Clock, Cpu }
 import { apiFetch } from '../utils/api'
 import { canRecheck, describeRecheck, recheckError, PARTNER_NOTE, WAKE_NOTE } from '../utils/mcpRecheck'
 import { overviewStamp, isStale } from '../utils/overview.js'
+import { clock } from '../utils/time'
 import LogViewerModal from './LogViewerModal'
 
 const STATUS_COLORS = {
@@ -189,7 +190,8 @@ export default function NodeDetailModal({ node, onClose, isDemo, hideCosts }) {
           const ago = lastPoll ? Math.round(nowSec - lastPoll) : null
           const nextIn = ago !== null ? Math.max(0, interval - ago) : null
           const overdue = ago !== null && ago > interval
-          const visibleMetrics = Object.entries(m).filter(([k]) => !k.startsWith('_') && k !== 'note')
+          const visibleMetrics = Object.entries(m).filter(([k]) => !k.startsWith('_') && k !== 'note' && k !== 'models')
+          const models = Array.isArray(m.models) ? m.models : null
           void tick // trigger re-render on tick
           return (
             <div className="mb-4">
@@ -202,6 +204,44 @@ export default function NodeDetailModal({ node, onClose, isDemo, hideCosts }) {
               {ago !== null && (
                 <div className={`mb-2 text-xs ${overdue ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-500 dark:text-purple-300'}`}>
                   Checked {_formatAge(ago)} · {overdue ? 'refresh pending' : `Next in ${nextIn}s`}
+                </div>
+              )}
+              {/* REQ-GHA-034: each model of this provider, as ColdVault reported its calls */}
+              {models && (
+                <div className="mb-2">
+                  {models.length === 0 ? (
+                    <div className="text-sm text-gray-500 dark:text-purple-300">No calls to these models in the last hour.</div>
+                  ) : (
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-xs text-gray-500 dark:text-purple-300 text-left">
+                          <th className="font-normal pb-1">Model (last hour)</th>
+                          <th className="font-normal pb-1 text-right">Answered</th>
+                          <th className="font-normal pb-1 text-right">Failed</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {models.map(md => {
+                          const failed = (md.failed || 0) + (md.timed_out || 0)
+                          return (
+                            <tr key={md.id} className="align-top">
+                              <td className="py-0.5 text-gray-800 dark:text-purple-100">
+                                {md.name || md.id}
+                                {failed > 0 && (
+                                  <div className="text-xs text-gray-500 dark:text-purple-300">
+                                    {md.reason}{md.backup ? ` · ${md.backup} answered instead` : ' · no other model answered'}
+                                    {md.last_at ? ` · last ${clock(md.last_at)}` : ''}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-0.5 text-right font-mono text-gray-800 dark:text-purple-100">{md.answered}</td>
+                              <td className={`py-0.5 text-right font-mono ${failed > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-800 dark:text-purple-100'}`}>{failed}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  )}
                 </div>
               )}
               <div className="grid grid-cols-2 gap-2">

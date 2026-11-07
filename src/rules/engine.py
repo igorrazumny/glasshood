@@ -408,6 +408,28 @@ def track_ai_review(problems: list, reviewed_parts: set, labels: Optional[dict] 
         _apply(candidates, checked, now)
 
 
+def track_model_failures(failures: list, read: bool, labels: Optional[dict] = None) -> None:
+    """A failing AI model of the monitored system as an alarm on its provider's box
+    (REQ-GHA-034). failures: [{model, part, severity, title, explanation, evidence}].
+    When the figures were read, a model no longer failing ends its alarm; when they
+    were not read, nothing changes."""
+    labels = labels or {}
+    with _lock:
+        checked = {k for k in _active if str(k[0]).startswith("model:")} if read else set()
+        candidates = []
+        for f in failures:
+            rule = {"id": "model_failure", "group": f"model:{f['model']}", "severity": f["severity"],
+                    "kind": "alarm", "description": "AI model failing"}
+            part = f["part"]
+            checked.add((rule["group"], part))
+            alert = _candidate(rule, part, labels.get(part), f"Model failing: {f['title']}")
+            alert.title = f"{labels[part]}: {f['title']}" if part in labels else f["title"]
+            alert.explanation = f.get("explanation")
+            alert.evidence = list(f.get("evidence") or [])
+            candidates.append(alert)
+        _apply(candidates, checked, time.time())
+
+
 def _kept(a: Alert) -> bool:
     return a.kind == "ai" or a.report is not None
 
