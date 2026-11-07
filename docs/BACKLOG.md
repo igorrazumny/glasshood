@@ -471,3 +471,58 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Testable:** Yes (API + UI; one live AI alarm)
 - **Who builds:** Neo.
 - **Status:** implemented 2026-11-07 (the review writes what/suspicion/directions with each problem; the alarm window shows them first, the log lines closed under "View the related log entries", "Details" closed; a discovered server is named by its landscape box). Live check on the next review outstanding.
+
+## REQ-GHA-032: Every box on the landscape opens its own logs
+
+- **Goal:** Every box on the landscape has a View Logs button, and it opens the log lines that belong to that box, read from that system's own logs in its own project. No box says "No logs configured for this node" or "Unknown node": not the outside services (RedPill, Vertex, OpenAI, xAI, DashScope, mail), not the visitor entry, the firewall rules, the error counter, alert rules and notification channels, and not the parts GlassHood found itself (load balancer pieces, the machine group).
+- **Why:** Owner, 2026-11-07: clicking a box and its logs button sometimes says no logs are connected.
+- **Target state:**
+  1. A box with its own logs (load balancer, database, machines and so on) shows those, as today.
+  2. The visitor entry shows the load balancer's request lines.
+  3. A firewall rule shows the record of changes to that rule.
+  4. The error counter, alert rules and notification channels show the record of changes to them.
+  5. An outside service shows the system's own lines that mention that service (its calls to it and their errors).
+  6. A part GlassHood found itself shows the same lines as the landscape box it belongs to.
+  7. If a box had no log lines in the last hour, the window says so in plain words and shows that box's most recent lines from the last 7 days, each with its time.
+  8. GlassHood only reads; nothing in the monitored system is changed or switched on (for example firewall connection logging stays as it is).
+  9. The lines shown are chosen from what is clicked, never from text the browser sends (REQ-704 stays).
+  10. A box GlassHood cannot read says why in plain words; never an empty window without a reason.
+- **Owner decision, same day:** the Error counter, Alert rules and Notification channels boxes are removed from the ColdVault landscape, since ColdVault deleted those resources (architect, REQ-207, 2026-11-07 18:38Z).
+- **Priority:** P2
+- **Testable:** Yes (UI + API: for every box on the live landscape the logs call returns lines or a plain reason, none returns "Unknown node", and the button shows on every box)
+- **Who builds:** Neo.
+- **Status:** confirmed 2026-11-07, not started.
+
+## REQ-GHA-033: The side panels can be resized and closed; the alarm list fills the right panel
+
+- **Goal:** The reader decides how much room the side panels take.
+- **Why:** Owner, 2026-11-07: the alarms on the right should reach the bottom of the page; the AI overview and alarms panel should be draggable left and right or closable, and the same for the left panel ("we used to have ability to close both but it disappeared on the way").
+- **Target state:**
+  1. The left panel (projects) can be closed with a clearly visible control and opened again with one click; its inner edge can be dragged to make it wider or narrower.
+  2. The right panel (AI overview and alarms) works the same way: a clearly visible close control, one click to open again, and its inner edge can be dragged left to widen it or right to narrow it.
+  3. The landscape always uses the space the panels leave free; nothing sits behind a panel.
+  4. The alarm list uses all the height left in the right panel down to the bottom of the page and scrolls only when the alarms do not fit; no fixed short box with empty space under it.
+  5. Each panel's width and open or closed state are kept in that browser between visits, and work the same in light and dark mode.
+  6. Each panel has a minimum width at which its text is still readable and a maximum that leaves the landscape visible. On a phone the panels open over the landscape, as today.
+- **Priority:** P2
+- **Testable:** Yes (UI)
+- **Who builds:** Neo.
+- **Status:** confirmed 2026-11-07, not started.
+
+## REQ-GHA-034: A failing AI model, and the backup that answered for it, is visible in GlassHood
+
+- **Goal:** When one of ColdVault's AI models fails and another answers in its place, GlassHood shows it.
+- **Why:** Owner, 2026-11-07 (via architect): Claude Opus 4.7 failed on coldvault.ai and Claude Sonnet 4.6 answered instead; "We should make sure exactly things like that are visible in Glasshood."
+- **Target state:**
+  1. On the ColdVault landscape, each AI model ColdVault called in the last hour is shown on the box of the provider it belongs to, with how many of its calls were answered and how many failed.
+  2. When a model fails, its provider box is marked and its details say in plain words which model failed, how many times, the last reason given (for example "quota exceeded (429)"), which model answered in its place, if any, and when it last happened.
+  3. A warning alarm is raised when a model failed and a backup answered (users still got a reply). A critical alarm is raised when a model failed and no other model answered (users got no reply).
+  4. The alarm clears by itself once that model answers again and its failures have left the last hour.
+  5. The alarm's explanation is written for business readers as in REQ-GHA-031. Its log lines are the model's error lines and the switch-to-backup lines, tied by request_id, shown on request.
+  6. View Logs on that provider box shows the same lines (REQ-GHA-032).
+  7. GlassHood only reads ColdVault's metrics and its own log lines; no change to ColdVault.
+  8. If ColdVault does not report per-model figures yet, the box says so in plain words and never shows healthy without data. A model with no calls in the hour is shown as idle, not failing.
+- **Priority:** P2
+- **Testable:** Yes (UI + API: with ColdVault reporting one model failing and another answering, GlassHood shows a warning on the right provider box naming both models and the reason, and clears it after an hour with no failures)
+- **Who builds:** Neo.
+- **Status:** confirmed 2026-11-07, not started.
