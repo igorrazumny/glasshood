@@ -80,10 +80,13 @@ def judge(resource: dict) -> tuple:
     if "runningStatus" in p or "latestReadyRevisionName" in p:          # container app
         ready, latest = p.get("latestReadyRevisionName"), p.get("latestRevisionName")
         figures.update(running=p.get("runningStatus"), revision=ready)
-        if prov == "Failed" or (p.get("runningStatus") or "").lower() == "stopped":
+        running = (p.get("runningStatus") or "").lower()
+        if prov == "Failed" or running == "stopped":
             return "error", f"Container app {p.get('runningStatus') or prov}", figures
         if ready != latest:
             return "degraded", f"Newest revision {latest} is not ready; serving {ready}", figures
+        if prov != "Succeeded" or running != "running":
+            return "degraded", f"Container app is {p.get('runningStatus') or 'in an unknown state'} (provisioning {prov})", figures
         return "healthy", f"Running revision {ready}", figures
     if "state" in p and isinstance(p.get("state"), str):                 # function / web app
         figures["state"] = p["state"]
@@ -93,8 +96,10 @@ def judge(resource: dict) -> tuple:
         figures["primary"] = p["statusOfPrimary"]
         ok = p["statusOfPrimary"] == "available" and prov == "Succeeded"
         return ("healthy" if ok else "error"), f"Primary storage {p['statusOfPrimary']}", figures
-    if prov in (None, "Succeeded"):
-        return "healthy", f"Provisioning {prov or 'n/a'}", figures
+    if prov is None:
+        return "not checked", "Azure returned no state for this resource", figures
+    if prov == "Succeeded":
+        return "healthy", "Provisioning Succeeded", figures
     if prov in ("Failed", "Canceled"):
         return "error", f"Provisioning {prov}", figures
     return "degraded", f"Provisioning {prov}", figures

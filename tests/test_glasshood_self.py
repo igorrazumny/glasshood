@@ -63,7 +63,61 @@ def test_a_stopped_loop_shows_as_stopped():
     assert gs._fresh(time.time() - 2000, 600, "X")[0] == "degraded"
     s, d = gs._fresh(time.time() - 4000, 600, "X")
     assert s == "error" and "stopped" in d
+
+
+def test_a_task_that_never_runs_becomes_an_error_after_a_grace(monkeypatch):
+    # shadow C1: measured from GlassHood's start
+    monkeypatch.setattr(gs, "_STARTED", time.time() - 60)
     assert gs._fresh(None, 600, "X")[0] == "not checked"
+    monkeypatch.setattr(gs, "_STARTED", time.time() - 48 * 3600)
+    s, d = gs._fresh(None, 10800, "The AI log review")
+    assert s == "error" and "has not run at all" in d
+
+
+def test_a_never_started_review_raises_an_alarm_through_the_rules(monkeypatch):
+    from src.models.topology import Node
+    from src.rules import engine
+    monkeypatch.setattr(gs, "_STARTED", time.time() - 48 * 3600)
+    with patch("src.analysis.ai_review.status", return_value={"reviewed_at": None, "error": None, "interval_s": 10800}):
+        r = gs.component("ai_review")
+    engine._active.clear()
+    rule = {"id": "node_error", "group": "status", "severity": "critical", "scope": "node",
+            "condition": {"metric": "status", "operator": "==", "value": "error"}}
+    monkeypatch.setattr(engine, "_rules", lambda path: [rule])
+    engine.evaluate_rules([Node(id="gls-ai-review", label="AI log review", type="compute", status=r["status"])], {})
+    assert [a["node_id"] for a in engine.get_alerts()] == ["gls-ai-review"]
+    engine._active.clear()
+
+
+def test_self_boxes_exist_even_before_the_first_landscape_round():
+    from src.api.routes.topology import _refresh_self
+    manifest = [{"nodes": [{"id": "gls-ai-review", "label": "AI log review", "type": "compute",
+                            "monitoring": {"probe": {"type": "glasshood_self", "component": "ai_review"}}}]}]
+    nodes = []
+    with patch("src.api.routes.manifests._load_manifests", return_value=manifest), \
+         patch("src.analysis.ai_review.status", return_value={"reviewed_at": time.time(), "error": None, "interval_s": 10800}):
+        _refresh_self(nodes)
+    assert [(n.id, n.status) for n in nodes] == [("gls-ai-review", "healthy")]
+
+
+def test_a_failed_overview_refresh_shows_even_with_a_last_good_summary():
+    # shadow C2: last good -> failed refresh -> recovered
+    spend = {"capped": False}
+    with patch("src.analysis.vertex_overview.get_spend", return_value=spend):
+        with patch("src.analysis.vertex_overview.get_system",
+                   return_value={"analyzed_at": time.time() - 60, "summary": "last good", "error": "Vertex AI HTTP 500"}):
+            r = gs.component("ai_overview")
+        assert r["status"] == "degraded" and "HTTP 500" in r["check_description"] and "last good" in r["check_description"]
+        with patch("src.analysis.vertex_overview.get_system",
+                   return_value={"analyzed_at": time.time() - 60, "summary": "new", "error": None}):
+            assert gs.component("ai_overview")["status"] == "healthy"
+
+
+def test_empty_or_transitioning_azure_answers_are_not_healthy():
+    assert az.box({"id": "x"}, get=lambda i: {})["status"] == "not checked"
+    b = az.box({"id": APP_ID}, get=lambda i: {"properties": {"provisioningState": "InProgress", "runningStatus": "Progressing",
+                                                              "latestRevisionName": "r1", "latestReadyRevisionName": "r1"}})
+    assert b["status"] == "degraded"
 
 
 def test_coldvault_not_read_is_an_error_with_its_reason():

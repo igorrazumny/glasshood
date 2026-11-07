@@ -404,15 +404,22 @@ def _build_topology() -> dict:
 
 
 def _refresh_self(nodes: list) -> None:
+    """GlassHood's own work boxes, created here if the landscape check has not delivered them
+    (a stalled check must not hide its own watchdog), and judged now."""
     try:
         from src.api.routes.manifests import _load_manifests
         from src.collectors.glasshood_self import component
-        wanted = {n["id"]: ((n.get("monitoring") or {}).get("probe") or {}).get("component")
-                  for m in _load_manifests() for n in m.get("nodes", []) or []
-                  if ((n.get("monitoring") or {}).get("probe") or {}).get("type") == "glasshood_self"}
+        declared = {n["id"]: n for m in _load_manifests() for n in m.get("nodes", []) or []
+                    if ((n.get("monitoring") or {}).get("probe") or {}).get("type") == "glasshood_self"}
+        wanted = {i: ((n.get("monitoring") or {}).get("probe") or {}).get("component") for i, n in declared.items()}
     except Exception as e:
         logger.debug(f"self check skipped: {e}")
         return
+    present = {n.id for n in nodes}
+    for nid, decl in declared.items():
+        if nid not in present:
+            nodes.append(Node(id=nid, label=decl.get("label", nid), type=decl.get("type", "compute"),
+                              status="not checked", source="manifest", metrics={}))
     for node in nodes:
         if node.id in wanted:
             r = component(wanted[node.id] or "")
