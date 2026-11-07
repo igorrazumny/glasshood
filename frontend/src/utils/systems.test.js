@@ -58,6 +58,19 @@ test('idle parts are not counted as unread', () => {
   assert.equal(c.line, 'All 1 checked parts working')
 })
 
+test('an alarm on a box inside a server counts for its system', () => {
+  // shadow C2: vm-a is tagged ColdVault; its app child is failing and has a critical alarm
+  const nested = [{ id: 'vm-a', project: 'coldvault', env: 'prod', status: 'healthy',
+    children: [{ id: 'vm-a-api', status: 'error', children: [{ id: 'vm-a-api-x', status: 'healthy' }] }] }]
+  const owner = systemOfNodes(nested, manifests)
+  assert.equal(owner.get('vm-a-api'), 'manifest-coldvault-prod')
+  assert.equal(owner.get('vm-a-api-x'), 'manifest-coldvault-prod')
+  const [c] = systemCards([manifests[0]], nested, [{ node_id: 'vm-a-api', severity: 'critical' }])
+  assert.equal(c.critical, 1)
+  assert.equal(c.state, 'error')
+  assert.equal(c.parts, 3)
+})
+
 test('the portfolio line counts systems that need attention', () => {
   const cards = systemCards(manifests, nodes, alerts)
   assert.equal(portfolioLine(cards), '2 systems · 2 need attention')

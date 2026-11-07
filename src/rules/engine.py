@@ -437,22 +437,25 @@ def track_model_failures(failures: list, read: bool, labels: Optional[dict] = No
         _apply(candidates, checked, time.time())
 
 
-def track_provider_incidents(entries: list, read: bool, labels: Optional[dict] = None) -> None:
+def track_provider_incidents(entries: list, read: set, labels: Optional[dict] = None) -> None:
     """A public system's published incident or maintenance as one alarm on the first part it
-    names (REQ-GHA-036 clause 4). It ends when the provider no longer lists it as open; when
-    a provider could not be read nothing changes."""
+    names (REQ-GHA-036 clause 4), keeping every part it names. It ends when its provider,
+    read this time, no longer lists it as open; a provider not read (absent from `read`)
+    leaves its own alarms as they are, whatever the other providers say."""
     labels = labels or {}
+    read = set(read or ())
     with _lock:
-        checked = {k for k in _active if str(k[0]).startswith("provider:")} if read else set()
+        checked = {k for k in _active if str(k[0]).startswith("provider:")
+                   and str(k[0]).split(":", 2)[1] in read}
         candidates = []
         for e in entries:
-            rule = {"id": "provider_incident", "group": f"provider:{e['id']}", "severity": e["severity"],
+            rule = {"id": "provider_incident", "group": f"provider:{e['provider']}:{e['id']}", "severity": e["severity"],
                     "kind": "alarm", "description": "Reported by the provider"}
             part = e["part"]
             checked.add((rule["group"], part))
             alert = _candidate(rule, part, labels.get(part), f"Provider reports: {e['title']}")
             alert.title = e["title"]
-            alert.explanation = e.get("explanation")
+            alert.explanation = {**(e.get("explanation") or {}), "affected_parts": list(e.get("parts") or [part])}
             alert.evidence = list(e.get("evidence") or [])
             candidates.append(alert)
         _apply(candidates, checked, time.time())

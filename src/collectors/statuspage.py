@@ -22,6 +22,7 @@ TIMEOUT_S = 15
 
 _lock = threading.Lock()
 _cache: dict = {}      # url -> {"at": ts, "data": dict | None, "error": str | None}
+_fetching: dict = {}   # url -> lock held while that provider is being read (one read at a time)
 
 _STATUS = {
     "operational": "healthy",
@@ -44,6 +45,16 @@ def summary(url: str, fetch=None) -> dict:
         hit = _cache.get(url)
         if hit and now - hit["at"] < CACHE_S:
             return hit
+        gate = _fetching.setdefault(url, threading.Lock())
+    with gate:  # concurrent first reads of one provider share a single fetch
+        with _lock:
+            hit = _cache.get(url)
+            if hit and time.time() - hit["at"] < CACHE_S:
+                return hit
+        return _read(url, fetch, now)
+
+
+def _read(url: str, fetch, now: float) -> dict:
     try:
         if fetch:
             data = fetch(url)
@@ -84,11 +95,12 @@ def box(probe: dict, fetch=None) -> dict:
 
 
 def _events(data: dict) -> list:
-    """Incidents not yet resolved and maintenance in progress, newest first."""
+    """Incidents not yet resolved, and maintenance under way or being verified (the provider
+    has not marked it completed), newest first."""
     out = [dict(i, _kind="incident") for i in data.get("incidents") or []
            if i.get("status") not in ("resolved", "postmortem")]
     out += [dict(m, _kind="maintenance") for m in data.get("scheduled_maintenances") or []
-            if m.get("status") == "in_progress"]
+            if m.get("status") in ("in_progress", "verifying")]
     return out
 
 
@@ -108,14 +120,16 @@ def outside_systems() -> list:
 
 
 def incidents(fetch=None) -> tuple:
-    """(alarm entries, read_ok) for every outside system: one alarm per incident or maintenance,
-    on the first box it names; the provider's own text and link are the evidence."""
-    entries, read_ok = [], True
+    """(alarm entries, names of the providers read) for every outside system: one alarm per
+    incident or maintenance, on the first box it names, keeping every box it names; the
+    provider's own text and link are the evidence. A provider that could not be read is
+    left out of the set, so only its own alarms stay as they were."""
+    entries, read = [], set()
     for name, url, comps in outside_systems():
         s = summary(url, fetch)
         if not s["data"]:
-            read_ok = False
             continue
+        read.add(name)
         page = (s["data"].get("page") or {}).get("url") or url
         for ev in _events(s["data"]):
             named = [c for c in ev.get("components") or [] if c.get("id") in comps]
@@ -126,20 +140,23 @@ def incidents(fetch=None) -> tuple:
             impact = ev.get("impact") or "none"
             severity = "critical" if impact in ("critical", "major") and ev["_kind"] == "incident" else "warning"
             where = ", ".join(c.get("name", "") for c in named[:8]) + (f" and {len(named) - 8} more" if len(named) > 8 else "")
-            what = (f"{name} reports {'an incident' if ev['_kind'] == 'incident' else 'maintenance in progress'}: "
+            kind_words = ("an incident" if ev["_kind"] == "incident" else
+                          "maintenance being verified" if ev.get("status") == "verifying" else "maintenance in progress")
+            what = (f"{name} reports {kind_words}: "
                     f"\"{ev.get('name')}\" ({ev.get('status', '').replace('_', ' ')}, impact {impact}), affecting {where}.")
             if latest:
                 what += f" Latest provider update: {latest[:400]}"
             link = ev.get("shortlink") or page
             entries.append({
-                "id": ev.get("id"), "part": comps[named[0]["id"]], "severity": severity,
+                "id": ev.get("id"), "provider": name, "part": comps[named[0]["id"]], "severity": severity,
+                "parts": [comps[c["id"]] for c in named],
                 "title": f"{ev.get('name')} ({'incident' if ev['_kind'] == 'incident' else 'maintenance'}, reported by {name})",
                 "explanation": {"what": what, "suspicion": None,
                                 "directions": [f"Follow the provider's updates: {link}"]},
                 "evidence": [f"{u.get('created_at', '')[:16].replace('T', ' ')} UTC {u.get('status', '')}: {u.get('body', '')}"
                              for u in updates[:20]] + [f"Source: {link}"],
             })
-    return entries, read_ok
+    return entries, read
 
 
 def log_entries(node_id: str, fetch=None) -> Optional[dict]:
