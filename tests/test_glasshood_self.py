@@ -166,3 +166,38 @@ def test_a_part_without_a_log_source_says_why():
          patch("src.api.routes.logs._resolve_node", return_value=("no_logs", None, "A static website keeps no logs here.")):
         body = TestClient(app).get("/api/logs/gh-site").json()
     assert body["count"] == 0 and body["note"] == "A static website keeps no logs here."
+
+
+def test_a_failed_overview_refresh_raises_a_warning_that_ends_on_recovery(monkeypatch):
+    # shadow C2 remainder: through the rules, with the landscape's own warning rule
+    import yaml
+    from src.models.topology import Node
+    from src.rules import engine
+    rules = yaml.safe_load(SELF_ALARMS)
+    monkeypatch.setattr(engine, "_rules", lambda path: rules)
+    engine._active.clear()
+
+    def run(system):
+        with patch("src.analysis.vertex_overview.get_spend", return_value={"capped": False}), \
+             patch("src.analysis.vertex_overview.get_system", return_value=system):
+            r = gs.component("ai_overview")
+        nodes = [Node(id="gls-ai-overview", label="AI overview", type="compute", status=r["status"]),
+                 Node(id="cv-backend", label="Backend service", type="compute", status="degraded")]
+        return [(a.node_id, a.severity) for a in engine.evaluate_rules(nodes, {})]
+    assert run({"analyzed_at": time.time() - 60, "summary": "good", "error": None}) == []
+    assert run({"analyzed_at": time.time() - 60, "summary": "good", "error": "Vertex AI HTTP 500"}) == [("gls-ai-overview", "warning")]
+    assert run({"analyzed_at": time.time() - 30, "summary": "new", "error": None}) == []
+    engine._active.clear()
+
+
+SELF_ALARMS = """
+- id: self_work_late
+  name: GlassHood's own work
+  group: status
+  title: "{part}: GlassHood's own work is late or failing"
+  description: GlassHood's own task is late or failing
+  severity: warning
+  scope: node
+  parts: [gls-coldvault-read, gls-landscape-checks, gls-public-status, gls-ai-overview, gls-ai-review, gls-saved-state]
+  condition: {metric: status, operator: ==, value: degraded}
+"""
