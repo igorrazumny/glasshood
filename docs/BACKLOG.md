@@ -429,4 +429,4 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Priority:** P2
 - **Testable:** Yes (API + UI; one live run)
 - **Who builds:** Neo.
-- **Status:** implemented 2026-11-06 (AI review every 3 h after the overview; AI alarms and reports are saved to AI_STATE_DIR when it points at a writable folder, otherwise kept in memory). Live acceptance (a planted or real problem, an investigation, a follow-up) outstanding.
+- **Status:** implemented 2026-11-06 (AI review every 3 h after the overview; AI alarms and reports are saved to AI_STATE_DIR when it points at a writable folder, otherwise kept in memory). 2026-11-07: writable share glasshood-state mounted at /app/state (controller/deploy/state.sh), AI_STATE_DIR set; planted error lines in ColdVault's logs (log name glasshood-acceptance-test) raised a critical AI alarm quoting a real line, and it survived a restart with the same first-seen time. Outstanding: a signed-in investigation and follow-up, and acknowledging the critical alarm.
