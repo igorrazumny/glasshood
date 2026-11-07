@@ -462,6 +462,10 @@ def _poll_node(node_config: dict) -> dict:
         if probe_type in _RESOURCE_PROBES:
             # REQ-GHA-023: a real part of the monitored project, read with read-only roles.
             return {"node_id": node_id, **_RESOURCE_PROBES[probe_type](probe_config)}
+        if probe_type == "coldvault_models":
+            # REQ-GHA-034: the provider's models as ColdVault reported their calls
+            from src.collectors.coldvault_models import box
+            return {"node_id": node_id, **box(probe_config.get("providers") or [])}
         if probe_type == "external":
             # REQ-GHA-023 clause 3: GlassHood cannot check this service; never shown green.
             return {"node_id": node_id, "status": "not checked", "metrics": {},

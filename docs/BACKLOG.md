@@ -525,4 +525,4 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Priority:** P2
 - **Testable:** Yes (UI + API: with ColdVault reporting one model failing and another answering, GlassHood shows a warning on the right provider box naming both models and the reason, and clears it after an hour with no failures)
 - **Who builds:** Neo.
-- **Status:** confirmed 2026-11-07, not started.
+- **Status:** implemented 2026-11-07 (src/collectors/coldvault_models.py reads requests.per_model after each metrics read and, when a model failed, ColdVault's failure, switch-to-backup and billing lines tied by request_id; provider boxes use probe type coldvault_models; a failing model is a warning when another model answered that question, critical when none did, and ends when the hour has no failures; the box details list each model's calls). Not yet verified.
