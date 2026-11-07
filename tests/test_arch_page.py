@@ -149,7 +149,8 @@ def test_no_svg_arrow_markers():
 def test_cards_map_to_real_sections():
     targets = re.findall(r'class="pd-card" data-target="([a-z-]+)"', _HTML)
     ids = set(re.findall(r'<section class="pd-section" id="([a-z-]+)"', _HTML))
-    assert targets == ["implementation", "compliance", "zero-trust", "mcp"] and all(t in ids for t in targets)
+    assert targets == ["dashboard", "implementation", "zero-trust", "mcp"] and all(t in ids for t in targets)
+    assert 'id="compliance"' in _HTML, "the compliance section stays, without a top card"
 
 
 def test_launch_cta_present():
@@ -253,3 +254,34 @@ def test_the_collection_cadences_are_the_ones_that_run():
     assert sec.count("every 10&nbsp;minutes") == 4
     assert "Every collector runs on one shared 10-minute interval" in " ".join(sec.split())
     assert "the AI overview and the AI log review run every 3 hours" in " ".join(sec.split())
+
+
+def test_the_page_leads_with_ai_monitoring_for_business_and_it():
+    # REQ-GHA-018, amended 2026-11-07 (third), Igor's direction: AI monitoring that shows business and IT where the
+    # system and each component stand, not a check against a declared design; the dashboard, alerts and tickets have
+    # their own section; what is not built yet is said to be next, and the ServiceNow connection is per deployment.
+    flat = _flat_text()
+    hero = " ".join(_HTML.split('<p class="pd-hero">', 1)[1].split("</p>", 1)[0].split())
+    assert hero == ("GlassHood is AI monitoring for integration pipelines and complex systems. Read-only collectors bring in "
+                    "the logs and measurements of every component, deterministic checks run first and AI on top, and one "
+                    "dashboard shows business and IT where the system and each component stand.")
+    overview = _HTML.split("arch-diagram--overview", 1)[1].split("</svg>", 1)[0]
+    for label in (">Business &amp; IT<", ">dashboard &#183; alerts &#183; logs<", ">Landscape file<",
+                  ">components &#183; logs &#183; alarms<", ">Ticketing<", ">ServiceNow incidents<", ">per deployment<",
+                  ">live &#8853; landscape file<"):
+        assert label in overview, label
+    for gone in (">Declared design<", ">User<", "evidence report", "regulated systems"):
+        assert gone not in overview, gone
+    assert "regulated systems" not in _HTML and "reconciled against declared design" not in _HTML
+    sec = " ".join(_HTML.split('<section class="pd-section" id="dashboard">', 1)[1].split("</section>", 1)[0].split())
+    for needle in ("Business owners and IT teams read the same dashboard", "Each component&rsquo;s logs are one click away",
+                   "Every alert carries a severity: critical, warning or info", "GlassHood does not send them out yet",
+                   "opens an incident for each new critical or warning alert", "set up for each deployment",
+                   "the live demo has none", "Next: alerting the right distribution lists by severity",
+                   "regular updates as agreed", "Neither is built yet."):
+        assert needle in sec, needle
+    order = [_HTML.index(f'<section class="pd-section" id="{i}">') for i in ("analysis", "dashboard", "topology")]
+    assert order == sorted(order), "the dashboard section follows the analysis"
+    assert "ServiceNow incidents</div>" in _HTML.split("arch-diagram--detail", 1)[1], "the detailed diagram shows it too"
+    assert "ServiceNow incidents by severity where a deployment connects it" in _HTML
+    assert "the dashboard, alerts and tickets for business and IT" in flat
