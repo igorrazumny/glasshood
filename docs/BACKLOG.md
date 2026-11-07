@@ -507,7 +507,7 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Priority:** P2
 - **Testable:** Yes (UI)
 - **Who builds:** Neo.
-- **Status:** confirmed 2026-11-07, not started.
+- **Status:** implemented 2026-11-07 (Hide buttons with a label on both panels; the closed panel leaves a labelled tab; the inner edge drags, double-click restores the default; widths and open state kept in the browser; the alarm list fills the panel). The hide controls had been covered by the top bar since it was made taller; the panels now start below it. Checked in a browser in dark and light mode. Not yet verified.
 
 ## REQ-GHA-034: A failing AI model, and the backup that answered for it, is visible in GlassHood
 

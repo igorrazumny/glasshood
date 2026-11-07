@@ -18,6 +18,7 @@ import { usePolling } from '../hooks/usePolling'
 import { computeManifestLayout } from '../utils/manifestLayout'
 import { canvasNodes } from '../utils/canvasParts.js'
 import { clearToken, apiFetch, apiUrl } from '../utils/api'
+import { loadPanel, savePanel, clampWidth } from '../utils/panels'
 
 function useDemoData() {
   const [topology, setTopology] = useState(null)
@@ -55,10 +56,14 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
   const [selectedNode, setSelectedNode] = useState(null)
   const [selectedAlert, setSelectedAlert] = useState(null)
   const [activeProject, setActiveProject] = useState(null)
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  // REQ-GHA-033: each panel's open state and width are remembered in this browser
+  const [sidebarOpen, setSidebarOpen] = useState(() => loadPanel('left').open)
+  const [sidebarWidth, setSidebarWidth] = useState(() => loadPanel('left').width)
   const [sidebarPinned, setSidebarPinned] = useState(true)
-  const [rightOpen, setRightOpen] = useState(true)
+  const [rightOpen, setRightOpen] = useState(() => loadPanel('right').open)
+  const [rightWidth, setRightWidth] = useState(() => loadPanel('right').width)
   const [rightPinned, setRightPinned] = useState(true)
+  const [viewport, setViewport] = useState(() => window.innerWidth)
   const [verifyReports, setVerifyReports] = useState(null)
   const [verifyLoading, setVerifyLoading] = useState(false)
   const [showVerifyModal, setShowVerifyModal] = useState(false)
@@ -116,6 +121,17 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
     onLogout?.()
   }
 
+  useEffect(() => { savePanel('left', { open: sidebarOpen, width: sidebarWidth }) }, [sidebarOpen, sidebarWidth])
+  useEffect(() => { savePanel('right', { open: rightOpen, width: rightWidth }) }, [rightOpen, rightWidth])
+  useEffect(() => {
+    const onResize = () => setViewport(window.innerWidth)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+  // A saved width is re-checked against the current window, so the landscape stays visible
+  const leftWidth = clampWidth('left', sidebarWidth, viewport)
+  const rightPanelWidth = clampWidth('right', rightWidth, viewport)
+
   const toggleSidebar = useCallback(() => setSidebarOpen(v => !v), [])
   const togglePin = useCallback(() => setSidebarPinned(v => !v), [])
   const toggleRight = useCallback(() => setRightOpen(v => !v), [])
@@ -135,8 +151,9 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
   }, [])
 
   // Dynamic padding for main content — both panels are fixed overlays
-  const leftShift = sidebarOpen && sidebarPinned && projectNodes.length > 0 ? 248 : 8
-  const rightShift = rightOpen && rightPinned ? 328 : 8
+  // REQ-GHA-033 clause 3: the landscape uses exactly the space the panels leave free
+  const leftShift = sidebarOpen && sidebarPinned && projectNodes.length > 0 ? leftWidth + 8 : 8
+  const rightShift = rightOpen && rightPinned ? rightPanelWidth + 8 : 8
 
   // Filter alerts/anomalies by selected project context
   const selectedProject = activeProject ? projectNodes.find(p => p.id === activeProject) : null
@@ -188,17 +205,24 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
           pinned={sidebarPinned}
           onToggle={toggleSidebar}
           onPin={togglePin}
+          width={leftWidth}
+          onResize={setSidebarWidth}
         />
       )}
 
-      <RightSidebar open={rightOpen} pinned={rightPinned} onToggle={toggleRight} onPin={toggleRightPin}>
+      <RightSidebar open={rightOpen} pinned={rightPinned} onToggle={toggleRight} onPin={toggleRightPin}
+        width={rightPanelWidth} onResize={setRightWidth}>
         {/* REQ-GHA-024 clause 1: the AI overview first; alerts and warnings are the detail below */}
-        <AnalysisPanel data={analysis.data} topology={topology.data} canvas={canvas} isDemo={isDemo} />
+        <div className="shrink-0">
+          <AnalysisPanel data={analysis.data} topology={topology.data} canvas={canvas} isDemo={isDemo} />
+        </div>
         {/* REQ-GHA-027: an anomaly is an alarm on its part (with its classification in the
             detail), so it is not listed a second time in a separate anomaly panel */}
         <AlertPanel alerts={filteredAlerts} resolved={filteredResolved}
           rules={topology.data?.alarm_rules} onSelect={setSelectedAlert} />
-        <SecurityPanel isDemo={isDemo} />
+        <div className="shrink-0">
+          <SecurityPanel isDemo={isDemo} />
+        </div>
       </RightSidebar>
 
       <div className="flex-1 overflow-hidden transition-all duration-300"

@@ -3,6 +3,8 @@
 // REQ-GHA-027: only alarms whose condition holds now, each once, in plain words;
 // recently resolved alarms and rules without data are listed underneath.
 // REQ-GHA-028: alarms not yet trusted carry an "example" or "observation" tag.
+// REQ-GHA-033 clause 4: the list takes all the height left in the right panel and
+// scrolls only when the alarms do not fit.
 
 import { useState } from 'react'
 import { AlertTriangle, AlertOctagon, Info, CheckCircle } from 'lucide-react'
@@ -38,7 +40,7 @@ export default function AlertPanel({ alerts, resolved, rules, onSelect }) {
   const warningCount = alerts.filter(a => a.severity === 'warning').length
 
   return (
-    <div className="bg-card dark:bg-purple-800 border border-border dark:border-purple-700 rounded-lg p-3 mb-3">
+    <div className="bg-card dark:bg-purple-800 border border-border dark:border-purple-700 rounded-lg p-3 mb-3 flex-1 min-h-[16rem] flex flex-col">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <AlertTriangle size={14} className="text-yellow-600 dark:text-yellow-400" />
@@ -54,7 +56,7 @@ export default function AlertPanel({ alerts, resolved, rules, onSelect }) {
         </div>
       </div>
 
-      <div className="space-y-1.5 max-h-48 overflow-y-auto">
+      <div className="space-y-1.5 flex-1 min-h-0 overflow-y-auto">
         {sorted.map((alert, i) => {
           const style = SEVERITY_STYLE[alert.severity] || SEVERITY_STYLE.info
           const Icon = style.icon
