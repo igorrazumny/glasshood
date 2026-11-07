@@ -447,7 +447,18 @@ def _bind_legacy_provider_keys(part_provider: dict) -> None:
         alert = _active.pop(key)
         new_key = (f"provider:{name}:{str(key[0]).split(':', 1)[1]}", key[1])
         alert.group = new_key[0]
-        _active.setdefault(new_key, alert)
+        current = _active.get(new_key)
+        if current is None:
+            _active[new_key] = alert
+            continue
+        # Both exist: keep one alarm, without losing what the old one carried
+        if current.report is None and alert.report is not None:
+            current.report = alert.report
+        if alert.acknowledged and not current.acknowledged:
+            current.acknowledged, current.acknowledged_by, current.acknowledged_at = (
+                alert.acknowledged, alert.acknowledged_by, alert.acknowledged_at)
+        if alert.first_seen and (not current.first_seen or alert.first_seen < current.first_seen):
+            current.first_seen = alert.first_seen
 
 
 def track_provider_incidents(entries: list, read: set, labels: Optional[dict] = None,

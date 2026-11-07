@@ -190,6 +190,20 @@ def test_a_provider_alarm_saved_in_the_old_key_format_keeps_its_report_and_ends(
     engine._active.clear()
 
 
+def test_old_and_new_keys_for_one_incident_merge_without_losing_the_report():
+    from src.models.alert import Alert
+    engine._active.clear()
+    mk = lambda group, report, first: Alert(rule_id="provider_incident", kind="alarm", severity="critical",
+                                            message="m", triggered_at="t", node_id="ex-fra", group=group,
+                                            report=report, first_seen=first)
+    engine._active[("provider:inc1", "ex-fra")] = mk("provider:inc1", {"executive_summary": "Old report"}, "2026-11-07T20:00:00+00:00")
+    engine._active[("provider:Example:inc1", "ex-fra")] = mk("provider:Example:inc1", None, "2026-11-07T21:00:00+00:00")
+    engine._bind_legacy_provider_keys({"ex-fra": "Example"})
+    [a] = engine.get_alerts()
+    assert a["report"]["executive_summary"] == "Old report" and a["first_seen"].startswith("2026-11-07T20")
+    engine._active.clear()
+
+
 def test_a_box_log_is_the_providers_published_updates(monkeypatch):
     _fresh()
     monkeypatch.setattr(sp, "outside_systems", lambda: [("Example", URL, {"c-ams": "ex-ams", "c-fra": "ex-fra"})])
