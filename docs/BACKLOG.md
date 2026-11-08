@@ -706,3 +706,43 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Testable:** Yes (API)
 - **Who builds:** Neo.
 - **Status:** confirmed by the owner 2026-11-08 (full text).
+
+## REQ-GHA-044: Every box on a system's diagram has a reason to be there, and its green is earned
+
+- **Goal:** The diagram shows the parts people maintain, and a green box is backed by a real check.
+- **Why:** Owner, 2026-11-08: a box with no logs is hard to monitor, but it can still be part of the picture and still be checked, for example by a ping.
+- **Target state:**
+  1. A box is shown for anything people must configure and maintain, or whose failure can stop the system working, whether or not it produces logs.
+  2. A box shows healthy only when a real check supports it. A real check is any of: its logs, a direct answer to a ping or request, or its provider's own status for that exact resource.
+  3. Each box says what its state is based on, in plain words, for example "Answers at its address", "Provider reports it running", or "Logs read".
+  4. A box that cannot be checked stays on the diagram, is marked "Not checked" with the reason, and never shows green.
+  5. A "Not checked" box neither raises an alarm nor makes its system count as unhealthy, and it does not count as healthy either.
+  6. A box whose check fails shows the failure, even if the box has no logs.
+  7. Logs are never demanded as a condition for health. A box without logs and with a passing check is healthy.
+  8. Boxes already marked as set up but not in use keep that state and are not checked or coloured as healthy.
+  9. Every box on the TestRobin, GlassHood and ColdVault diagrams follows these clauses after this change.
+  10. The AI assessment treats "Not checked" as unknown. It never describes such a part as working.
+- **Priority:** P2
+- **Testable:** Yes (API and UI)
+- **Who builds:** Neo.
+- **Status:** confirmed by the owner 2026-11-08 (full text).
+
+## REQ-GHA-045: The systems pages have a clear visual order and show each thing once
+
+- **Goal:** The important things stand out, and nothing is said twice on one screen.
+- **Why:** Owner, 2026-11-08: accepted the recommendations of a design review of the home view, and asked for the official logos of external systems.
+- **Target state:**
+  1. Text sizes. The product uses one fixed scale: page title about 22-24 px bold, system name 16 px bold, status sentence 15 px bold, AI paragraph 14 px with comfortable line spacing and at most about 65 characters per line, supporting details 12-13 px in muted grey. Small labels stay readable in light and dark themes.
+  2. Same card layout. All five home cards have the same layout: the system's logo at a clearly visible size, its name at the same apparent size on every card, and its domain in muted text below.
+  3. External logos. GitHub and Cloudflare use their official logos from their own brand pages, following those companies' published logo rules. The logo files are stored in the product. If a logo's rules forbid this use, that card shows the name as text. The sidebar stays text only, without logos.
+  4. Assessment shown once. The same AI assessment text never appears twice on one screen. A card shows a one-line headline and "Read assessment" to expand it to the full text. The right-hand panel gives a combined view of what needs attention and what changed since the last check.
+  5. Status label. Each card shows a label with icon and word: Healthy, Needs attention, Degraded or Unknown. The same word appears wherever that system's status is summarised. It leads with the reason, for example "Needs attention - 8 configuration notes". It always matches the saved record of REQ-GHA-040.
+  6. Quieter header. The build string moves out of the header to a footer or About view. The long status sentence becomes short items with counts. Refresh and its timer become one "Refreshed 12 s ago" control. The theme choice moves into a menu. Every remaining icon has a label or tooltip. The wordmark is about 20 px.
+  7. Right-hand column. Alerts get the space they need, and no text is cut off mid-sentence. The overview is shorter or collapsible and is fully readable when opened.
+  8. Wording and links. "OUTSIDE VIEW" reads "Provider status page", and the source address is a working link. Alerts show relative time such as "15 min ago", with the exact time still available on demand.
+  9. Clickable cards. The whole card opens the system's details. Keyboard users can reach and open it too.
+  10. Unchanged. No data, status logic, alarm, AI behaviour or permission changes through this requirement. REQ-GHA-040 to 043 still apply. The layout still works at phone width.
+- **Priority:** P2
+- **Testable:** Yes (UI)
+- **Who builds:** Neo.
+- **Status:** confirmed by the owner 2026-11-08 (full text).
