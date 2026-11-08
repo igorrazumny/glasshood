@@ -407,14 +407,25 @@ def _build_topology() -> dict:
     return result
 
 
-def _no_green_without_check(nodes: list) -> None:
-    """REQ-GHA-044 clauses 2 and 4: being listed in a cloud inventory is not a health check."""
-    for node in nodes:
-        m = node.metrics or {}
-        if node.source == "discovered" and node.status == "healthy" and not m.get("_check_description") \
-                and not any(not k.startswith("_") for k in m):
-            node.status = "not checked"
-            node.metrics = {**m, "_check_description": "Found in the cloud inventory; no check confirms it is working"}
+# REQ-GHA-044 clause 2: what shows a check really happened. Inventory fields (an address, a
+# port) describe a resource; they say nothing about whether it works.
+_CHECK_EVIDENCE = ("_probe_type", "_check_description", "_last_poll", "latency_ms", "cpu_percent", "ram_percent")
+_NO_CHECK = "No check confirms this part is working"
+
+
+def _no_green_without_check(boxes: list) -> None:
+    """REQ-GHA-044 clauses 2, 4 and 9: every box in the tree, from every source."""
+    for box in boxes or ():
+        is_dict = isinstance(box, dict)
+        status = box.get("status") if is_dict else box.status
+        metrics = (box.get("metrics") if is_dict else box.metrics) or {}
+        if status == "healthy" and not any(metrics.get(k) is not None for k in _CHECK_EVIDENCE):
+            metrics = {**metrics, "_check_description": _NO_CHECK}
+            if is_dict:
+                box["status"], box["metrics"] = "not checked", metrics
+            else:
+                box.status, box.metrics = "not checked", metrics
+        _no_green_without_check(box.get("children") if is_dict else box.children)
 
 
 def _refresh_self(nodes: list) -> None:
