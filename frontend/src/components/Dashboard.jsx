@@ -19,8 +19,8 @@ import { computeManifestLayout } from '../utils/manifestLayout'
 import { canvasNodes } from '../utils/canvasParts.js'
 import { clearToken, apiFetch, apiUrl } from '../utils/api'
 import { loadPanel, savePanel, fitPanels, landscapeInsets } from '../utils/panels'
-import { systemCards, systemOfNodes, portfolioLine, systemId, isGroupId, cardsInGroup } from '../utils/systems'
-import SystemsHome from './SystemsHome'
+import { systemCards, systemOfNodes, portfolioLine, systemId, isGroupId, cardsInGroup, headerLine, GROUPS, groupedCards } from '../utils/systems'
+import SystemsHome, { Waiting } from './SystemsHome'
 
 function useDemoData() {
   const [topology, setTopology] = useState(null)
@@ -181,6 +181,7 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
   const systemLabel = new Map(cards.map(c => [c.id, c.label]))
   // REQ-GHA-035 clause 9: a group (9Robots or external systems) shows its systems' cards
   const groupSelected = isGroupId(activeProject)
+  const selectedCard = cards.find(c => c.id === activeProject) || null
   const homeCards = cardsInGroup(cards, groupSelected ? activeProject : null)
   const showHome = !isDemo && cards.length > 1 && (activeProject === null || groupSelected)
   // Filter alerts/anomalies by the selected system or group
@@ -220,6 +221,8 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
         isDemo={isDemo}
         readOnly={hideCosts && !isDemo}
         onVerify={isDemo ? null : runVerification}
+        scope={isDemo ? null : !topology.data ? { text: 'Loading your systems…', state: 'unknown' }
+          : cards.length > 1 ? headerLine(cards, activeProject) : null}
       />
       {projectNodes.length > 0 && (
         <ProjectTree
@@ -240,7 +243,13 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
         width={rightPanelWidth} onResize={setRightWidth}>
         {/* REQ-GHA-024 clause 1: the AI overview first; alerts and warnings are the detail below */}
         <div className="shrink-0">
-          <AnalysisPanel data={analysis.data} topology={topology.data} canvas={canvas} isDemo={isDemo} />
+          <AnalysisPanel data={analysis.data} topology={topology.data} canvas={canvas} isDemo={isDemo}
+            loading={!analysis.data}
+            scopeLabel={selectedCard ? selectedCard.label : groupSelected ? (GROUPS.find(g => g.id === activeProject)?.label || 'All monitored systems') : 'All monitored systems'}
+            listCards={!isDemo && !selectedCard && (cards.length > 1 || !topology.data)
+              ? groupedCards(homeCards).flatMap(g => g.cards) : null}
+            descriptions={systemDescriptions.data || {}}
+            showStats={isDemo || !!selectedCard || cards.length <= 1} />
         </div>
         {/* REQ-GHA-027: an anomaly is an alarm on its part (with its classification in the
             detail), so it is not listed a second time in a separate anomaly panel */}
@@ -254,9 +263,11 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
 
       <div className="flex-1 overflow-hidden transition-all duration-300"
         style={{ paddingLeft: leftShift, paddingRight: rightShift, paddingTop: 8, paddingBottom: 8 }}>
-        {showHome ? (
+        {!isDemo && !topology.data && !topology.error ? (
+          <Waiting text="Loading your systems…" />
+        ) : showHome ? (
           <SystemsHome cards={homeCards} line={portfolioLine(homeCards)} onOpen={setActiveProject}
-            descriptions={systemDescriptions.data || {}} />
+            descriptions={systemDescriptions.data || {}} loading={!topology.data} />
         ) : (
           <TopologyMap key={activeProject || 'all'} data={mapData} error={topology.error} isDemo={isDemo} hideCosts={hideCosts}
             onNodeSelect={setSelectedNode} focusProjectId={mapManifests.length ? null : activeProject} manifests={mapManifests} />

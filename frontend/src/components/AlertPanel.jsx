@@ -3,84 +3,87 @@
 // REQ-GHA-027: only alarms whose condition holds now, each once, in plain words;
 // recently resolved alarms and rules without data are listed underneath.
 // REQ-GHA-028: alarms not yet trusted carry an "example" or "observation" tag.
-// REQ-GHA-033 clause 4: the list takes all the height left in the right panel and
-// scrolls only when the alarms do not fit.
+// REQ-GHA-038: one collapsible list per severity level; colour only as a small mark.
+// REQ-GHA-038 clause 4: the alarm area takes at most about half the panel's height; open
+// lists share it, each scrolling on its own.
 
 import { useState } from 'react'
-import { AlertTriangle, AlertOctagon, Info, CheckCircle } from 'lucide-react'
-import { alarmTitle, alarmWhen, resolvedWhen, notCheckedNames, alarmTag, sortAlarms } from '../utils/alarms'
+import { AlertTriangle, CheckCircle, ChevronRight, ChevronDown } from 'lucide-react'
+import { alarmTitle, alarmWhen, resolvedWhen, notCheckedNames, alarmTag, LEVELS, alarmsByLevel, defaultOpen } from '../utils/alarms'
 
-// REQ-009: severity styles get dark: variants. Light uses bg-100 + text-700
-// for readable contrast on white card; dark keeps the /10 alpha + light text.
-const SEVERITY_STYLE = {
-  critical: { icon: AlertOctagon,
-    color: 'text-red-700 dark:text-red-400',
-    bg: 'bg-red-100 dark:bg-red-400/10',
-    border: 'border-red-300 dark:border-red-400/20' },
-  warning: { icon: AlertTriangle,
-    color: 'text-yellow-700 dark:text-yellow-400',
-    bg: 'bg-yellow-100 dark:bg-yellow-400/10',
-    border: 'border-yellow-300 dark:border-yellow-400/20' },
-  info: { icon: Info,
-    color: 'text-blue-700 dark:text-blue-400',
-    bg: 'bg-blue-100 dark:bg-blue-400/10',
-    border: 'border-blue-300 dark:border-blue-400/20' },
+const OPEN_KEY = 'glasshood.alarmLists'
+
+function loadOpen() {
+  try { return JSON.parse(localStorage.getItem(OPEN_KEY) || '{}') || {} } catch { return {} }
 }
 
 export default function AlertPanel({ alerts, resolved, rules, onSelect, systemOf }) {
   const [showResolved, setShowResolved] = useState(false)
+  const [chosen, setChosen] = useState(loadOpen)   // what the reader opened or closed, remembered
   const notChecked = notCheckedNames(rules)
   if (!alerts?.length && !resolved?.length && !notChecked.length) return null
   alerts = alerts || []
 
-  // Critical first, then warning; real alarms before examples (REQ-GHA-028)
-  const sorted = sortAlarms(alerts)
-
-  const criticalCount = alerts.filter(a => a.severity === 'critical').length
-  const warningCount = alerts.filter(a => a.severity === 'warning').length
+  const byLevel = alarmsByLevel(alerts)
+  const defaults = defaultOpen(byLevel)
+  const isOpen = id => (id in chosen ? chosen[id] : defaults[id])
+  const toggle = id => {
+    const next = { ...chosen, [id]: !isOpen(id) }
+    setChosen(next)
+    try { localStorage.setItem(OPEN_KEY, JSON.stringify(next)) } catch { /* not remembered */ }
+  }
+  const counted = alerts.filter(a => a.kind !== 'example')
 
   return (
-    <div className="bg-card dark:bg-purple-800 border border-border dark:border-purple-700 rounded-lg p-3 mb-3 flex-1 min-h-[16rem] flex flex-col">
-      <div className="flex items-center justify-between mb-2">
+    <div className="bg-card dark:bg-purple-800 border border-border dark:border-purple-700 rounded-lg p-3 mb-3 flex flex-col min-h-0"
+      style={{ maxHeight: '50vh' }}>
+      <div className="flex items-center justify-between mb-2 flex-shrink-0">
         <div className="flex items-center gap-2">
-          <AlertTriangle size={14} className="text-yellow-600 dark:text-yellow-400" />
+          <AlertTriangle size={14} className="text-gray-500 dark:text-purple-300" />
           <span className="text-xs font-semibold text-gray-500 dark:text-purple-300 uppercase tracking-wider">Alerts</span>
         </div>
-        <div className="flex items-center gap-2 text-sm">
-          {criticalCount > 0 && (
-            <span className="text-red-700 dark:text-red-400">{criticalCount} critical</span>
-          )}
-          {warningCount > 0 && (
-            <span className="text-yellow-700 dark:text-yellow-400">{warningCount} warning</span>
-          )}
-        </div>
+        <span className="text-xs text-gray-500 dark:text-purple-300">{counted.length ? `${counted.length} open` : 'none open'}</span>
       </div>
 
-      <div className="space-y-1.5 flex-1 min-h-0 overflow-y-auto">
-        {sorted.map((alert, i) => {
-          const style = SEVERITY_STYLE[alert.severity] || SEVERITY_STYLE.info
-          const Icon = style.icon
+      <div className="flex flex-col min-h-0 flex-1 gap-1">
+        {LEVELS.filter(l => byLevel[l.id]?.length).map(level => {
+          const list = byLevel[level.id]
+          const open = isOpen(level.id)
           return (
-            <div key={`${alert.rule_id}-${alert.node_id}-${i}`}
-              onClick={() => onSelect?.(alert)}
-              className={`flex items-start gap-2 ${style.bg} ${style.border} border rounded px-2 py-1.5 ${onSelect ? 'cursor-pointer hover:brightness-95 dark:hover:brightness-125' : ''}`}>
-              <Icon size={12} className={`${style.color} mt-0.5 flex-shrink-0`} />
-              <div className="min-w-0 flex-1">
-                <p className={`text-sm ${style.color} leading-snug`}>
-                  {alarmTag(alert) && (
-                    <span className="text-[10px] font-semibold uppercase mr-1.5 px-1 py-px rounded border border-gray-400 dark:border-purple-400 text-gray-600 dark:text-purple-200">
-                      {alarmTag(alert)}
-                    </span>
-                  )}
-                  {systemOf && systemOf(alert) && (
-                    <span className="text-[10px] font-semibold mr-1.5 px-1 py-px rounded bg-gray-200 dark:bg-purple-700 text-gray-700 dark:text-purple-100">
-                      {systemOf(alert)}
-                    </span>
-                  )}
-                  {alarmTitle(alert)}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-purple-300 mt-0.5">{alarmWhen(alert)}</p>
-              </div>
+            <div key={level.id} className={`flex flex-col ${open ? 'min-h-0 flex-1' : 'flex-shrink-0'}`}>
+              <button onClick={() => toggle(level.id)}
+                className="flex items-center gap-2 h-7 px-1 rounded text-sm text-gray-700 dark:text-purple-100 hover:bg-surface dark:hover:bg-purple-700/40">
+                {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                <span className={`w-2 h-2 rounded-full ${level.dot}`} />
+                <span className="font-medium">{level.label}</span>
+                <span className="text-gray-500 dark:text-purple-300">· {list.length}</span>
+              </button>
+              {open && (
+                <div className="space-y-1 overflow-y-auto min-h-0 flex-1 pl-1 pr-1 pb-1">
+                  {list.map((alert, i) => (
+                    <div key={`${alert.group}-${alert.node_id}-${i}`} onClick={() => onSelect?.(alert)}
+                      className={`flex items-start gap-2 bg-surface/60 dark:bg-purple-900/40 border border-border dark:border-purple-700 rounded px-2 py-1.5 ${onSelect ? 'cursor-pointer hover:border-accent-500 dark:hover:border-purple-400' : ''}`}>
+                      <span className={`mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0 ${level.dot}`} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm text-gray-800 dark:text-purple-100 leading-snug">
+                          {alarmTag(alert) && (
+                            <span className="text-[10px] font-semibold uppercase mr-1.5 px-1 py-px rounded border border-gray-400 dark:border-purple-400 text-gray-600 dark:text-purple-200">
+                              {alarmTag(alert)}
+                            </span>
+                          )}
+                          {systemOf && systemOf(alert) && (
+                            <span className="text-[10px] font-semibold mr-1.5 px-1 py-px rounded bg-gray-200 dark:bg-purple-700 text-gray-700 dark:text-purple-100">
+                              {systemOf(alert)}
+                            </span>
+                          )}
+                          {alarmTitle(alert)}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-purple-300 mt-0.5">{alarmWhen(alert)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )
         })}
@@ -90,7 +93,7 @@ export default function AlertPanel({ alerts, resolved, rules, onSelect, systemOf
       </div>
 
       {resolved?.length > 0 && (
-        <div className="mt-2">
+        <div className="mt-2 flex-shrink-0">
           <button onClick={() => setShowResolved(v => !v)}
             className="text-xs text-gray-500 dark:text-purple-300 hover:underline">
             {showResolved ? 'Hide' : 'Show'} recently resolved ({resolved.length})
@@ -111,7 +114,7 @@ export default function AlertPanel({ alerts, resolved, rules, onSelect, systemOf
       )}
 
       {notChecked.length > 0 && (
-        <p className="text-xs text-gray-500 dark:text-purple-300 mt-2">
+        <p className="text-xs text-gray-500 dark:text-purple-300 mt-2 flex-shrink-0">
           Not checked (no data for this system): {notChecked.join(', ')}
         </p>
       )}

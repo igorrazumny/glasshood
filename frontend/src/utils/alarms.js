@@ -66,3 +66,38 @@ export function errorText(err) {
   const m = String(err?.message || err || '')
   try { return JSON.parse(m.slice(m.indexOf('{'))).detail || m } catch { return m }
 }
+
+// REQ-GHA-038: five severity levels, each its own list; examples apart
+export const LEVELS = [
+  { id: 'critical', label: 'Critical', dot: 'bg-red-500' },
+  { id: 'high', label: 'High', dot: 'bg-orange-500' },
+  { id: 'medium', label: 'Medium', dot: 'bg-yellow-400' },
+  { id: 'low', label: 'Low', dot: 'bg-gray-400' },
+  { id: 'info', label: 'Information', dot: 'bg-gray-300' },
+  { id: 'example', label: 'Examples', dot: 'bg-gray-300' },
+]
+
+export function alarmLevel(alert) {
+  if (alert?.kind === 'example') return 'example'
+  if (alert?.kind === 'observation') return 'info'
+  const g = String(alert?.group || '')
+  if (g.startsWith('provider:') && /\(maintenance/i.test(String(alert?.title || '')) && alert?.severity !== 'critical') return 'info'
+  if (alert?.severity === 'critical') return 'critical'
+  if (alert?.severity === 'high') return 'high'
+  if (alert?.severity === 'warning') return 'medium'
+  if (alert?.severity === 'low') return 'low'
+  return 'info'
+}
+
+// {level: [alerts newest first]} for the levels that have alarms
+export function alarmsByLevel(alerts) {
+  const out = {}
+  for (const a of sortAlarms(alerts)) (out[alarmLevel(a)] ||= []).push(a)
+  return out
+}
+
+// Open at first: Critical and High; Medium unless Critical or High have alarms; the rest closed
+export function defaultOpen(byLevel) {
+  const urgent = (byLevel.critical?.length || 0) + (byLevel.high?.length || 0) > 0
+  return { critical: true, high: true, medium: !urgent, low: false, info: false, example: false }
+}

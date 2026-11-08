@@ -68,7 +68,7 @@ function TreeItem({ label, status, active, onClick, indent = 0, count, bold }) {
           ? 'bg-accent-500/15 text-accent-600 dark:text-accent-300 border-l-2 border-accent-500'
           : 'text-gray-700 dark:text-purple-200 hover:text-gray-900 dark:hover:text-purple-100 hover:bg-surface/50 dark:hover:bg-purple-700/30 border-l-2 border-transparent'
       } ${bold ? 'font-medium' : ''}`}
-      style={{ paddingLeft: `${14 + indent * 20}px` }}
+      style={{ paddingLeft: `${12 + indent * 14}px` }}
     >
       <span className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_DOT[status] || STATUS_DOT.unknown}`} />
       <span className="truncate flex-1">{label}</span>
@@ -100,6 +100,9 @@ export default function ProjectTree({ projects, systems, activeProject, onSelect
   const tree = buildTree(projects)
   const totalNodes = projects.reduce((sum, p) => sum + (p.metrics?.node_count || 0), 0)
   const overallStatus = worstStatus(projects.map(p => p.status || 'unknown'))
+
+  // a group is open unless folded (false); one click folds, the next opens
+  const toggleGroup = (id) => setExpanded(prev => ({ ...prev, [id]: prev[id] === false }))
 
   const toggleProduct = (product) => {
     setExpanded(prev => ({ ...prev, [product]: !prev[product] }))
@@ -177,7 +180,7 @@ export default function ProjectTree({ projects, systems, activeProject, onSelect
                 : <ChevronDown size={14} />}
             </button>
             <TreeItem
-              label="All Projects"
+              label="All systems"
               status={overallStatus}
               active={activeProject === null}
               onClick={() => onSelect(null)}
@@ -186,18 +189,24 @@ export default function ProjectTree({ projects, systems, activeProject, onSelect
             />
           </div>
 
-          {/* REQ-GHA-035 clause 9: 9Robots systems and external systems, each system with its real state */}
+          {/* REQ-GHA-035 clause 9 / REQ-GHA-037 clause 9: the two groups under All systems, each
+              collapsible, small indents, the coloured dots say what needs attention */}
           {!treeCollapsed && systems?.length > 0 && groupedCards(systems).map(({ group, cards }) => {
-            const attention = cards.filter(c => c.state === 'error' || c.state === 'degraded' || c.critical).length
             const worst = cards.some(c => c.state === 'error') ? 'error'
               : cards.some(c => c.state === 'degraded') ? 'degraded'
               : cards.every(c => c.state === 'healthy') ? 'healthy' : 'unknown'
+            const folded = expanded[group.id] === false
             return (
               <div key={group.id}>
-                <TreeItem label={group.label} status={worst} active={activeProject === group.id}
-                  onClick={() => onSelect(group.id)} indent={1} bold
-                  count={attention ? `${attention} need${attention === 1 ? 's' : ''} attention` : undefined} />
-                {cards.map(c => (
+                <div className="flex items-center">
+                  <button onClick={() => toggleGroup(group.id)} title={folded ? 'Show its systems' : 'Hide its systems'}
+                    className="pl-4 pr-0.5 py-2 text-gray-500 hover:text-gray-800 dark:text-purple-300 dark:hover:text-purple-100">
+                    {folded ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+                  </button>
+                  <TreeItem label={group.label} status={worst} active={activeProject === group.id}
+                    onClick={() => onSelect(group.id)} indent={0} />
+                </div>
+                {!folded && cards.map(c => (
                   <TreeItem key={c.id} label={c.label} status={c.state} active={activeProject === c.id}
                     onClick={() => onSelect(c.id)} indent={3} />
                 ))}

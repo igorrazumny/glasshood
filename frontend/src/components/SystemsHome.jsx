@@ -2,7 +2,7 @@
 // Purpose: REQ-GHA-035 clause 2 — the home view: every monitored system side by side, each
 // with its state in one plain line and its open alarms; a click opens that system.
 
-import { AlertOctagon, AlertTriangle, Eye } from 'lucide-react'
+import { AlertOctagon, AlertTriangle, Eye, Loader2 } from 'lucide-react'
 import { clock } from '../utils/time'
 import { assessmentLine } from '../utils/systems'
 import { groupedCards, portfolioLine } from '../utils/systems'
@@ -12,8 +12,10 @@ const DOT = {
   'not checked': 'bg-gray-400',
 }
 
-export default function SystemsHome({ cards, line, onOpen, descriptions = {} }) {
+export default function SystemsHome({ cards, line, onOpen, descriptions = {}, loading = false }) {
   // REQ-GHA-035 clause 9: 9Robots systems and external systems, each with its own line
+  // REQ-GHA-037 clause 6: while the systems load, say so
+  if (loading && !cards.length) return <Waiting text="Loading your systems…" />
   return (
     <div className="h-full overflow-y-auto p-4">
       <div className="mb-4">
@@ -53,12 +55,16 @@ function SystemCard({ card: c, about, onOpen }) {
           </span>
         )}
       </div>
-      {c.subtitle && !c.outside && <div className="text-xs text-gray-500 dark:text-purple-300 mt-0.5">{c.subtitle}</div>}
+      {(c.outside ? c.source : c.subtitle) && <div className="text-xs text-gray-500 dark:text-purple-300 mt-0.5">{c.outside ? c.source : c.subtitle}</div>}
       <p className="text-[15px] font-medium text-gray-800 dark:text-purple-100 mt-3">{c.line}</p>
       <div className="flex items-center gap-3 mt-1 text-sm">
-        {c.critical > 0 && <span className="flex items-center gap-1 text-red-700 dark:text-red-400"><AlertOctagon size={13} />{c.critical} critical</span>}
-        {c.warning > 0 && <span className="flex items-center gap-1 text-yellow-700 dark:text-yellow-400"><AlertTriangle size={13} />{c.warning} warning{c.warning === 1 ? '' : 's'}</span>}
-        {!c.critical && !c.warning && <span className="text-gray-500 dark:text-purple-300">No open alarm</span>}
+        {c.critical + c.warning > 0
+          ? <span className={`flex items-center gap-1 ${c.critical ? 'text-red-700 dark:text-red-400' : 'text-yellow-700 dark:text-yellow-400'}`}>
+              {c.critical ? <AlertOctagon size={13} /> : <AlertTriangle size={13} />}
+              {c.critical + c.warning} alert{c.critical + c.warning === 1 ? '' : 's'} to review{c.critical ? ` (${c.critical} critical)` : ''}
+            </span>
+          : <span className="text-gray-500 dark:text-purple-300">No active alerts</span>}
+        {c.notes > 0 && <span className="text-gray-500 dark:text-purple-300">{c.notes} configuration note{c.notes === 1 ? '' : 's'}</span>}
       </div>
       <div className="mt-3 pt-3 border-t border-border/70 dark:border-purple-700/70 flex-1">
         <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-purple-300 mb-1">
@@ -70,12 +76,24 @@ function SystemCard({ card: c, about, onOpen }) {
         {a.problem && (
           <div className="text-xs text-red-700 dark:text-red-400 mb-1">{a.problem}</div>
         )}
-        <p className="text-sm text-gray-700 dark:text-purple-100 leading-relaxed">{a.text}</p>
+        <p className="text-sm text-gray-700 dark:text-purple-100 leading-relaxed flex items-start gap-2">
+          {!about?.summary && !about?.error && <Loader2 size={14} className="animate-spin mt-0.5 flex-shrink-0" />}
+          <span>{a.text}</span>
+        </p>
       </div>
       <div className="mt-4 flex items-center justify-between text-xs text-gray-500 dark:text-purple-300">
         <span>{c.checkedAt ? `Checked ${clock(c.checkedAt * 1000)}` : 'Not checked yet'}</span>
         <span className="text-sm font-medium text-accent-600 dark:text-accent-300 group-hover:translate-x-0.5 transition">See details →</span>
       </div>
     </button>
+  )
+}
+
+export function Waiting({ text }) {
+  return (
+    <div className="h-full flex flex-col items-center justify-center gap-3 text-gray-500 dark:text-purple-300">
+      <Loader2 size={28} className="animate-spin" />
+      <span className="text-sm">{text}</span>
+    </div>
   )
 }
