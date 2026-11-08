@@ -249,6 +249,9 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
             listCards={!isDemo && !selectedCard && (cards.length > 1 || !topology.data)
               ? groupedCards(homeCards).flatMap(g => g.cards) : null}
             descriptions={systemDescriptions.data || {}}
+            fetchError={isDemo ? null : liveAnalysis.error}
+            descriptionsError={isDemo || systemDescriptions.data ? null : systemDescriptions.error}
+            systemsError={isDemo || topology.data ? null : topology.error}
             showStats={isDemo || !!selectedCard || cards.length <= 1} />
         </div>
         {/* REQ-GHA-027: an anomaly is an alarm on its part (with its classification in the
@@ -267,7 +270,9 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
           <Waiting text="Loading your systems…" />
         ) : showHome ? (
           <SystemsHome cards={homeCards} line={portfolioLine(homeCards)} onOpen={setActiveProject}
-            descriptions={systemDescriptions.data || {}} loading={!topology.data} />
+            descriptions={systemDescriptions.data || {}} loading={!topology.data}
+            loadError={topology.data ? null : topology.error}
+            descriptionsError={systemDescriptions.data ? null : systemDescriptions.error} />
         ) : (
           <TopologyMap key={activeProject || 'all'} data={mapData} error={topology.error} isDemo={isDemo} hideCosts={hideCosts}
             onNodeSelect={setSelectedNode} focusProjectId={mapManifests.length ? null : activeProject} manifests={mapManifests} />

@@ -4,7 +4,7 @@
 
 import { AlertOctagon, AlertTriangle, Eye, Loader2 } from 'lucide-react'
 import { clock } from '../utils/time'
-import { assessmentLine } from '../utils/systems'
+import { assessmentLine, loadFailed } from '../utils/systems'
 import { groupedCards, portfolioLine } from '../utils/systems'
 
 const DOT = {
@@ -12,9 +12,10 @@ const DOT = {
   'not checked': 'bg-gray-400',
 }
 
-export default function SystemsHome({ cards, line, onOpen, descriptions = {}, loading = false }) {
+export default function SystemsHome({ cards, line, onOpen, descriptions = {}, loading = false, loadError = null, descriptionsError = null }) {
   // REQ-GHA-035 clause 9: 9Robots systems and external systems, each with its own line
   // REQ-GHA-037 clause 6: while the systems load, say so
+  if (!cards.length && loadError) return <Failed text={loadFailed('Your systems', loadError)} />
   if (loading && !cards.length) return <Waiting text="Loading your systems…" />
   return (
     <div className="h-full overflow-y-auto p-4">
@@ -29,7 +30,7 @@ export default function SystemsHome({ cards, line, onOpen, descriptions = {}, lo
             <span className="text-xs text-gray-500 dark:text-purple-300">{portfolioLine(groupCards)}</span>
           </div>
           <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
-            {groupCards.map(c => <SystemCard key={c.id} card={c} about={descriptions[c.product]} onOpen={onOpen} />)}
+            {groupCards.map(c => <SystemCard key={c.id} card={c} about={descriptions[c.product]} loadError={descriptionsError} onOpen={onOpen} />)}
           </div>
         </section>
       ))}
@@ -39,8 +40,9 @@ export default function SystemsHome({ cards, line, onOpen, descriptions = {}, lo
 
 // REQ-GHA-037: what a business owner needs — state in one line, open alarms, the AI's view of
 // the whole system, when it was checked — and a clear way in
-function SystemCard({ card: c, about, onOpen }) {
+function SystemCard({ card: c, about, loadError, onOpen }) {
   const a = assessmentLine(about, Date.now())
+  if (!about && loadError) a.text = loadFailed('The assessment', loadError)
   return (
     <button onClick={() => onOpen(c.id)}
       className="group text-left flex flex-col bg-card dark:bg-purple-800 border border-border dark:border-purple-700 rounded-xl p-5
@@ -77,7 +79,7 @@ function SystemCard({ card: c, about, onOpen }) {
           <div className="text-xs text-red-700 dark:text-red-400 mb-1">{a.problem}</div>
         )}
         <p className="text-sm text-gray-700 dark:text-purple-100 leading-relaxed flex items-start gap-2">
-          {!about?.summary && !about?.error && <Loader2 size={14} className="animate-spin mt-0.5 flex-shrink-0" />}
+          {!about?.summary && !about?.error && !loadError && <Loader2 size={14} className="animate-spin mt-0.5 flex-shrink-0" />}
           <span>{a.text}</span>
         </p>
       </div>
@@ -86,6 +88,14 @@ function SystemCard({ card: c, about, onOpen }) {
         <span className="text-sm font-medium text-accent-600 dark:text-accent-300 group-hover:translate-x-0.5 transition">See details →</span>
       </div>
     </button>
+  )
+}
+
+export function Failed({ text }) {
+  return (
+    <div className="h-full flex items-center justify-center p-6">
+      <span className="text-sm text-yellow-700 dark:text-yellow-300 text-center">{text}</span>
+    </div>
   )
 }
 

@@ -3,7 +3,7 @@
 // Run: node frontend/src/utils/systems.test.js
 
 import assert from 'node:assert/strict'
-import { headerLine, systemCards, systemOfNodes, portfolioLine, systemId, groupedCards, cardsInGroup, assessmentLine, listAssessments } from './systems.js'
+import { headerLine, systemCards, systemOfNodes, portfolioLine, systemId, groupedCards, cardsInGroup, assessmentLine, listAssessments, loadFailed } from './systems.js'
 
 let failed = 0
 function test(name, fn) {
@@ -143,6 +143,14 @@ test('a group with an unassessed system never claims it operates normally', () =
   const cards = [{ id: 'x', label: 'A', state: 'healthy' }, { id: 'y', label: 'B', state: 'not checked' }]
   const line = headerLine(cards.map(c => ({ ...c, outside: false, critical: 0 })), null).text
   assert.equal(line, 'Our systems: 1 operating normally, 1 status unavailable')
+})
+
+test('a failed read is said in plain words, never shown as still loading', () => {
+  // REQ-GHA-037 clause 6; shadow's pre-existing gap on #123
+  assert.equal(loadFailed('The AI overview', '503: {"detail":"x"}'), 'The AI overview could not be loaded ({"detail":"x"}); trying again.')
+  const [row] = listAssessments([{ id: 'a', label: 'One', product: 'one' }], {}, Date.now(), 'Failed to fetch')
+  assert.equal(row.waiting, false)
+  assert.equal(row.text, 'The assessment could not be loaded (Failed to fetch); trying again.')
 })
 
 if (failed) { console.error(`${failed} failed`); process.exit(1) }

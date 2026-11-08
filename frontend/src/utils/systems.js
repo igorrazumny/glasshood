@@ -133,13 +133,20 @@ export function assessmentLine(about, nowMs, maxAgeS = 3 * 3600) {
   return { when, text, old, problem }
 }
 
+// REQ-GHA-037 clause 6: a read that failed is said in plain words, never shown as loading
+export function loadFailed(what, error) {
+  return `${what} could not be loaded (${String(error).replace(/^\d{3}:\s*/, '').slice(0, 120)}); trying again.`
+}
+
 // REQ-GHA-037 clause 9 with REQ-GHA-024: the list of per-system assessments on the home view
 // or a group says, for each system, when it was written, whether it is old and whether the
 // latest update failed, exactly as that system's card does
-export function listAssessments(cards, descriptions, nowMs) {
+export function listAssessments(cards, descriptions, nowMs, loadError = null) {
   return (cards || []).map(c => {
     const about = descriptions?.[c.product] || null
-    return { id: c.id, label: c.label, waiting: !about?.summary && !about?.error, ...assessmentLine(about, nowMs) }
+    const line = assessmentLine(about, nowMs)
+    if (!about && loadError) return { id: c.id, label: c.label, waiting: false, ...line, text: loadFailed('The assessment', loadError) }
+    return { id: c.id, label: c.label, waiting: !about?.summary && !about?.error, ...line }
   })
 }
 

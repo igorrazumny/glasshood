@@ -8,7 +8,7 @@ import { Brain, RefreshCw, AlertTriangle, CheckCircle, Server, Shield, Loader2 }
 import { apiFetch } from '../utils/api'
 import { statsNodes } from '../utils/canvasParts.js'
 import { overviewStamp, spendLine } from '../utils/overview.js'
-import { listAssessments } from '../utils/systems.js'
+import { listAssessments, loadFailed } from '../utils/systems.js'
 
 function ScoreBadge({ score }) {
   if (score === null || score === undefined) return null
@@ -69,7 +69,10 @@ function TopologyStats({ topology, canvas }) {
 
 // REQ-GHA-037 clauses 7 and 9: the title names what the overview covers; on the home view or
 // a group it lists each system's own short assessment; box counts only for one system
-function SystemsList({ cards, descriptions }) {
+function SystemsList({ cards, descriptions, loadError, systemsError }) {
+  if (!cards.length && systemsError) {
+    return <p className="text-sm text-yellow-700 dark:text-yellow-300">{loadFailed('Your systems', systemsError)}</p>
+  }
   if (!cards.length) {
     return (
       <p className="text-gray-500 dark:text-purple-300 text-sm flex items-center gap-2">
@@ -79,7 +82,7 @@ function SystemsList({ cards, descriptions }) {
   }
   return (
     <ul className="space-y-3">
-      {listAssessments(cards, descriptions, Date.now()).map(a => (
+      {listAssessments(cards, descriptions, Date.now(), loadError).map(a => (
         <li key={a.id}>
           <div className="text-sm font-semibold text-gray-800 dark:text-purple-100">
             {a.label}{a.when && <span className="font-normal text-xs text-gray-500 dark:text-purple-300"> · {a.when}</span>}
@@ -97,7 +100,8 @@ function SystemsList({ cards, descriptions }) {
 }
 
 export default function AnalysisPanel({ data, topology, canvas, scopeLabel = 'All monitored systems', listCards = null,
-                                        descriptions = null, showStats = true, loading = false }) {
+                                        descriptions = null, showStats = true, loading = false,
+                                        fetchError = null, descriptionsError = null, systemsError = null }) {
   const [refreshing, setRefreshing] = useState(false)
   const [refreshNote, setRefreshNote] = useState('')
 
@@ -146,12 +150,17 @@ export default function AnalysisPanel({ data, topology, canvas, scopeLabel = 'Al
       {!listCards && analysis.error && (
         <p className="text-xs text-yellow-700 dark:text-yellow-300">{analysis.error}{hasData ? ' — showing the last overview.' : ''}</p>
       )}
+      {!listCards && fetchError && (
+        <p className="text-xs text-yellow-700 dark:text-yellow-300">
+          {hasData ? `${loadFailed('A newer overview', fetchError)} Showing the last one.` : loadFailed('The AI overview', fetchError)}
+        </p>
+      )}
       {refreshNote && <p className="text-xs text-gray-500 dark:text-purple-300">{refreshNote}</p>}
 
       {listCards ? (
-        <SystemsList cards={listCards} descriptions={descriptions} />
+        <SystemsList cards={listCards} descriptions={descriptions} loadError={descriptionsError} systemsError={systemsError} />
       ) : !hasData ? (
-        <p className="text-gray-500 dark:text-purple-300 text-sm flex items-center gap-2">
+        fetchError ? null : <p className="text-gray-500 dark:text-purple-300 text-sm flex items-center gap-2">
           {!analysis.error && <Loader2 size={14} className="animate-spin" />}
           {analysis.error ? 'No overview yet.' : (loading || !data ? 'Loading the AI overview…' : 'AI overview being written…')}
         </p>
