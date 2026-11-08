@@ -146,6 +146,7 @@ export function listAssessments(cards, descriptions, nowMs, loadError = null) {
     const about = descriptions?.[c.product] || null
     const line = assessmentLine(about, nowMs)
     if (!about && loadError) return { id: c.id, label: c.label, waiting: false, ...line, text: loadFailed('The assessment', loadError) }
+    if (loadError) return { id: c.id, label: c.label, waiting: false, ...line, problem: line.problem || loadFailed('A newer assessment', loadError) }
     return { id: c.id, label: c.label, waiting: !about?.summary && !about?.error, ...line }
   })
 }

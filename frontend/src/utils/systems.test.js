@@ -153,4 +153,13 @@ test('a failed read is said in plain words, never shown as still loading', () =>
   assert.equal(row.text, 'The assessment could not be loaded (Failed to fetch); trying again.')
 })
 
+test('a failed refresh is said beside an assessment that is kept', () => {
+  // shadow P1 on #129: a cached summary must not hide that the newer read failed
+  const now = Date.now()
+  const [row] = listAssessments([{ id: 'a', label: 'One', product: 'one' }],
+    { one: { summary: 'Fine', analyzed_at: (now - 600e3) / 1000 } }, now, 'Failed to fetch')
+  assert.equal(row.text, 'Fine')
+  assert.equal(row.problem, 'A newer assessment could not be loaded (Failed to fetch); trying again.')
+})
+
 if (failed) { console.error(`${failed} failed`); process.exit(1) }
