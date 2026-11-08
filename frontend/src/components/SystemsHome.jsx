@@ -4,6 +4,7 @@
 
 import { AlertOctagon, AlertTriangle, Eye } from 'lucide-react'
 import { clock } from '../utils/time'
+import { assessmentLine } from '../utils/systems'
 import { groupedCards, portfolioLine } from '../utils/systems'
 
 const DOT = {
@@ -37,7 +38,7 @@ export default function SystemsHome({ cards, line, onOpen, descriptions = {} }) 
 // REQ-GHA-037: what a business owner needs — state in one line, open alarms, the AI's view of
 // the whole system, when it was checked — and a clear way in
 function SystemCard({ card: c, about, onOpen }) {
-  const written = about?.analyzed_at ? clock(about.analyzed_at * 1000) : null
+  const a = assessmentLine(about, Date.now())
   return (
     <button onClick={() => onOpen(c.id)}
       className="group text-left flex flex-col bg-card dark:bg-purple-800 border border-border dark:border-purple-700 rounded-xl p-5
@@ -61,11 +62,15 @@ function SystemCard({ card: c, about, onOpen }) {
       </div>
       <div className="mt-3 pt-3 border-t border-border/70 dark:border-purple-700/70 flex-1">
         <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-purple-300 mb-1">
-          AI assessment{written ? ` · ${written}` : ''}
+          AI assessment{a.when ? ` · ${a.when}` : ''}
         </div>
-        <p className="text-sm text-gray-700 dark:text-purple-100 leading-relaxed">
-          {about?.summary || (about?.error ? `Not available yet: ${about.error}` : 'Being written; it appears within a few minutes.')}
-        </p>
+        {a.old && (
+          <div className="text-xs text-yellow-700 dark:text-yellow-400 mb-1">{a.old}</div>
+        )}
+        {a.problem && (
+          <div className="text-xs text-red-700 dark:text-red-400 mb-1">{a.problem}</div>
+        )}
+        <p className="text-sm text-gray-700 dark:text-purple-100 leading-relaxed">{a.text}</p>
       </div>
       <div className="mt-4 flex items-center justify-between text-xs text-gray-500 dark:text-purple-300">
         <span>{c.checkedAt ? `Checked ${clock(c.checkedAt * 1000)}` : 'Not checked yet'}</span>

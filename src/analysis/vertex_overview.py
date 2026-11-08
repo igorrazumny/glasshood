@@ -742,7 +742,7 @@ def _run_outside_part(box: str, rec: dict, sig) -> None:
             _parts[box] = _keep_last_good(_parts.get(box), why)
 
 
-def run_outside() -> int:
+def run_outside(parts: bool = True) -> int:
     """REQ-GHA-036 clause 7: an overview of each external system every round, and an analysis
     of each of its parts written only when what the provider publishes about it changed.
     Returns the number of part analyses written."""
@@ -754,14 +754,14 @@ def run_outside() -> int:
             with _lock:
                 _outside[product] = _keep_last_good(_outside.get(product), f"the provider's status could not be read: {p['error']}")
             continue
-        parts = _published_parts(p)
+        part_list = _published_parts(p)
         counts = {}
-        for _, rec, _ in parts:
+        for _, rec, _ in part_list:
             counts[rec["provider_status"]] = counts.get(rec["provider_status"], 0) + 1
         payload = {"service": p["name"], "status_page": p["page"], "components_by_state": counts,
                    "not_operational": [{"component": r["component"], "group": r["group"], "state": r["provider_status"],
                                         "since": r["provider_updated"]}
-                                       for _, r, _ in parts if r["provider_status"] != "operational"][:150],
+                                       for _, r, _ in part_list if r["provider_status"] != "operational"][:150],
                    "open_incidents_and_maintenance": [{
                        "name": e.get("name"), "kind": e.get("_kind"), "status": e.get("status"), "impact": e.get("impact"),
                        "components": [x.get("name") for x in e.get("components") or []][:30],
@@ -776,8 +776,10 @@ def run_outside() -> int:
             logger.warning(f"outside overview failed for {p['name']}: {why}")
             with _lock:
                 _outside[product] = _keep_last_good(_outside.get(product), why)
+        if not parts:
+            continue
         with _lock:
-            jobs += [(box, rec, sig) for box, rec, sig in parts
+            jobs += [(box, rec, sig) for box, rec, sig in part_list
                      if not (_outside_sig.get(box) == sig and (_parts.get(box) or {}).get("summary"))]
     with ThreadPoolExecutor(max_workers=4, thread_name_prefix="outside") as ex:
         for f in [ex.submit(_run_outside_part, *j) for j in jobs]:
@@ -810,8 +812,15 @@ def reserve_manual_refresh() -> int:
 
 
 def manual_refresh(topology: dict) -> None:
+    """A person's refresh renews every system overview the views show (the combined one, each
+    own system's and each external system's); part analyses follow their own schedule."""
     refresh_durable_spend()
     run_system(topology)
+    run_own_systems(topology)
+    try:
+        run_outside(parts=False)
+    except Exception as e:
+        logger.error(f"outside overviews on refresh failed: {e}")
 
 
 def overview_loop(get_topology_fn, ready_fn=None):

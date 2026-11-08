@@ -147,3 +147,24 @@ def test_each_own_system_gets_its_own_overview_and_card_description():
     cards = ov.system_cards()
     assert cards["coldvault"]["summary"] == "coldvault is running normally."
     assert ov.get_own("glasshood")["summary"] == "glasshood is running normally."
+
+
+def test_a_manual_refresh_renews_each_systems_own_overview():
+    # shadow P1: refresh while viewing ColdVault must update ColdVault's own assessment
+    with patch.object(ov, "refresh_durable_spend"), patch.object(ov, "run_system") as sys_, \
+         patch.object(ov, "run_own_systems") as own, patch.object(ov, "run_outside") as out:
+        ov.manual_refresh({"nodes": []})
+    sys_.assert_called_once(); own.assert_called_once()
+    out.assert_called_once_with(parts=False)
+
+
+def test_outside_overview_without_parts_writes_no_part_analysis():
+    _reset()
+    calls = []
+    def gen(prompt, text):
+        calls.append(prompt)
+        return {"score": 8, "summary": "ok", "issues": [], "recommendations": []}
+    with patch("src.collectors.statuspage.published", return_value=_published()), \
+         patch.object(ov, "_generate", side_effect=gen):
+        assert ov.run_outside(parts=False) == 0
+    assert calls == [ov.OUTSIDE_SYSTEM_PROMPT]

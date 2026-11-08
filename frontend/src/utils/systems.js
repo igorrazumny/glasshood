@@ -107,3 +107,21 @@ export function portfolioLine(cards) {
   if (unread) parts.push(`${unread} not checked`)
   return parts.join(' · ')
 }
+
+// REQ-GHA-037 with REQ-GHA-024 clause 7: an AI assessment says when it was written, says
+// plainly when it is old or its latest refresh failed, and keeps the last good text as old
+export function assessmentLine(about, nowMs, maxAgeS = 3 * 3600) {
+  if (!about) return { when: null, text: 'Being written; it appears within a few minutes.', old: null, problem: null }
+  const at = about.analyzed_at ? about.analyzed_at * 1000 : null
+  const ageS = at ? (nowMs - at) / 1000 : null
+  const sameDay = at && new Date(at).toDateString() === new Date(nowMs).toDateString()
+  const fmtTime = ms => new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(ms)
+  const fmtDate = ms => new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(ms)
+  const when = at ? (sameDay ? `written ${fmtTime(at)}` : `written ${fmtDate(at)}`) : null
+  const hours = ageS ? Math.round(ageS / 3600) : 0
+  const old = at && (about.stale || ageS > maxAgeS)
+    ? `This assessment is ${hours >= 1 ? `${hours} h` : `${Math.round(ageS / 60)} min`} old; the system may have changed since.` : null
+  const problem = about.error ? `Latest update failed: ${about.error}` : null
+  const text = about.summary || (about.error ? 'No assessment yet.' : 'Being written; it appears within a few minutes.')
+  return { when, text, old, problem }
+}

@@ -61,7 +61,7 @@ export default function LoginScreen({ onLogin, onDemo, prefillDemo, setPrefillDe
           <div className="relative group">
             <button
               onClick={handleEnterDemo}
-              className="w-full text-white rounded py-3 font-medium text-lg transition-opacity hover:opacity-90"
+              className="w-full text-white border-2 border-transparent rounded py-3 font-medium text-lg transition-opacity hover:opacity-90"
               style={{ background: `linear-gradient(135deg, ${GH_ORANGE}, ${CV_BLUE})` }}
             >
               Live demo
@@ -122,7 +122,7 @@ export default function LoginScreen({ onLogin, onDemo, prefillDemo, setPrefillDe
         <button
           type="submit"
           disabled={loading}
-          className="w-full text-white rounded py-3 text-lg font-medium disabled:opacity-50 transition-opacity"
+          className="w-full text-white border-2 border-transparent rounded py-3 text-lg font-medium disabled:opacity-50 transition-opacity"
           style={{ background: `linear-gradient(135deg, ${GH_ORANGE}, ${CV_BLUE})` }}
         >
           {loading ? 'Authenticating...' : 'Login'}
