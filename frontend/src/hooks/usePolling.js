@@ -34,6 +34,7 @@ export function usePolling(path, intervalMs = 15000) {
   useEffect(() => {
     currentPath.current = path
     setData(null)
+    setError(null)   // an error from the previous path is not this one's
     if (!path) return
     let alive = true
     poll() // Initial fetch
