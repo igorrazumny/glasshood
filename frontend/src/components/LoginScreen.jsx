@@ -73,7 +73,7 @@ export default function LoginScreen({ onLogin, onDemo, prefillDemo, setPrefillDe
           </div>
           <div className="mt-4">
             <button type="button" onClick={handleSwitchToLive}
-              className="w-full bg-surface dark:bg-purple-900 border border-border dark:border-purple-700 text-gray-300 rounded py-2 text-base font-medium hover:border-gray-500 transition-colors">
+              className="w-full bg-card dark:bg-purple-900 border-2 border-gray-300 dark:border-purple-500 text-gray-800 dark:text-purple-100 rounded py-3 text-lg font-medium hover:border-accent-500 hover:text-accent-600 dark:hover:border-purple-300 transition-colors">
               Login (full access)
             </button>
           </div>
@@ -94,7 +94,7 @@ export default function LoginScreen({ onLogin, onDemo, prefillDemo, setPrefillDe
           placeholder="Email"
           value={loginEmail}
           onChange={(e) => setLoginEmail(e.target.value)}
-          className="w-full bg-surface dark:bg-purple-900 border border-border dark:border-purple-700 rounded px-3 py-2 text-white placeholder-gray-500 mb-3 focus:outline-none"
+          className="w-full bg-surface dark:bg-purple-900 border border-border dark:border-purple-700 rounded px-3 py-2 text-gray-900 dark:text-white placeholder-gray-500 mb-3 focus:outline-none"
           onFocus={e => e.target.style.borderColor = CV_BLUE}
           onBlur={e => e.target.style.borderColor = ''}
           autoFocus
@@ -105,7 +105,7 @@ export default function LoginScreen({ onLogin, onDemo, prefillDemo, setPrefillDe
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full bg-surface dark:bg-purple-900 border border-border dark:border-purple-700 rounded px-3 py-2 pr-10 text-white placeholder-gray-500 focus:outline-none"
+            className="w-full bg-surface dark:bg-purple-900 border border-border dark:border-purple-700 rounded px-3 py-2 pr-10 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none"
             onFocus={e => e.target.style.borderColor = CV_BLUE}
             onBlur={e => e.target.style.borderColor = ''}
           />
@@ -122,7 +122,7 @@ export default function LoginScreen({ onLogin, onDemo, prefillDemo, setPrefillDe
         <button
           type="submit"
           disabled={loading}
-          className="w-full text-white rounded py-2 font-medium disabled:opacity-50 transition-opacity"
+          className="w-full text-white rounded py-3 text-lg font-medium disabled:opacity-50 transition-opacity"
           style={{ background: `linear-gradient(135deg, ${GH_ORANGE}, ${CV_BLUE})` }}
         >
           {loading ? 'Authenticating...' : 'Login'}
@@ -137,7 +137,7 @@ export default function LoginScreen({ onLogin, onDemo, prefillDemo, setPrefillDe
             <button
               type="button"
               onClick={() => loginWithRedirect()}
-              className="w-full bg-surface dark:bg-purple-900 border border-border dark:border-purple-700 text-gray-300 rounded py-2 text-sm font-medium hover:border-gray-500 transition-colors flex items-center justify-center gap-2"
+              className="w-full bg-card dark:bg-purple-900 border-2 border-gray-300 dark:border-purple-500 text-gray-800 dark:text-purple-100 rounded py-3 text-lg font-medium hover:border-accent-500 hover:text-accent-600 dark:hover:border-purple-300 transition-colors flex items-center justify-center gap-2"
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                 <path d="M15.68 8.18c0-.567-.05-1.113-.145-1.636H8v3.094h4.305a3.68 3.68 0 0 1-1.597 2.415v2.007h2.585c1.513-1.393 2.387-3.444 2.387-5.88Z" fill="#4285F4"/>
@@ -151,7 +151,7 @@ export default function LoginScreen({ onLogin, onDemo, prefillDemo, setPrefillDe
         )}
         <div className="mt-4">
           <button type="button" onClick={handleExploreDemo}
-            className="w-full bg-surface dark:bg-purple-900 border border-border dark:border-purple-700 text-gray-300 rounded py-2 text-base font-medium hover:border-gray-500 transition-colors">
+            className="w-full bg-card dark:bg-purple-900 border-2 border-gray-300 dark:border-purple-500 text-gray-800 dark:text-purple-100 rounded py-3 text-lg font-medium hover:border-accent-500 hover:text-accent-600 dark:hover:border-purple-300 transition-colors">
             Live demo
           </button>
         </div>

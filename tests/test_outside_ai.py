@@ -116,5 +116,34 @@ def test_a_selected_external_system_never_shows_another_systems_overview():
         body = c.get("/api/analysis?system=cloudflare").json()
         assert body["summary"] == "" and "not been written yet" in body["error"]
         assert c.get("/api/analysis?system=nope").status_code == 404
-        assert c.get("/api/analysis?system=coldvault").json()["summary"] == "ColdVault is healthy"
+        # an own system without its own overview yet says so; never the combined one in its place
+        assert "not been written yet" in c.get("/api/analysis?system=coldvault").json()["error"]
         assert c.get("/api/analysis").json()["summary"] == "ColdVault is healthy"
+
+
+def test_each_own_system_gets_its_own_overview_and_card_description():
+    # REQ-GHA-037
+    with ov._lock:
+        ov._own.clear()
+    calls = []
+
+    def gen(prompt, text):
+        payload = json.loads(text)
+        calls.append(payload)
+        return {"score": 9, "summary": f"{payload['system']} is running normally.", "issues": [], "recommendations": []}
+    topology = {"nodes": [{"id": "cv-a", "label": "App", "project": "coldvault", "status": "healthy", "metrics": {}},
+                          {"id": "gls-a", "label": "Backend", "project": "glasshood", "status": "healthy", "metrics": {}},
+                          {"id": "cf-a", "label": "AMS", "project": "cloudflare", "status": "healthy", "metrics": {}}]}
+    manifests = [{"product": "coldvault", "project_id": ov.PROJECT}, {"product": "glasshood", "project_id": ""},
+                 {"product": "cloudflare", "kind": "outside_view"}]
+    with patch("src.api.routes.manifests._load_manifests", return_value=manifests), \
+         patch.object(ov, "_generate", side_effect=gen), \
+         patch.object(ov, "_log_lines", return_value=["a log line"]) as logs:
+        ov.run_own_systems(topology)
+    assert sorted(c["system"] for c in calls) == ["coldvault", "glasshood"]     # no external system here
+    assert [c["recent_logs"] for c in calls if c["system"] == "coldvault"] == [["a log line"]]
+    assert [c["recent_logs"] for c in calls if c["system"] == "glasshood"] == [[]]
+    assert [p["label"] for c in calls if c["system"] == "glasshood" for p in c["parts"]] == ["Backend"]
+    cards = ov.system_cards()
+    assert cards["coldvault"]["summary"] == "coldvault is running normally."
+    assert ov.get_own("glasshood")["summary"] == "glasshood is running normally."

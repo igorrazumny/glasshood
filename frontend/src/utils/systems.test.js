@@ -38,24 +38,24 @@ test('a card says the state in one plain line and counts its own alarms', () => 
   const [cv, cf] = systemCards(manifests, nodes, alerts)
   assert.equal(cv.label, 'ColdVault')
   assert.equal(cv.state, 'degraded')
-  assert.equal(cv.line, '1 part with problems, checked · 1 not checked')
+  assert.equal(cv.line, 'Running, with problems in 1 part')
   assert.deepEqual([cv.critical, cv.warning, cv.parts, cv.checkedAt], [1, 0, 3, 200])
   assert.equal(cf.outside, true)
-  assert.equal(cf.line, '1 part failing, reported by the provider')
+  assert.equal(cf.line, 'The provider reports outages in 1 part')
   assert.deepEqual([cf.critical, cf.warning], [0, 1])
 })
 
 test('a system nobody could read is never shown as working', () => {
   const [c] = systemCards([manifests[0]], [{ id: 'x', project: 'coldvault', env: 'prod', status: 'not checked' }], [])
   assert.equal(c.state, 'not checked')
-  assert.match(c.line, /^Not checked yet/)
+  assert.equal(c.line, 'Not checked yet')
 })
 
 test('idle parts are not counted as unread', () => {
   const [c] = systemCards([manifests[0]], [
     { id: 'a', project: 'coldvault', env: 'prod', status: 'healthy' },
     { id: 'b', project: 'coldvault', env: 'prod', status: 'idle' }], [])
-  assert.equal(c.line, 'All 1 checked parts working')
+  assert.equal(c.line, 'Running normally')
 })
 
 test('an alarm on a box inside a server counts for its system', () => {
