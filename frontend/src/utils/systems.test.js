@@ -100,7 +100,7 @@ test('an old assessment and a failed refresh are both said, the old text kept', 
   assert.match(a.old, /24 h old/)
   assert.equal(a.problem, 'Latest update failed: daily cap reached')
   const fresh = assessmentLine({ summary: 'ok', analyzed_at: (now - 600e3) / 1000, stale: false }, now)
-  assert.equal(fresh.old, null); assert.equal(fresh.problem, null); assert.match(fresh.when, /^written \d\d:\d\d$/)
+  assert.equal(fresh.old, null); assert.equal(fresh.problem, null); assert.match(fresh.when, /^written \d\d:\d\d \S+$/)
   assert.equal(assessmentLine(null, now).text, 'Being written; it appears within a few minutes.')
 })
 
