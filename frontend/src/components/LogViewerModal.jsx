@@ -3,9 +3,10 @@
 // REQ-GHA-032: a quiet part shows its latest lines of the last 7 days (with the date)
 // and every empty window says why.
 
-import { useState, useEffect, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
-import { apiFetch, apiUrl } from '../utils/api'
+import { usePolling } from '../hooks/usePolling'
+import { loadFailed } from '../utils/systems'
 import { clock, dateTime } from '../utils/time'
 
 const SEVERITY_COLORS = {
@@ -19,12 +20,18 @@ const SEVERITY_COLORS = {
 // REQ-704: logConfig prop removed (filter/project are derived server-side
 // from node_id via the compiled manifest). Callers no longer pass it.
 export default function LogViewerModal({ nodeId, nodeLabel, nodeStatus, isDemo, onClose }) {
-  const [entries, setEntries] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [note, setNote] = useState(null)
-  const [week, setWeek] = useState(false)
-  const [provider, setProvider] = useState(false)
+  // Logs already opened show at once from this session's store and are read again in the
+  // background every 30 s, so newer lines appear without waiting (same store as the views:
+  // one session's logs never show in the next session)
+  const url = nodeId ? (isDemo ? `/api/demo/logs/${nodeId}` : `/api/logs/${nodeId}`) : null
+  const logs = usePolling(url, 30000)
+  const data = logs.data
+  const entries = data?.entries || []
+  const loading = !data && !logs.error
+  const error = data?.error || (logs.error ? loadFailed('The logs', logs.error) : null)
+  const note = data?.note || null
+  const week = data?.window === '7d' || data?.window === 'provider'
+  const provider = data?.window === 'provider'
   const bottomRef = useRef(null)
 
   useEffect(() => {
@@ -34,37 +41,10 @@ export default function LogViewerModal({ nodeId, nodeLabel, nodeStatus, isDemo, 
   }, [onClose])
 
   useEffect(() => {
-    if (!nodeId) return
-    setLoading(true)
-    setError(null)
-    setNote(null)
-    setWeek(false)
-
-    // REQ-704: filter+project are derived server-side from node_id via the
-    // compiled manifest. We no longer send log_filter / log_project query
-    // params from the client (accepted-and-ignored on the backend, but still
-    // sending them invites accidental reliance and gives a misleading sense
-    // of where the trust boundary is).
-    const url = isDemo ? `/api/demo/logs/${nodeId}` : `/api/logs/${nodeId}`
-    const fetcher = isDemo ? fetch(apiUrl(url)).then(r => r.json()) : apiFetch(url)
-
-    fetcher
-      .then(data => {
-        setEntries(data.entries || [])
-        if (data.error) setError(data.error)
-        if (data.note) setNote(data.note)
-        setWeek(data.window === '7d' || data.window === 'provider')
-        setProvider(data.window === 'provider')
-      })
-      .catch(err => setError(err.message))
-      .finally(() => setLoading(false))
-  }, [nodeId, isDemo])
-
-  useEffect(() => {
     if (!loading && bottomRef.current) {
       bottomRef.current.scrollIntoView({ behavior: 'smooth' })
     }
-  }, [loading, entries])
+  }, [loading, entries.length])   // only when lines arrive, so a refresh does not move the reader
 
   if (!nodeId) return null
 
@@ -76,6 +56,9 @@ export default function LogViewerModal({ nodeId, nodeLabel, nodeStatus, isDemo, 
           <div className="flex items-center gap-3">
             <h2 className="text-lg font-semibold text-white">Logs: {nodeLabel}</h2>
             <span className="text-xs text-gray-500">{nodeId}</span>
+            {logs.lastUpdated && (
+              <span className="text-xs text-gray-500 dark:text-purple-300">read {clock(logs.lastUpdated)} · updates every 30 s</span>
+            )}
             {nodeStatus && (
               <span className={`text-xs px-2 py-0.5 rounded font-medium ${
                 nodeStatus === 'healthy' || nodeStatus === 'deployed' ? 'bg-green-500/10 text-green-400' :
