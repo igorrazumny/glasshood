@@ -20,6 +20,7 @@ from src.auth.rbac import VALID_ROLES, require_role
 from src.auth.audit import log_auth_event
 
 logger = logging.getLogger(__name__)
+DEMO_LOGIN = 'demo@glasshood.example.com'
 router = APIRouter(tags=["auth"])
 
 JWT_ALGORITHM = "HS256"
@@ -228,7 +229,7 @@ def login(body: LoginRequest):
     if not GLASSHOOD_PASSWORD:
         raise HTTPException(status_code=500, detail="Auth not configured")
     # Demo user: read-only viewer access with masking
-    is_demo = body.login.lower() == 'demo@glasshood.example.com' and body.password == 'demo'
+    is_demo = body.login.lower() == DEMO_LOGIN and body.password == 'demo'
     if not is_demo:
         if GLASSHOOD_LOGIN and body.login.lower() != GLASSHOOD_LOGIN.lower():
             log_auth_event("login_failed", user=body.login, details={"reason": "invalid_login"})

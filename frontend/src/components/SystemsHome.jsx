@@ -25,7 +25,7 @@ function StatusChip({ card }) {
   )
 }
 
-export default function SystemsHome({ cards, line, onOpen, onOpenAlert, descriptions = {}, loading = false, loadError = null, descriptionsError = null }) {
+export default function SystemsHome({ title = 'All systems', cards, line, onOpen, onOpenAlert, descriptions = {}, loading = false, loadError = null, descriptionsError = null }) {
   // REQ-GHA-035 clause 9: Proprietary systems and External systems, each with its own line
   // REQ-GHA-037 clause 6: while the systems load, say so
   if (!cards.length && loadError) return <Failed text={loadFailed('Your systems', loadError)} />
@@ -34,7 +34,7 @@ export default function SystemsHome({ cards, line, onOpen, onOpenAlert, descript
   return (
     <div className="h-full overflow-y-auto p-4">
       <div className="mb-4">
-        <h2 className="text-[22px] font-bold text-gray-800 dark:text-purple-100">Monitored systems</h2>
+        <h2 className="text-[22px] font-bold text-gray-800 dark:text-purple-100">{title}</h2>
         <p className="text-sm text-gray-500 dark:text-purple-300">{off ? <AiOfflineLine offline={off.offline} onOpenAlert={onOpenAlert} /> : line}</p>
       </div>
       {groupedCards(cards).map(({ group, cards: groupCards }) => (

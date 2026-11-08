@@ -7,7 +7,7 @@ import pytest
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
-from src.api.server import _OPEN_WRITES, _WORK_ON_READ, app
+from src.api.server import _OPEN_WRITES, _OWN_PREFERENCES, _WORK_ON_READ, app
 
 WRITES = ("POST", "PUT", "PATCH", "DELETE")
 
@@ -35,7 +35,7 @@ def test_there_are_write_routes_to_check():
             "/api/security/findings/{cve_id}/status", "/api/integrations/snow/sync"} <= paths
 
 
-@pytest.mark.parametrize("method,path", _write_routes())
+@pytest.mark.parametrize("method,path", [r for r in _write_routes() if r[1] not in _OWN_PREFERENCES])
 def test_the_demo_role_is_refused_the_same_way_everywhere(client, method, path):
     def viewer(request):
         request.state.user_context = _as("viewer")

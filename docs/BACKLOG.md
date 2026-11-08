@@ -746,3 +746,36 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Testable:** Yes (UI)
 - **Who builds:** Neo.
 - **Status:** confirmed by the owner 2026-11-08 (full text).
+
+## REQ-GHA-046: The AI review of a selection is a short, crisp statement of the situation; detail belongs to the single system; the reader sets the panel's space
+
+- **Goal:** A person responsible for several systems reads in seconds whether things are fine and what deserves a call-out, and arranges the right-hand column as suits them.
+- **Why:** Owner, 2026-11-09. On all systems the panel lists only some systems and copies individual findings into the top-level view, including a minor firewall observation. The intent is a brief answer for a person responsible for several systems: are things fine, and what deserves a call-out. The panel's fixed half-height split also does not suit every reader.
+- **Target state:**
+  AI review of several systems
+  1. The panel's title reads "AI review · " followed by exactly the name selected on the left: All systems, Proprietary systems, External systems, or the system's name. The heading of the middle area uses the same name for a selection of several systems. "All monitored systems" no longer appears as a name for that selection.
+  2. When all systems or a group are selected, the review is short and crisp prose about the selection as a whole: whether things are generally fine, and what, if anything, deserves a call-out.
+  3. It is about the whole situation. It need not name every system, and it names a system only to call something out.
+  4. It contains no list, no bullet points, no "Needs attention" section and no enumeration of incidents, locations, components, findings or alert numbers.
+  5. Observations and configuration notes never appear in it, individually or as a summary.
+  6. An actual fault or a provider-reported problem that deserves attention is always called out. If nothing deserves it, the review says plainly that all is going fine.
+  7. The review agrees with the saved status of each system in the selection (REQ-GHA-040), never contradicts it, and shows when it was evaluated.
+  8. It does not repeat the text on the cards. This requirement replaces the attention list in REQ-GHA-045 clause 4. "Changed since the last check" stays below the review.
+  AI review of one system
+  9. When one system is selected, its review keeps its detail, including what needs attention and next steps, and may be longer and more specific.
+  10. In that review, findings are weighed by importance. A minor observation is not presented as a main issue, and one finding is not repeated across several parts.
+  Production of the review
+  11. The review is produced within the monthly limits and backup rules (REQ-GHA-041). It is refreshed only when the saved record of a system in that selection changes, and it survives a restart like other evaluations (REQ-GHA-042). When AI is offline it behaves as REQ-GHA-042 states.
+  12. The model stays the same at first, with better instructions. If live results still break clauses 2 to 5 or 10, the owner is asked about a stronger model for this review.
+  Space in the right-hand column
+  13. When all alert lists are collapsed, the alerts sit at the bottom of the column and the AI review takes all the remaining height.
+  14. When alert lists are open, a boundary between the AI review and the alerts can be dragged to give either more room, and it works by keyboard too. Neither area can be dragged out of reach, and each scrolls within its own space.
+  15. The position a signed-in user leaves the boundary in is kept for that account and is restored at the next sign-in, including on another device.
+  16. The Live demo saves nothing on the server (REQ-GHA-043) and starts every new session at the defaults.
+  17. The fixed half-height limits of REQ-GHA-038 clause 4 and their defaults are replaced by clauses 13 to 16. The default split when lists are open is about half each.
+  Alert labels
+  18. In the alert lists, every alert names its level (Critical, Medium or Information) in the same form and position as the existing tags, alongside its type when it has one, such as Observation, and its system.
+- **Priority:** P2
+- **Testable:** Yes (API and UI; live reading of the text by the owner)
+- **Who builds:** Neo.
+- **Status:** confirmed by the owner 2026-11-09 (full text).

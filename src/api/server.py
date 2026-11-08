@@ -8,7 +8,7 @@ import threading
 import time
 from pathlib import Path
 
-from fastapi import FastAPI, Depends, Request
+from fastapi import FastAPI, Depends, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, RedirectResponse
@@ -43,12 +43,15 @@ from src.config.settings import (
 )
 from src.discovery.gcp_assets import discovery_loop
 
+from src.api.routes.preferences import router as preferences_router
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # REQ-GHA-043: every action that changes something or starts work needs an operator, including any
 # added later. Only signing in and out and the browser's crash report are open to the demo role.
 _OPEN_WRITES = {"/api/auth/login", "/api/auth/refresh", "/api/auth/logout", "/api/frontend-error"}
+_OWN_PREFERENCES = {"/api/preferences/right-panel"}  # REQ-GHA-046: any account's own; never the demo's
 _WORK_ON_READ = {"/api/compliance/report"}   # a GET that creates a report and adds to a shared audit log
 
 
@@ -56,9 +59,13 @@ def _writes_need_operator(request: Request) -> None:
     path = request.url.path
     if path in _OPEN_WRITES or (request.method in ("GET", "HEAD", "OPTIONS") and path not in _WORK_ON_READ):
         return
-    from src.api.routes.auth import verify_token
+    from src.api.routes.auth import DEMO_LOGIN, verify_token
     from src.auth.rbac import require_role
-    verify_token(request)
+    ctx = verify_token(request)
+    if path in _OWN_PREFERENCES:
+        if str(ctx.get("user") or "").lower() == DEMO_LOGIN:
+            raise HTTPException(status_code=403, detail="The Live demo stores nothing")
+        return
     require_role(request, "operator")
 
 
@@ -108,6 +115,7 @@ app.include_router(ingest_router)
 app.include_router(storage_router)
 app.include_router(customers_router)
 app.include_router(projects_router)
+app.include_router(preferences_router)
 app.include_router(manifests_router)
 app.include_router(mcp_recheck_router)
 

@@ -251,14 +251,6 @@ export function statusReason(card) {
   return ''
 }
 
-// REQ-GHA-045 clause 4: the right-hand column lists only what needs attention, not the cards' text
-export function attentionItems(cards, descriptions) {
-  return (cards || []).filter(c => c.state !== 'healthy' || c.critical || c.warning).map(c => ({
-    id: c.id, label: c.label, word: statusWord(c.state), reason: statusReason(c),
-    issues: descriptions?.[c.product]?.issues || [],
-  }))
-}
-
 // REQ-GHA-045 clause 4: what the last monitoring cycle changed, from the existing comparison
 export function changeLines(diff, max = 5) {
   if (!diff || diff.first_run) return { none: 'Nothing to compare yet', lines: [], more: 0 }
@@ -280,4 +272,11 @@ export function scopeDiff(diff, owner, cardIds) {
   const removed = diff.removed || []
   return { ...diff, added: (diff.added || []).filter(inScope), changed: (diff.changed || []).filter(c => inScope(c.id)),
     removed: removed.filter(inScope), unassigned: removed.filter(id => !owner.has(id)).length }
+}
+
+// REQ-GHA-046 clause 7: a review written before the newest evaluations says so
+export function selectionNotice(review) {
+  if (!review || review.current !== false) return review?.update_failed ? 'The latest update of this review could not be written.' : null
+  const older = review.summary ? ' This text is from before the newest evaluations.' : ''
+  return (review.update_failed ? 'The latest update of this review could not be written.' : 'A newer review is being written.') + older
 }

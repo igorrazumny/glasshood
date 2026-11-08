@@ -7,9 +7,9 @@
 // REQ-GHA-038 clause 4: the alarm area takes at most about half the panel's height; open
 // lists share it, each scrolling on its own.
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AlertTriangle, CheckCircle, ChevronRight, ChevronDown } from 'lucide-react'
-import { alarmTitle, alarmWhen, alarmAgo, resolvedWhen, notCheckedNames, alarmTag, LEVELS, alarmsByLevel, defaultOpen } from '../utils/alarms'
+import { alarmTitle, alarmWhen, alarmAgo, resolvedWhen, notCheckedNames, alarmTag, LEVELS, alarmsByLevel, defaultOpen, alarmLevel } from '../utils/alarms'
 
 const OPEN_KEY = 'glasshood.alarmLists'
 
@@ -17,29 +17,29 @@ function loadOpen() {
   try { return JSON.parse(localStorage.getItem(OPEN_KEY) || '{}') || {} } catch { return {} }
 }
 
-export default function AlertPanel({ alerts, resolved, rules, onSelect, systemOf }) {
+export default function AlertPanel({ alerts, resolved, rules, onSelect, systemOf, onOpenChange }) {
   const [showResolved, setShowResolved] = useState(false)
   const [chosen, setChosen] = useState(loadOpen)   // what the reader opened or closed, remembered
   const notChecked = notCheckedNames(rules)
-  if (!alerts?.length && !resolved?.length && !notChecked.length) return null
+  const hasAny = !!(alerts?.length || resolved?.length || notChecked.length)
   alerts = alerts || []
 
   const byLevel = alarmsByLevel(alerts)
   const defaults = defaultOpen(byLevel)
   const isOpen = id => (id in chosen ? chosen[id] : defaults[id])
+  const anyOpen = hasAny && (showResolved || LEVELS.some(l => byLevel[l.id]?.length && isOpen(l.id)))
+  useEffect(() => { onOpenChange?.(anyOpen) }, [anyOpen, onOpenChange])
+  if (!hasAny) return null
   const toggle = id => {
     const next = { ...chosen, [id]: !isOpen(id) }
     setChosen(next)
     try { localStorage.setItem(OPEN_KEY, JSON.stringify(next)) } catch { /* not remembered */ }
   }
   const counted = alerts.filter(a => a.kind !== 'example')
-  // REQ-GHA-038 clause 4: at most about half the panel; while a list is open it keeps room
-  // for its alarms however long the AI overview above is (that one is capped at half too)
-  const anyOpen = LEVELS.some(l => byLevel[l.id]?.length && isOpen(l.id))
 
   return (
     <div className="bg-card dark:bg-purple-800 border border-border dark:border-purple-700 rounded-lg p-3 mb-3 flex flex-col min-h-0"
-      style={{ minHeight: anyOpen ? '40%' : undefined, flex: anyOpen ? '1 1 auto' : '0 0 auto' }}>
+      style={{ minHeight: 0, flex: anyOpen ? '1 1 0' : '0 0 auto' }}>
       <div className="flex items-center justify-between mb-2 flex-shrink-0">
         <div className="flex items-center gap-2">
           <AlertTriangle size={14} className="text-gray-500 dark:text-purple-300" />
@@ -69,6 +69,7 @@ export default function AlertPanel({ alerts, resolved, rules, onSelect, systemOf
                       <span className={`mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0 ${level.dot}`} />
                       <div className="min-w-0 flex-1">
                         <p className="text-sm text-gray-800 dark:text-purple-100 leading-snug">
+                          <span className="text-[10px] font-semibold uppercase mr-1.5 px-1 py-px rounded border border-gray-400 dark:border-purple-400 text-gray-600 dark:text-purple-200">{level.label}</span>
                           {alarmTag(alert) && (
                             <span className="text-[10px] font-semibold uppercase mr-1.5 px-1 py-px rounded border border-gray-400 dark:border-purple-400 text-gray-600 dark:text-purple-200">
                               {alarmTag(alert)}
@@ -107,7 +108,7 @@ export default function AlertPanel({ alerts, resolved, rules, onSelect, systemOf
                 <div key={`${alert.group}-${alert.node_id}-${alert.ended_at}-${i}`}
                   className="flex items-start gap-2 text-xs text-gray-600 dark:text-purple-200">
                   <CheckCircle size={11} className="text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
-                  <span className="min-w-0 flex-1">{alarmTitle(alert)}</span>
+                  <span className="min-w-0 flex-1"><span className="font-semibold mr-1">{LEVELS.find(l => l.id === alarmLevel(alert))?.label}</span>{alarmTitle(alert)}</span>
                   <span className="text-gray-500 dark:text-purple-300 whitespace-nowrap">{resolvedWhen(alert)}</span>
                 </div>
               ))}
