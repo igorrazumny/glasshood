@@ -117,7 +117,7 @@ test('an old assessment keeps its text without an age warning; a failed refresh 
 test('the header says what it covers', () => {
   const cards = systemCards(manifests, nodes, alerts)
   assert.equal(headerLine(cards, null).text, 'Our systems: 1 needs attention · External services: 1 needs attention')
-  assert.equal(headerLine(cards, 'manifest-coldvault-prod').text, 'ColdVault: needs attention')
+  assert.equal(headerLine(cards, 'manifest-coldvault-prod').text, 'ColdVault: Needs attention')
   assert.equal(headerLine(cards, 'group-external').text, 'External services: 1 needs attention')
   assert.equal(headerLine([], null).text, 'Loading your systems…')
 })

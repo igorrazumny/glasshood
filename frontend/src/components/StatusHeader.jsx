@@ -2,7 +2,7 @@
 // Purpose: Top bar — overall status, last updated, refresh button, theme toggle.
 
 import { useState, useEffect, useRef } from 'react'
-import { RefreshCw, LogOut, ShieldCheck, Monitor, Sun, Moon } from 'lucide-react'
+import { RefreshCw, LogOut, ShieldCheck, Monitor, Settings, Sun, Moon } from 'lucide-react'
 import { useTheme } from '../hooks/useTheme'
 import { apiUrl } from '../utils/api'
 import AiOfflineLine from './AiOfflineLine'
@@ -126,6 +126,33 @@ function ThemeToggle() {
   )
 }
 
+// REQ-GHA-045 clause 6: the theme choice and the build sit in one menu
+function SettingsMenu({ version }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!open) return undefined
+    const close = e => { if (!ref.current?.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [open])
+  return (
+    <div ref={ref} className="relative">
+      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} aria-label="Settings" title="Settings"
+        className="text-gray-500 hover:text-gray-800 dark:text-purple-200 dark:hover:text-purple-100 transition-colors">
+        <Settings size={18} />
+      </button>
+      {open && (
+        <div className="absolute right-0 mt-2 p-3 w-44 rounded-lg bg-card dark:bg-purple-800 border border-border dark:border-purple-700 shadow-lg">
+          <div className="text-xs text-gray-500 dark:text-purple-300 mb-1">Theme</div>
+          <ThemeToggle />
+          {version && <div className="text-xs text-gray-500 dark:text-purple-300 mt-3">Version {version}</div>}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function StatusHeader({ topology, lastUpdated, onRefresh, onLogout, isDemo, readOnly, onVerify , scope, onOpenAlert }) {
   const [ago, setAgo] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
@@ -163,42 +190,40 @@ export default function StatusHeader({ topology, lastUpdated, onRefresh, onLogou
   return (
     <div className="flex items-center justify-between px-3 sm:px-5 h-16 bg-card dark:bg-purple-900 border-b border-border dark:border-purple-700 relative z-50 transition-colors duration-200">
       <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-        <img src="/glasshood-logo-full.png" alt="GlassHood" className="h-12 sm:h-14 flex-shrink-0" />
-        {version && <span className="text-xs text-gray-500 dark:text-purple-300 hidden sm:inline">v{version}</span>}
+        <img src="/glasshood-logo-full.png" alt="GlassHood" className="h-[46px] flex-shrink-0" />
         {isDemo && <span className="text-sm bg-accent-500/20 text-accent-700 dark:bg-accent-500/20 dark:text-accent-300 px-2 py-1 rounded">Sample data</span>}
         {readOnly && <span className="text-sm bg-sky-500/20 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300 px-2 py-1 rounded">Read-only · live system</span>}
         <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${STATUS_DOT[status]} animate-pulse`} title={statusText} />
-        <span className={`text-base font-medium truncate hidden sm:inline ${STATUS_COLOR[status]}`}>
-          {scope?.offline ? <AiOfflineLine offline={scope.offline} onOpenAlert={onOpenAlert} /> : statusText}
+        <span className={`text-sm font-medium truncate hidden sm:flex items-center gap-2 ${STATUS_COLOR[status]}`}>
+          {scope?.offline ? <AiOfflineLine offline={scope.offline} onOpenAlert={onOpenAlert} />
+            : (statusText || '').split(' · ').map(s => <span key={s} className="px-2 py-0.5 rounded border border-current/30 truncate">{s}</span>)}
         </span>
       </div>
 
       <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0">
-        <span className={`text-sm sm:text-base ${agoColor}`}>
-          {lastUpdated ? `${ago}s` : '...'}
-        </span>
         {onVerify && (
           <button
             onClick={onVerify}
             className="text-gray-500 hover:text-blue-600 dark:text-purple-200 dark:hover:text-accent-300 transition-colors"
-            title="Verify Manifests"
+            title="Verify Manifests" aria-label="Verify Manifests"
           >
             <ShieldCheck size={18} />
           </button>
         )}
         <button
           onClick={handleRefresh}
-          className="text-gray-500 hover:text-gray-800 dark:text-purple-200 dark:hover:text-purple-100 transition-colors"
-          title="Refresh"
+          className={`flex items-center gap-1.5 text-sm hover:text-gray-800 dark:hover:text-purple-100 transition-colors ${agoColor}`}
+          title="Refresh now"
         >
-          <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
+          <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
+          <span className="hidden sm:inline">{lastUpdated ? `Refreshed ${ago} s ago` : 'Refreshing…'}</span>
         </button>
-        <ThemeToggle />
+        <SettingsMenu version={version} />
         {onLogout && (
           <button
             onClick={onLogout}
             className="text-gray-500 hover:text-gray-700 dark:text-purple-300 dark:hover:text-purple-100 transition-colors"
-            title="Logout"
+            title="Sign out" aria-label="Sign out"
           >
             <LogOut size={18} />
           </button>

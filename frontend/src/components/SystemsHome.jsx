@@ -2,14 +2,27 @@
 // Purpose: REQ-GHA-035 clause 2 — the home view: every monitored system side by side, each
 // with its state in one plain line and its open alarms; a click opens that system.
 
-import { AlertOctagon, AlertTriangle, Eye, Loader2 } from 'lucide-react'
-import { assessmentLine, loadFailed } from '../utils/systems'
+import { useState } from 'react'
+import { AlertOctagon, AlertTriangle, CheckCircle, HelpCircle, Loader2 } from 'lucide-react'
+import { assessmentLine, loadFailed, statusWord, statusReason } from '../utils/systems'
 import AiOfflineLine from './AiOfflineLine'
 import { groupedCards, portfolioLine } from '../utils/systems'
 
-const DOT = {
-  healthy: 'bg-green-500', degraded: 'bg-yellow-500', error: 'bg-red-500',
-  'not checked': 'bg-gray-400',
+const CHIP = {
+  healthy: ['text-green-700 dark:text-green-400', CheckCircle],
+  degraded: ['text-yellow-700 dark:text-yellow-400', AlertTriangle],
+  error: ['text-red-700 dark:text-red-400', AlertOctagon],
+}
+
+// REQ-GHA-045 clause 5: icon and word, the reason straight after
+function StatusChip({ card }) {
+  const [color, Icon] = CHIP[card.state] || ['text-gray-500 dark:text-purple-300', HelpCircle]
+  const reason = statusReason(card)
+  return (
+    <span className={`inline-flex items-center gap-1 text-[15px] font-bold ${color}`}>
+      <Icon size={15} />{statusWord(card.state)}{reason && <span> · {reason}</span>}
+    </span>
+  )
 }
 
 export default function SystemsHome({ cards, line, onOpen, onOpenAlert, descriptions = {}, loading = false, loadError = null, descriptionsError = null }) {
@@ -21,7 +34,7 @@ export default function SystemsHome({ cards, line, onOpen, onOpenAlert, descript
   return (
     <div className="h-full overflow-y-auto p-4">
       <div className="mb-4">
-        <h2 className="text-lg font-semibold text-gray-800 dark:text-purple-100">Monitored systems</h2>
+        <h2 className="text-[22px] font-bold text-gray-800 dark:text-purple-100">Monitored systems</h2>
         <p className="text-sm text-gray-500 dark:text-purple-300">{off ? <AiOfflineLine offline={off.offline} onOpenAlert={onOpenAlert} /> : line}</p>
       </div>
       {groupedCards(cards).map(({ group, cards: groupCards }) => (
@@ -50,37 +63,32 @@ function SystemCard({ card: c, about, loadError, onOpen, onOpenAlert }) {
   return (
     // a div, not a button: it holds the alert's link and the closed last evaluation
     <div role="button" tabIndex={0} onClick={() => onOpen(c.id)}
-      onKeyDown={e => { if (e.key === 'Enter' && e.target === e.currentTarget) onOpen(c.id) }}
+      onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); onOpen(c.id) } }}
       style={{ flex: '1 1 320px', minWidth: 0, maxWidth: 520 }}
       className="group cursor-pointer text-left flex flex-col bg-card dark:bg-purple-800 border border-border dark:border-purple-700 rounded-xl p-5
         hover:border-accent-500 dark:hover:border-purple-400 hover:shadow-lg hover:-translate-y-0.5 transition">
       <div className="flex items-center gap-2">
-        <span className={`w-2.5 h-2.5 rounded-full ${DOT[c.state] || DOT['not checked']}`} />
         {/* the white plate keeps the logo's own colours readable on the dark theme */}
         {c.logo
-          ? <span className="bg-white rounded px-1.5 py-1 inline-flex"><img src={c.logo} alt={c.label} className="h-7 w-auto" /></span>
-          : <span className="text-lg font-semibold text-gray-900 dark:text-purple-50">{c.label}</span>}
+          ? <span className="bg-white rounded px-1.5 py-1 inline-flex"><img src={c.logo} alt={c.label} className="h-8 w-auto" /></span>
+          : <span className="text-base font-bold text-gray-900 dark:text-purple-50">{c.label}</span>}
         {c.outside && (
-          <span className="ml-auto flex items-center gap-1 text-[10px] uppercase tracking-wide px-1.5 py-px rounded border border-gray-300 dark:border-purple-500 text-gray-500 dark:text-purple-300"
+          <span className="ml-auto text-xs text-gray-500 dark:text-purple-300"
             title="Built only from what the provider publishes; GlassHood has no access inside it">
-            <Eye size={10} /> Outside view
+            Provider status page
           </span>
         )}
       </div>
-      {(c.outside ? c.source : c.subtitle) && <div className="text-xs text-gray-500 dark:text-purple-300 mt-0.5">{c.outside ? c.source : c.subtitle}</div>}
+      {(c.outside ? c.source : c.subtitle) && <div className="text-xs text-gray-500 dark:text-purple-300 mt-0.5">
+        {c.sourceUrl
+          ? <a href={c.sourceUrl} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="underline">{c.source}</a>
+          : (c.outside ? c.source : c.subtitle)}
+      </div>}
       {c.offline
         ? <p className="mt-3"><AiOfflineLine offline={c.offline} onOpenAlert={onOpenAlert} /></p>
-        : <p className="text-[15px] font-medium text-gray-800 dark:text-purple-100 mt-3">{c.line}</p>}
+        : <p className="mt-3"><StatusChip card={c} /></p>}
       {!c.offline && (
-      <div className="flex items-center gap-3 mt-1 text-sm">
-        {c.critical + c.warning > 0
-          ? <span className={`flex items-center gap-1 ${c.critical ? 'text-red-700 dark:text-red-400' : 'text-yellow-700 dark:text-yellow-400'}`}>
-              {c.critical ? <AlertOctagon size={13} /> : <AlertTriangle size={13} />}
-              {c.critical + c.warning} alert{c.critical + c.warning === 1 ? '' : 's'} to review{c.critical ? ` (${c.critical} critical)` : ''}
-            </span>
-          : <span className="text-gray-500 dark:text-purple-300">No active alerts</span>}
-        {c.notes > 0 && <span className="text-gray-500 dark:text-purple-300">{c.notes} configuration note{c.notes === 1 ? '' : 's'}</span>}
-      </div>
+      <p className="mt-1 text-sm text-gray-700 dark:text-purple-200">{c.line}</p>
       )}
       {c.notice && <p className="text-sm font-medium text-red-700 dark:text-red-400 mt-2">Critical: {c.notice}</p>}
       {c.offline ? (
@@ -99,15 +107,31 @@ function SystemCard({ card: c, about, loadError, onOpen, onOpenAlert }) {
           <div className="text-xs text-red-700 dark:text-red-400 mb-1">{a.problem}</div>
         )}
         {a.job && <div className="text-xs text-gray-500 dark:text-purple-300 mb-1">{a.job}</div>}
-        <p className="text-sm text-gray-700 dark:text-purple-100 leading-relaxed flex items-start gap-2">
-          {a.busy && !a.job && !loadError && <Loader2 size={14} className="animate-spin mt-0.5 flex-shrink-0" />}
-          <span>{a.text}</span>
-        </p>
+        <Assessment text={a.text} busy={a.busy && !a.job && !loadError} />
       </div>
       )}
       <div className="mt-4 flex items-center justify-end text-xs text-gray-500 dark:text-purple-300">
         <span className="text-sm font-medium text-accent-600 dark:text-accent-300 group-hover:translate-x-0.5 transition">See details →</span>
       </div>
+    </div>
+  )
+}
+
+// REQ-GHA-045 clause 4: one line until the reader asks for the whole assessment
+function Assessment({ text, busy }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div>
+      <p className={`text-sm text-gray-700 dark:text-purple-100 leading-[1.55] max-w-[65ch] flex items-start gap-2 ${open ? '' : 'min-w-0'}`}>
+        {busy && <Loader2 size={14} className="animate-spin mt-0.5 flex-shrink-0" />}
+        <span className={open ? '' : 'truncate'}>{text}</span>
+      </p>
+      {!busy && text && (
+        <button type="button" onClick={e => { e.stopPropagation(); setOpen(!open) }}
+          className="mt-1 text-xs font-medium text-accent-600 dark:text-accent-300 underline">
+          {open ? 'Hide assessment' : 'Read assessment'}
+        </button>
+      )}
     </div>
   )
 }

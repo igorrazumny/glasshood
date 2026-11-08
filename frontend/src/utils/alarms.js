@@ -14,6 +14,17 @@ export function alarmWhen(alert) {
 }
 
 // "10:46–11:02 CET" for a resolved alarm
+// REQ-GHA-045 clause 8: "15 min ago"; the exact times stay in alarmWhen, shown on hover
+export function alarmAgo(alert, nowMs = Date.now()) {
+  const at = new Date(alert.first_seen || alert.triggered_at).getTime()
+  if (Number.isNaN(at)) return ''
+  const min = Math.max(0, Math.round((nowMs - at) / 60000))
+  if (min < 1) return 'just now'
+  if (min < 60) return `${min} min ago`
+  const h = Math.round(min / 60)
+  return h < 24 ? `${h} h ago` : `${Math.round(h / 24)} d ago`
+}
+
 export function resolvedWhen(alert) {
   return clockRange(alert.first_seen || alert.triggered_at, alert.ended_at)
 }

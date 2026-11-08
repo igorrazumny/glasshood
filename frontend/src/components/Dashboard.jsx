@@ -258,7 +258,7 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
         {/* REQ-GHA-024 clause 1: the AI overview first; alerts and warnings are the detail below.
             REQ-GHA-038: the overview takes at most half the panel and scrolls inside it, so
             the alarms below always have room */}
-        <div className="min-h-0 overflow-y-auto" style={{ maxHeight: '50%', flex: '0 1 auto' }}>
+        <div className="min-h-0 overflow-y-auto" style={{ maxHeight: '45%', flex: '0 1 auto' }}>
           <AnalysisPanel data={analysis.data} topology={mapData} canvas={canvas} isDemo={isDemo}
             loading={!analysis.data}
             scopeLabel={selectedCard ? selectedCard.label : groupSelected ? (GROUPS.find(g => g.id === activeProject)?.label || 'All monitored systems') : 'All monitored systems'}
