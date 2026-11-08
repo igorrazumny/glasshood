@@ -1,5 +1,6 @@
 // File: frontend/src/utils/api.js
 // Purpose: API fetch wrapper with Auth0 + legacy token + auto-reauth on 401
+import { newSession } from './pollCache.js'
 
 import { WAKE } from '../config/wake'
 
@@ -40,16 +41,13 @@ let _token = sessionStorage.getItem('glasshood_token') || null
 let _auth0GetToken = null  // Auth0 getAccessTokenSilently function
 
 export function setToken(token) {
+  newSession()
   _token = token
   sessionStorage.setItem('glasshood_token', token)
 }
 
-// The last answer for each polled path, so a click shows that system's own stored view at once
-// while a fresh read runs. Cleared on logout, so one person's view never shows for the next.
-export const pollCache = new Map()
-
 export function clearToken() {
-  pollCache.clear()
+  newSession()
   _token = null
   sessionStorage.removeItem('glasshood_token')
   sessionStorage.removeItem('glasshood_creds')
@@ -60,6 +58,7 @@ export function getToken() {
 }
 
 export function setAuth0TokenGetter(fn) {
+  if (fn !== _auth0GetToken) newSession()
   _auth0GetToken = fn
 }
 
