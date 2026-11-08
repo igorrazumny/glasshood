@@ -233,7 +233,7 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
         onLogout={isDemo ? null : handleLogout}
         isDemo={isDemo}
         readOnly={hideCosts && !isDemo}
-        onVerify={isDemo ? null : runVerification}
+        onVerify={isDemo || hideCosts ? null : runVerification}
         scope={isDemo ? null : !topology.data ? { text: 'Loading your systems…', state: 'unknown' }
           : headerLine(cards, activeProject)}
         onOpenAlert={openAlert}

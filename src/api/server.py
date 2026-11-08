@@ -8,7 +8,7 @@ import threading
 import time
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, RedirectResponse
@@ -46,7 +46,21 @@ from src.discovery.gcp_assets import discovery_loop
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="GlassHood")
+# REQ-GHA-043: every action that changes something or starts work needs an operator, including any
+# added later. Only signing in and out and the browser's crash report are open to the demo role.
+_OPEN_WRITES = {"/api/auth/login", "/api/auth/refresh", "/api/auth/logout", "/api/frontend-error"}
+
+
+def _writes_need_operator(request: Request) -> None:
+    if request.method in ("GET", "HEAD", "OPTIONS") or request.url.path in _OPEN_WRITES:
+        return
+    from src.api.routes.auth import verify_token
+    from src.auth.rbac import require_role
+    verify_token(request)
+    require_role(request, "operator")
+
+
+app = FastAPI(title="GlassHood", dependencies=[Depends(_writes_need_operator)])
 
 # CORS: CORS_ORIGINS (comma-separated) narrows it when the app is served from
 # app.glasshood.ai (REQ-GHA-018); unset keeps today's "*".

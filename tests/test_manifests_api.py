@@ -127,3 +127,12 @@ class TestResetVerificationEndpoint:
         resp = client.post("/api/manifests/reset-verification?product=test&solution=Test&environment=prod")
         assert resp.status_code == 200
         assert "test" in resp.json()["scope"]
+
+
+@pytest.fixture(autouse=True)
+def _operator_for_writes():
+    """REQ-GHA-043: these routes need an operator; what they do is tested here, the guard elsewhere."""
+    from src.api.server import _writes_need_operator, app
+    app.dependency_overrides[_writes_need_operator] = lambda: None
+    yield
+    app.dependency_overrides.pop(_writes_need_operator, None)
