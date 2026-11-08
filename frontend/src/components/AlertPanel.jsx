@@ -79,7 +79,7 @@ export default function AlertPanel({ alerts, resolved, rules, onSelect, systemOf
                               {systemOf(alert)}
                             </span>
                           )}
-                          {alarmTitle(alert)}
+                          {alert.number ? <span className="text-gray-500 dark:text-purple-300 mr-1">{alert.number}</span> : null}{alarmTitle(alert)}
                         </p>
                         <p className="text-xs text-gray-500 dark:text-purple-300 mt-0.5">{alarmWhen(alert)}</p>
                       </div>

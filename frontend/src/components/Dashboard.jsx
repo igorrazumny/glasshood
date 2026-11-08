@@ -184,6 +184,8 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
   const liveCards = systemCards(manifestData, allNodes, topology?.data?.alerts)
   const cards = isDemo ? liveCards : withRecords(liveCards, systemDescriptions.data)
   const systemLabel = new Map(cards.map(c => [c.id, c.label]))
+  // REQ-GHA-042 clause 3: an alert's number opens that alert
+  const openAlert = o => setSelectedAlert((topology.data?.alerts || []).find(a => a.group === o.group && a.node_id === o.node_id) || null)
   // REQ-GHA-035 clause 9: a group (9Robots or external systems) shows its systems' cards
   const groupSelected = isGroupId(activeProject)
   const selectedCard = cards.find(c => c.id === activeProject) || null
@@ -234,6 +236,7 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
         onVerify={isDemo ? null : runVerification}
         scope={isDemo ? null : !topology.data ? { text: 'Loading your systems…', state: 'unknown' }
           : headerLine(cards, activeProject)}
+        onOpenAlert={openAlert}
       />
       {projectNodes.length > 0 && (
         <ProjectTree
@@ -259,6 +262,7 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
           <AnalysisPanel data={analysis.data} topology={mapData} canvas={canvas} isDemo={isDemo}
             loading={!analysis.data}
             scopeLabel={selectedCard ? selectedCard.label : groupSelected ? (GROUPS.find(g => g.id === activeProject)?.label || 'All monitored systems') : 'All monitored systems'}
+            onOpenAlert={openAlert}
             listCards={!isDemo && !selectedCard && (cards.length > 1 || !topology.data)
               ? groupedCards(homeCards).flatMap(g => g.cards) : null}
             descriptions={systemDescriptions.data || {}}
@@ -287,7 +291,7 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
         {!isDemo && !topology.data && !topology.error ? (
           <Waiting text="Loading your systems…" />
         ) : showHome ? (
-          <SystemsHome cards={homeCards} line={portfolioLine(homeCards)} onOpen={setActiveProject}
+          <SystemsHome cards={homeCards} line={portfolioLine(homeCards)} onOpen={setActiveProject} onOpenAlert={openAlert}
             descriptions={systemDescriptions.data || {}} loading={!topology.data}
             loadError={topology.data ? null : topology.error}
             descriptionsError={systemDescriptions.error} />

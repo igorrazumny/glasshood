@@ -5,6 +5,7 @@ import { useState, useEffect, useRef } from 'react'
 import { RefreshCw, LogOut, ShieldCheck, Monitor, Sun, Moon } from 'lucide-react'
 import { useTheme } from '../hooks/useTheme'
 import { apiUrl } from '../utils/api'
+import AiOfflineLine from './AiOfflineLine'
 
 const STATUS_TEXT = {
   healthy: 'All Systems Operational',
@@ -125,7 +126,7 @@ function ThemeToggle() {
   )
 }
 
-export default function StatusHeader({ topology, lastUpdated, onRefresh, onLogout, isDemo, readOnly, onVerify , scope }) {
+export default function StatusHeader({ topology, lastUpdated, onRefresh, onLogout, isDemo, readOnly, onVerify , scope, onOpenAlert }) {
   const [ago, setAgo] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
   const [version, setVersion] = useState('')
@@ -168,7 +169,7 @@ export default function StatusHeader({ topology, lastUpdated, onRefresh, onLogou
         {readOnly && <span className="text-sm bg-sky-500/20 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300 px-2 py-1 rounded">Read-only · live system</span>}
         <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${STATUS_DOT[status]} animate-pulse`} title={statusText} />
         <span className={`text-base font-medium truncate hidden sm:inline ${STATUS_COLOR[status]}`}>
-          {statusText}
+          {scope?.offline ? <AiOfflineLine offline={scope.offline} onOpenAlert={onOpenAlert} /> : statusText}
         </span>
       </div>
 
