@@ -1,8 +1,14 @@
 # File: src/models/alert.py
 # Purpose: Alert dataclass for Layer 1 rule engine findings
 
+import hashlib
 from dataclasses import dataclass, field
 from typing import Optional
+
+
+def alarm_number(group: Optional[str], node_id: Optional[str]) -> int:
+    """REQ-GHA-042 clause 8: a short number from what the alarm is, so a restart cannot change it."""
+    return int(hashlib.sha1(f"{group}|{node_id}".encode()).hexdigest(), 16) % 90000 + 10000
 
 
 @dataclass
@@ -51,6 +57,7 @@ class Alert:
 
     def to_dict(self) -> dict:
         return {
+            "number": alarm_number(self.group or self.rule_id, self.node_id),
             "rule_id": self.rule_id,
             "severity": self.severity,
             "message": self.message,
