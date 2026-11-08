@@ -87,12 +87,6 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
   const systemDescriptions = usePolling(isDemo ? null : '/api/analysis/systems', 60000)
   const liveAnalysis = usePolling(isDemo ? null : analysisUrl, 30000)
   const analysis = isDemo ? demo.analysis : liveAnalysis
-  // REQ-GHA-023 clause 5: "nodes monitored" counts exactly what the canvas draws.
-  const canvas = useMemo(() => (
-    !isDemo && manifestData.length > 0 && topology.data
-      ? canvasNodes(computeManifestLayout(topology.data?.nodes, manifestData), topology.data?.nodes)
-      : null
-  ), [isDemo, manifestData, topology.data])
   const manifestProjects = manifestData.filter(m => m && typeof m === 'object').map(m => ({
     id: `manifest-${m.product || 'unknown'}-${m.environment || 'unknown'}`,
     label: m.solution || m.display_name || m.product || 'Unknown',
@@ -203,6 +197,12 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
   const mapData = activeProject && !groupSelected && topology.data && mapManifests.length
     ? { ...topology.data, nodes: allNodes.filter(n => owner.get(n.id) === activeProject || !owner.has(n.id)) }
     : topology.data
+  // Use exactly the selected map's inputs, not the portfolio-wide landscape.
+  const canvas = useMemo(() => (
+    !isDemo && mapManifests.length > 0 && mapData
+      ? canvasNodes(computeManifestLayout(mapData.nodes, mapManifests), mapData.nodes)
+      : null
+  ), [isDemo, mapManifests, mapData])
   const filteredAlerts = contextNodeIds
     ? (topology.data?.alerts || []).filter(a => contextNodeIds.has(a.node_id))
     : (topology.data?.alerts || [])
@@ -254,7 +254,7 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
             REQ-GHA-038: the overview takes at most half the panel and scrolls inside it, so
             the alarms below always have room */}
         <div className="min-h-0 overflow-y-auto" style={{ maxHeight: '50%', flex: '0 1 auto' }}>
-          <AnalysisPanel data={analysis.data} topology={topology.data} canvas={canvas} isDemo={isDemo}
+          <AnalysisPanel data={analysis.data} topology={mapData} canvas={canvas} isDemo={isDemo}
             loading={!analysis.data}
             scopeLabel={selectedCard ? selectedCard.label : groupSelected ? (GROUPS.find(g => g.id === activeProject)?.label || 'All monitored systems') : 'All monitored systems'}
             listCards={!isDemo && !selectedCard && (cards.length > 1 || !topology.data)

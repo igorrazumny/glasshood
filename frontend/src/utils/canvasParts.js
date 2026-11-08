@@ -69,6 +69,20 @@ export function statsNodes(topology, canvas) {
   return nodes?.length ? nodes : null
 }
 
+// The counts and the overall status describe the same visible set of parts.
+export function statsSummary(topology, canvas) {
+  const nodes = statsNodes(topology, canvas)
+  if (!nodes) return null
+  const byStatus = {}
+  for (const node of nodes) {
+    const status = node.status || 'unknown'
+    byStatus[status] = (byStatus[status] || 0) + 1
+  }
+  const overall = worstStatus(Object.keys(byStatus))
+    || (Object.keys(byStatus).every(s => s === 'idle') ? 'idle' : 'not checked')
+  return { total: nodes.length, byStatus, overall }
+}
+
 // REQ-GHA-023 clause 3: a dynamic group's colour is the worst of its members and of its
 // parent (the instance group), so a failed endpoint attestation turns the group yellow while
 // a member's stronger error still wins. Statuses that carry no health are ignored.

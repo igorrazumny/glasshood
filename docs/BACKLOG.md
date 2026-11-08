@@ -346,6 +346,8 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Who builds:** Neo.
 - **Status:** confirmed by Igor 2026-11-05 (full text); clause 3 amended by Igor the same evening after review. Implemented 2026-11-05: PR #47 (neo-shadow1 PROCEED for head ca76be8 after two rounds), merged 33fc0c5, live in image wif42 (revision 0000042, always on) with ColdVault manifest v4 (sha256 1bfe9dd4…). Live first poll 22:30Z: 34 parts polled; every Compute, Cloud Asset, Secret Manager and MCP call returned 200 under GlassHood's federated read-only account, so no new role was needed (clause 7). Clause 9 (pipeline layout): PR #49 (neo-shadow1 PROCEED for head c31df93 after one round), merged 76b3ec9, live 2026-11-06 in image wif43 (revision 0000043) with manifest v5 (sha256 bf4ebf1e…); same fix removes the false 'Degraded Performance' from not-checked parts. Live polls: 34 parts, every outbound call 200/202. Awaiting verification by the reviewer, including a signed-in look at the live canvas.
 
+- **2026-11-08 correction:** the selected-system overview now counts that system's visible canvas and derives Overall from those same parts, rather than the portfolio's own-system status.
+
 ## REQ-GHA-024: GlassHood gives a brief AI overview of the whole system and of each part
 
 - **Goal:** A business reader sees in a few sentences how the system is doing, and can open any part to read a short AI overview of it.
