@@ -565,3 +565,18 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Testable:** Yes (API + UI: a provider incident shows as an alarm on the right box with the provider's link and ends when the provider resolves it)
 - **Who builds:** Neo, after the home view from REQ-GHA-035 exists.
 - **Status:** confirmed 2026-11-07, not started.
+
+## REQ-GHA-037: The home view speaks to a business system owner
+
+- **Goal:** A business system owner (for example the owner of an MES or ERP system, not an IT expert) opens GlassHood and at once understands how their system is doing, and sees that it was looked at as a whole.
+- **Why:** Owner, 2026-11-08: the cards look professional but do not show they can be clicked, do not say what GlassHood makes of each system as a whole, and must be extremely business-friendly; the entry screen's second button looks disabled and has another height.
+- **Target state:**
+  1. Each system card shows a short AI description of the system as a whole (two or three plain sentences: what it is doing now, whether the people using it are affected, what deserves attention), written for a business reader, with when it was written. For our own systems it is written from what GlassHood monitors inside them; for external systems from what the provider publishes.
+  2. A card is visibly clickable: it reads like the homepage cards, with a line such as "See details", and highlights when the mouse is over it.
+  3. The card keeps what a business owner needs: the state in one line, open alarms by severity, the AI description and when it was checked. Technical counts (number of parts, "not checked") move to the system's own view.
+  4. TestRobin appears among the 9Robots systems once its monitoring is connected (REQ-GHA-035).
+  5. On the entry screen both choices look clearly clickable and are equally tall; the main action stands out, the other has a visible border and readable text.
+- **Priority:** P1
+- **Testable:** Yes (UI)
+- **Who builds:** Neo.
+- **Status:** confirmed 2026-11-08, not started.
