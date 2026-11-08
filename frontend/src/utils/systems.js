@@ -3,6 +3,7 @@
 // system; a box belongs to the system its landscape file (or its parent box) names.
 
 import { worstStatus } from './canvasParts.js'
+import { alarmLevel } from './alarms.js'
 
 const NOT_READ = new Set(['not checked', 'not monitored', 'unknown', 'stale'])
 
@@ -80,12 +81,18 @@ export function systemCards(manifests, nodes, alerts) {
     seen.add(id)
     const mine = allBoxes(nodes).filter(n => owner.get(n.id) === id)
     const statuses = mine.map(n => n.status)
-    const open = (alerts || []).filter(a => owner.get(a.node_id) === id)
+    // REQ-GHA-037 clause 8: alerts to review apart from configuration notes; examples not counted
+    const mineAll = (alerts || []).filter(a => owner.get(a.node_id) === id && a.kind !== 'example')
+    // the same levels as the alarm lists (REQ-GHA-038): Information is a note, the rest are alerts
+    const open = mineAll.filter(a => alarmLevel(a) !== 'info')
+    const notes = mineAll.filter(a => alarmLevel(a) === 'info').length
     const polls = mine.map(n => n.metrics?._last_poll).filter(Number.isFinite)
     const outside = m.kind === 'outside_view'
     cards.push({
       id, product: m.product, label: m.solution || m.display_name || m.product || 'System',
       subtitle: m.display_name && m.display_name !== m.solution ? m.display_name : '',
+      source: outside && m.source ? `Source: ${String(m.source).replace(/^https?:\/\//, '').replace(/\/$/, '')}` : '',
+      notes,
       outside,
       state: worstStatus(statuses.filter(s => s && !NOT_READ.has(s) && s !== 'idle')) || 'not checked',
       line: plainLine(statuses, outside),
@@ -124,4 +131,29 @@ export function assessmentLine(about, nowMs, maxAgeS = 3 * 3600) {
   const problem = about.error ? `Latest update failed: ${about.error}` : null
   const text = about.summary || (about.error ? 'No assessment yet.' : 'Being written; it appears within a few minutes.')
   return { when, text, old, problem }
+}
+
+// REQ-GHA-037 clause 7: the header says what it covers — per group on the home view,
+// the selected system's own state when one is chosen
+const SYSTEM_WORDS = { healthy: 'operating normally', degraded: 'needs attention', error: 'not working properly',
+  'not checked': 'status not available' }
+
+export function headerLine(cards, activeProject) {
+  const one = cards.find(c => c.id === activeProject)
+  if (one) return { text: `${one.label}: ${SYSTEM_WORDS[one.state] || 'status not available'}`, state: one.state }
+  const groups = groupedCards(cardsInGroup(cards, isGroupId(activeProject) ? activeProject : null))
+  if (!groups.length) return { text: 'Loading your systems…', state: 'unknown' }
+  const parts = groups.map(({ group, cards: gc }) => {
+    const name = group.outside ? 'External services' : 'Our systems'
+    if (gc.every(c => c.state === 'not checked')) return `${name}: status not available`
+    const n = gc.filter(c => c.state === 'error' || c.state === 'degraded' || c.critical).length
+    return `${name}: ${n ? `${n} need${n === 1 ? 's' : ''} attention` : 'operating normally'}`
+  })
+  // red only for our own systems; an external service's trouble alone shows amber
+  const own = groups.filter(g => !g.group.outside).flatMap(g => g.cards)
+  const ext = groups.filter(g => g.group.outside).flatMap(g => g.cards)
+  const state = own.some(c => c.state === 'error') ? 'error'
+    : own.some(c => c.state === 'degraded' || c.critical) || ext.some(c => c.state === 'error' || c.state === 'degraded' || c.critical) ? 'degraded'
+    : [...own, ...ext].every(c => c.state === 'healthy') ? 'healthy' : 'unknown'
+  return { text: parts.join(' · '), state }
 }

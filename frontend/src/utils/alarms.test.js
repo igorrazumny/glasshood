@@ -3,7 +3,7 @@
 // Run: node frontend/src/utils/alarms.test.js
 
 import assert from 'node:assert/strict'
-import { alarmWhen, resolvedWhen, alarmTitle, notCheckedNames, alarmKindLabel, sortAlarms,
+import { alarmLevel, alarmsByLevel, defaultOpen, alarmWhen, resolvedWhen, alarmTitle, notCheckedNames, alarmKindLabel, sortAlarms,
   alarmTag, alarmRef, patternLabel, errorText } from './alarms.js'
 import { zoneName } from './time.js'
 
@@ -92,6 +92,22 @@ test('the newest alarm comes first within the same severity and kind', () => {
     { id: 'crit-old', severity: 'critical', first_seen: '2026-11-06T10:00:00+00:00' },
   ]
   assert.deepEqual(sortAlarms(list).map(a => a.id), ['crit-old', 'new', 'old'])
+})
+
+test('alarms map onto the five severity levels', () => {
+  assert.equal(alarmLevel({ severity: 'critical', kind: 'ai' }), 'critical')
+  assert.equal(alarmLevel({ severity: 'warning', kind: 'alarm' }), 'medium')
+  assert.equal(alarmLevel({ severity: 'warning', kind: 'observation' }), 'info')
+  assert.equal(alarmLevel({ severity: 'critical', kind: 'example' }), 'example')
+  assert.equal(alarmLevel({ severity: 'warning', group: 'provider:Cloudflare:m1', title: 'MSP (maintenance, reported by Cloudflare)' }), 'info')
+  assert.equal(alarmLevel({ severity: 'warning', group: 'provider:Cloudflare:i1', title: 'Spectrum (incident, reported by Cloudflare)' }), 'medium')
+})
+
+test('critical and high open first; medium only when nothing is more urgent', () => {
+  const by = alarmsByLevel([{ severity: 'critical' }, { severity: 'warning' }, { severity: 'warning', kind: 'observation' }])
+  assert.deepEqual(Object.keys(by).sort(), ['critical', 'info', 'medium'])
+  assert.deepEqual(defaultOpen(by), { critical: true, high: true, medium: false, low: false, info: false, example: false })
+  assert.equal(defaultOpen(alarmsByLevel([{ severity: 'warning' }])).medium, true)
 })
 
 if (failed) { console.error(`${failed} failed`); process.exit(1) }

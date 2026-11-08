@@ -3,7 +3,7 @@
 // Run: node frontend/src/utils/systems.test.js
 
 import assert from 'node:assert/strict'
-import { systemCards, systemOfNodes, portfolioLine, systemId, groupedCards, cardsInGroup, assessmentLine } from './systems.js'
+import { headerLine, systemCards, systemOfNodes, portfolioLine, systemId, groupedCards, cardsInGroup, assessmentLine } from './systems.js'
 
 let failed = 0
 function test(name, fn) {
@@ -102,6 +102,25 @@ test('an old assessment and a failed refresh are both said, the old text kept', 
   const fresh = assessmentLine({ summary: 'ok', analyzed_at: (now - 600e3) / 1000, stale: false }, now)
   assert.equal(fresh.old, null); assert.equal(fresh.problem, null); assert.match(fresh.when, /^written \d\d:\d\d$/)
   assert.equal(assessmentLine(null, now).text, 'Being written; it appears within a few minutes.')
+})
+
+test('the header says what it covers', () => {
+  const cards = systemCards(manifests, nodes, alerts)
+  assert.equal(headerLine(cards, null).text, 'Our systems: 1 needs attention · External services: 1 needs attention')
+  assert.equal(headerLine(cards, 'manifest-coldvault-prod').text, 'ColdVault: needs attention')
+  assert.equal(headerLine(cards, 'group-external').text, 'External services: 1 needs attention')
+  assert.equal(headerLine([], null).text, 'Loading your systems…')
+})
+
+test('configuration notes are counted apart from alerts to review', () => {
+  const [c] = systemCards([manifests[0]], nodes, [{ node_id: 'cv-a', severity: 'warning', kind: 'observation' },
+    { node_id: 'cv-a', severity: 'warning', kind: 'alarm' }, { node_id: 'cv-a', severity: 'warning', kind: 'example' }])
+  assert.deepEqual([c.warning, c.notes], [1, 1])
+})
+
+test('external trouble alone makes the header amber, not red', () => {
+  const cards = systemCards(manifests, nodes.filter(n => n.id !== 'cv-b'), [])
+  assert.equal(headerLine(cards, null).state, 'degraded')
 })
 
 if (failed) { console.error(`${failed} failed`); process.exit(1) }

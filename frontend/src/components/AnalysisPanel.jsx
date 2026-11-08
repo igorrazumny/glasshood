@@ -4,7 +4,7 @@
 // surface so the panel reads correctly in both themes.
 
 import { useState } from 'react'
-import { Brain, RefreshCw, AlertTriangle, CheckCircle, Server, Shield } from 'lucide-react'
+import { Brain, RefreshCw, AlertTriangle, CheckCircle, Server, Shield, Loader2 } from 'lucide-react'
 import { apiFetch } from '../utils/api'
 import { statsNodes } from '../utils/canvasParts.js'
 import { overviewStamp, spendLine } from '../utils/overview.js'
@@ -66,7 +66,36 @@ function TopologyStats({ topology, canvas }) {
   )
 }
 
-export default function AnalysisPanel({ data, topology, canvas }) {
+// REQ-GHA-037 clauses 7 and 9: the title names what the overview covers; on the home view or
+// a group it lists each system's own short assessment; box counts only for one system
+function SystemsList({ cards, descriptions }) {
+  if (!cards.length) {
+    return (
+      <p className="text-gray-500 dark:text-purple-300 text-sm flex items-center gap-2">
+        <Loader2 size={14} className="animate-spin" /> Loading your systems…
+      </p>
+    )
+  }
+  return (
+    <ul className="space-y-3">
+      {cards.map(c => {
+        const d = descriptions?.[c.product]
+        return (
+          <li key={c.id}>
+            <div className="text-sm font-semibold text-gray-800 dark:text-purple-100">{c.label}</div>
+            <p className="text-sm text-gray-600 dark:text-purple-200 leading-relaxed flex items-start gap-2">
+              {!d?.summary && !d?.error && <Loader2 size={13} className="animate-spin mt-0.5 flex-shrink-0" />}
+              <span>{d?.summary || (d?.error ? `Not available: ${d.error}` : 'Being written…')}</span>
+            </p>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+export default function AnalysisPanel({ data, topology, canvas, scopeLabel = 'All monitored systems', listCards = null,
+                                        descriptions = null, showStats = true, loading = false }) {
   const [refreshing, setRefreshing] = useState(false)
   const [refreshNote, setRefreshNote] = useState('')
 
@@ -93,7 +122,7 @@ export default function AnalysisPanel({ data, topology, canvas }) {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Brain size={16} className="text-accent-500 dark:text-accent-300" />
-          <span className="text-base font-semibold text-gray-900 dark:text-white">AI overview</span>
+          <span className="text-base font-semibold text-gray-900 dark:text-white">AI overview · {scopeLabel}</span>
           {analysis.stale && hasData && (
             <span className="text-xs bg-yellow-100 dark:bg-yellow-400/10 text-yellow-700 dark:text-yellow-400 px-1.5 py-0.5 rounded">stale</span>
           )}
@@ -111,14 +140,19 @@ export default function AnalysisPanel({ data, topology, canvas }) {
       </div>
 
       {/* REQ-GHA-024 clause 1: when it was written, right on top (the model is not named) */}
-      <p className="text-xs text-gray-500 dark:text-purple-300 -mt-2">{overviewStamp(analysis)}</p>
-      {analysis.error && (
+      {!listCards && <p className="text-xs text-gray-500 dark:text-purple-300 -mt-2">{overviewStamp(analysis)}</p>}
+      {!listCards && analysis.error && (
         <p className="text-xs text-yellow-700 dark:text-yellow-300">{analysis.error}{hasData ? ' — showing the last overview.' : ''}</p>
       )}
       {refreshNote && <p className="text-xs text-gray-500 dark:text-purple-300">{refreshNote}</p>}
 
-      {!hasData ? (
-        <p className="text-gray-500 dark:text-purple-300 text-sm">{analysis.error ? 'No overview yet.' : 'Writing the first overview…'}</p>
+      {listCards ? (
+        <SystemsList cards={listCards} descriptions={descriptions} />
+      ) : !hasData ? (
+        <p className="text-gray-500 dark:text-purple-300 text-sm flex items-center gap-2">
+          {!analysis.error && <Loader2 size={14} className="animate-spin" />}
+          {analysis.error ? 'No overview yet.' : (loading || !data ? 'Loading the AI overview…' : 'AI overview being written…')}
+        </p>
       ) : (
         <>
           {/* Summary first: how the system is doing, in plain words */}
@@ -167,7 +201,7 @@ export default function AnalysisPanel({ data, topology, canvas }) {
         </p>
       )}
 
-      <TopologyStats topology={topology} canvas={canvas} />
+      {showStats && <TopologyStats topology={topology} canvas={canvas} />}
     </div>
   )
 }

@@ -125,7 +125,7 @@ function ThemeToggle() {
   )
 }
 
-export default function StatusHeader({ topology, lastUpdated, onRefresh, onLogout, isDemo, readOnly, onVerify }) {
+export default function StatusHeader({ topology, lastUpdated, onRefresh, onLogout, isDemo, readOnly, onVerify , scope }) {
   const [ago, setAgo] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
   const [version, setVersion] = useState('')
@@ -144,7 +144,9 @@ export default function StatusHeader({ topology, lastUpdated, onRefresh, onLogou
     return () => clearInterval(timer)
   }, [lastUpdated])
 
-  const status = topology?.overall_status || 'unknown'
+  // REQ-GHA-037 clause 7: the header says what it covers (per group, or the selected system)
+  const status = scope?.state || topology?.overall_status || 'unknown'
+  const statusText = scope?.text || STATUS_TEXT[status]
   // REQ-009: ago indicator gets dark-mode variants for the "stale" colors.
   const agoColor =
     ago > 60 ? 'text-red-600 dark:text-red-400'
@@ -164,9 +166,9 @@ export default function StatusHeader({ topology, lastUpdated, onRefresh, onLogou
         {version && <span className="text-xs text-gray-500 dark:text-purple-300 hidden sm:inline">v{version}</span>}
         {isDemo && <span className="text-sm bg-accent-500/20 text-accent-700 dark:bg-accent-500/20 dark:text-accent-300 px-2 py-1 rounded">Sample data</span>}
         {readOnly && <span className="text-sm bg-sky-500/20 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300 px-2 py-1 rounded">Read-only · live system</span>}
-        <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${STATUS_DOT[status]} animate-pulse`} title={STATUS_TEXT[status]} />
+        <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${STATUS_DOT[status]} animate-pulse`} title={statusText} />
         <span className={`text-base font-medium truncate hidden sm:inline ${STATUS_COLOR[status]}`}>
-          {STATUS_TEXT[status]}
+          {statusText}
         </span>
       </div>
 
