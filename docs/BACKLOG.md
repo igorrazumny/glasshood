@@ -598,6 +598,8 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 
 - **Additional owner direction, 2026-11-08:** The two hierarchy steps from All systems to a group and from a group to a system use the same visible indentation, preserving the current group-to-system spacing. Home cards reserve only the columns needed for their group's actual systems: spare width is consumed before cards narrow, cards have a comfortable maximum width, and stack when the available width cannot fit them. Own-system cards/navigation use the existing designer-made logos with original colours and proportions; status remains a separate indicator. These presentation changes are pending, not deployed.
 
+- **Additional owner direction, 2026-11-08:** The bar at the bottom of the screen shows RAM only; uptime, requests per hour and active users are removed from it.
+
 ## REQ-GHA-038: Alarms are grouped by severity in collapsible lists
 
 - **Goal:** The alarm area shows what matters first, without being flooded by notes, and never takes over the panel.

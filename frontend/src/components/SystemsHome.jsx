@@ -13,7 +13,7 @@ const DOT = {
 }
 
 export default function SystemsHome({ cards, line, onOpen, descriptions = {}, loading = false, loadError = null, descriptionsError = null }) {
-  // REQ-GHA-035 clause 9: 9Robots systems and external systems, each with its own line
+  // REQ-GHA-035 clause 9: Proprietary systems and External systems, each with its own line
   // REQ-GHA-037 clause 6: while the systems load, say so
   if (!cards.length && loadError) return <Failed text={loadFailed('Your systems', loadError)} />
   if (loading && !cards.length) return <Waiting text="Loading your systems…" />
@@ -29,7 +29,9 @@ export default function SystemsHome({ cards, line, onOpen, descriptions = {}, lo
             <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-600 dark:text-purple-200">{group.label}</h3>
             <span className="text-xs text-gray-500 dark:text-purple-300">{portfolioLine(groupCards)}</span>
           </div>
-          <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+          {/* only the cards a group really has take space: they grow into spare width up to a
+              comfortable maximum, then narrow, then stack */}
+          <div className="flex flex-wrap gap-4">
             {groupCards.map(c => <SystemCard key={c.id} card={c} about={descriptions[c.product]} loadError={descriptionsError} onOpen={onOpen} />)}
           </div>
         </section>
@@ -46,6 +48,7 @@ function SystemCard({ card: c, about, loadError, onOpen }) {
   else if (loadError && !a.problem) a.problem = loadFailed('A newer assessment', loadError)
   return (
     <button onClick={() => onOpen(c.id)}
+      style={{ flex: '1 1 320px', minWidth: 0, maxWidth: 520 }}
       className="group text-left flex flex-col bg-card dark:bg-purple-800 border border-border dark:border-purple-700 rounded-xl p-5
         hover:border-accent-500 dark:hover:border-purple-400 hover:shadow-lg hover:-translate-y-0.5 transition">
       <div className="flex items-center gap-2">

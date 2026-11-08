@@ -3,7 +3,7 @@
 // Run: node frontend/src/utils/systems.test.js
 
 import assert from 'node:assert/strict'
-import { headerLine, systemCards, systemOfNodes, portfolioLine, systemId, groupedCards, cardsInGroup, assessmentLine, listAssessments, loadFailed, staleDataLine } from './systems.js'
+import { TREE_LEFT, headerLine, systemCards, systemOfNodes, portfolioLine, systemId, groupedCards, cardsInGroup, assessmentLine, listAssessments, loadFailed, staleDataLine } from './systems.js'
 
 let failed = 0
 function test(name, fn) {
@@ -77,18 +77,18 @@ test('the portfolio line counts systems that need attention', () => {
   assert.equal(portfolioLine([{ state: 'healthy', critical: 0 }]), '1 system · none needs attention')
 })
 
-test('systems are grouped as 9Robots systems and external systems', () => {
+test('systems are grouped as Proprietary systems and External systems', () => {
   const cards = systemCards(manifests, nodes, alerts)
   const groups = groupedCards(cards)
   assert.deepEqual(groups.map(g => [g.group.label, g.cards.map(c => c.label)]),
-    [['9Robots systems', ['ColdVault']], ['External systems', ['Cloudflare']]])
+    [['Proprietary systems', ['ColdVault']], ['External systems', ['Cloudflare']]])
   assert.deepEqual(cardsInGroup(cards, 'group-external').map(c => c.label), ['Cloudflare'])
   assert.equal(cardsInGroup(cards, null).length, 2)
 })
 
 test('a group with no systems is not shown', () => {
   const groups = groupedCards(systemCards([manifests[0]], nodes, alerts))
-  assert.deepEqual(groups.map(g => g.group.label), ['9Robots systems'])
+  assert.deepEqual(groups.map(g => g.group.label), ['Proprietary systems'])
 })
 
 test('an old assessment keeps its text without an age warning; a failed refresh is said', () => {
@@ -177,6 +177,14 @@ test('a failed refresh with older data says so and when that data is from', () =
   const line = staleDataLine('Failed to fetch', Date.parse('2026-11-08T01:00:00Z'))
   assert.match(line, /^Could not refresh \(Failed to fetch\); showing the data from \d\d:\d\d \S+\. Trying again\.$/)
   assert.equal(staleDataLine(null, Date.now()), null)
+})
+
+test('each step down the projects tree is the same distance', () => {
+  // the dot's position: chevron left + width + right, then the row's own padding
+  const all = 8 + 14 + 4 + 12
+  const group = TREE_LEFT.groupChevron + 13 + 2 + 12
+  assert.equal(group - all, TREE_LEFT.system - group)
+  assert.equal(TREE_LEFT.system - group, 11)
 })
 
 if (failed) { console.error(`${failed} failed`); process.exit(1) }
