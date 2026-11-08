@@ -204,6 +204,11 @@ def _verify_node(node: dict) -> dict:
         log_filter = probe.get("filter", "")
         if log_filter and log_project:
             result["probe_result"] = _verify_logs_accessible(log_project, log_filter)
+    elif probe_type in {"aws_ecs_service", "aws_load_balancer", "aws_target_group", "aws_log_group"}:
+        from src.collectors.aws_resources import box
+        checked = box(probe)
+        result["probe_result"] = {"ok": checked["status"] in ("healthy", "idle"),
+                                  "error": checked["check_description"] if checked["status"] not in ("healthy", "idle") else None}
     elif probe_type in ("platform_provider", "platform_inference"):
         # Providers are probed at runtime by manifest_metrics (REQ-219 platform_inference;
         # platform_provider retained for backwards compat with any unmigrated manifests).
@@ -214,7 +219,16 @@ def _verify_node(node: dict) -> dict:
         log_cfg = logs[0]
         log_project = log_cfg.get("project", project_id)
         log_filter = log_cfg.get("filter", "")
-        if log_filter and log_project:
+        if log_cfg.get("source") == "aws":
+            from src.collectors.aws_resources import query_logs
+            try:
+                entries = query_logs(log_cfg, 24 * 7, 1)
+                result["logs_result"] = {"ok": True, "has_data": bool(entries), "error": None}
+            except Exception as e:
+                result["logs_result"] = {"ok": False, "has_data": False, "error": f"AWS logs could not be read ({type(e).__name__})"}
+        elif log_cfg.get("source") == "none":
+            result["logs_result"] = {"ok": False, "has_data": False, "error": log_cfg.get("reason") or "No readable log source"}
+        elif log_filter and log_project:
             result["logs_result"] = _verify_logs_accessible(log_project, log_filter)
 
     # --- Determine status (collect ALL errors, not short-circuit) ---

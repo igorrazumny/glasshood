@@ -490,6 +490,16 @@ def _read_entries(body: dict, sleep=time.sleep) -> list:
 def _log_lines(log_filter: str, warn_n: int, sample_n: int, project: str = "",
                since_s: int = None) -> list:
     """Recent warning/error lines plus a small sample of other lines, newest first."""
+    if isinstance(log_filter, dict):
+        if log_filter.get("source") != "aws":
+            raise ValueError("Unsupported structured log source")
+        # Non-Google locations stay structured; never send an AWS location to Cloud Logging.
+        from src.collectors.aws_resources import query_logs
+        entries = query_logs(log_filter, (since_s or INTERVAL_S) / 3600, warn_n + sample_n)
+        warning = {"WARNING", "ERROR", "CRITICAL", "ALERT", "EMERGENCY"}
+        picked = [e for e in entries if e.get("severity") in warning][:warn_n]
+        picked += [e for e in entries if e.get("severity") not in warning][:sample_n]
+        return [_entry_text({**e, "textPayload": e["message"]}) for e in picked]
     since = (datetime.now(timezone.utc) - timedelta(seconds=since_s or INTERVAL_S)).strftime("%Y-%m-%dT%H:%M:%SZ")
     base = f'timestamp>="{since}"' + (f" AND ({log_filter})" if log_filter else "")
     out = []
@@ -516,6 +526,12 @@ def _part_record(node: dict, parent: dict = None) -> dict:
     }
 
 
+def _log_location(logs):
+    if not logs:
+        return None
+    return dict(logs[0]) if logs[0].get("source") == "aws" else logs[0].get("filter")
+
+
 def _manifest_info():
     """(part id -> first log filter, part id -> label) from the manifests (top-level nodes)."""
     filters, labels = {}, {}
@@ -528,8 +544,9 @@ def _manifest_info():
                 if n.get("label"):
                     labels[n["id"]] = n["label"]
                 logs = ((n.get("monitoring") or {}).get("logs") or [])
-                if logs and logs[0].get("filter"):
-                    filters[n["id"]] = logs[0]["filter"]
+                location = _log_location(logs)
+                if location:
+                    filters[n["id"]] = location
     except Exception as e:
         logger.debug(f"manifest info unavailable: {e}")
     return filters, labels
@@ -556,13 +573,13 @@ def _walk_parts(topology: dict):
         parent_filter = filters.get((n.get("metrics") or {}).get("_parent") or "", "")
         rec = _part_record(n)
         rec["label"] = labels.get(n.get("id")) or rec["label"]  # the name the reader sees on the canvas
-        yield rec, (logs[0].get("filter") if logs else filters.get(n.get("id"), parent_filter))
+        yield rec, (_log_location(logs) if logs else filters.get(n.get("id"), parent_filter))
 
         def kids(children, parent):
             for c in children or []:
                 if isinstance(c, dict) and c.get("id"):
                     cl = ((c.get("monitoring") or {}).get("logs") or [])
-                    yield _part_record(c, parent), (cl[0].get("filter") if cl else "")
+                    yield _part_record(c, parent), (_log_location(cl) if cl else "")
                     yield from kids(c.get("children"), c)
         yield from kids(n.get("children"), n)
 
@@ -616,9 +633,13 @@ def run_own_systems(topology: dict) -> None:
         if product not in projects:
             continue  # external systems have their own overview (run_outside)
         try:
-            parts = [rec for rec, _ in _walk_parts({"nodes": nodes})]
+            walked = list(_walk_parts({"nodes": nodes}))
+            parts = [rec for rec, _ in walked]
             statuses = [p.get("status") for p in parts]
             logs = _log_lines("", SYSTEM_WARN_LINES, SYSTEM_SAMPLE_LINES) if projects.get(product) == PROJECT else []
+            locations = {json.dumps(f, sort_keys=True): f for _, f in walked if isinstance(f, dict)}
+            for location in locations.values():
+                logs += _log_lines(location, SYSTEM_WARN_LINES, SYSTEM_SAMPLE_LINES)
             payload = sanitize({"system": product, "parts": parts, "recent_logs": logs,
                                 "states": {s: statuses.count(s) for s in set(statuses)}})
             result = _generate(SYSTEM_PROMPT, json.dumps(payload, default=str))

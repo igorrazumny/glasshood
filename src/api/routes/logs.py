@@ -119,7 +119,7 @@ def _find_in_manifests(compiled: list, node_id: str) -> dict | None:
     return None
 
 
-def _resolve_node(node_id: str) -> tuple[str, str | None, str | None]:
+def _resolve_node(node_id: str) -> tuple[str, str | None, str | dict | None]:
     """Resolve (status, project, filter) for node_id via manifest + discovery cache.
 
     Returns one of:
@@ -144,6 +144,8 @@ def _resolve_node(node_id: str) -> tuple[str, str | None, str | None]:
         if logs and logs[0].get("source") == "none":
             # REQ-GHA-032 clause 10: a part with no log source says why
             return ("no_logs", None, logs[0].get("reason") or "This part writes no logs GlassHood can read.")
+        if logs and logs[0].get("source") == "aws":
+            return ("aws_logs", None, logs[0])
         if logs and logs[0].get("source") == "azure" and logs[0].get("workspace") and logs[0].get("query"):
             # REQ-GHA-035: GlassHood's own logs, in its Azure Log Analytics workspace
             return ("azure_logs", logs[0]["workspace"], logs[0]["query"])
@@ -269,6 +271,19 @@ async def get_logs(node_id: str, request: Request, lines: int = 100,
     lines = max(1, min(lines, 200))
     if status == "no_logs":
         return {"node_id": node_id, "entries": [], "count": 0, "note": resolved_filter}
+    if status == "aws_logs":
+        from src.collectors.aws_resources import query_logs
+        try:
+            loop = asyncio.get_running_loop()
+            entries = await loop.run_in_executor(None, query_logs, resolved_filter, 1, lines)
+            if entries:
+                return {"node_id": node_id, "entries": entries, "count": len(entries), "window": "1h"}
+            entries = await loop.run_in_executor(None, query_logs, resolved_filter, 24 * 7, lines)
+            return {"node_id": node_id, "entries": entries, "count": len(entries), "window": "7d",
+                    "note": QUIET_NOTE if entries else EMPTY_NOTE}
+        except Exception as e:
+            return {"node_id": node_id, "entries": [], "count": 0,
+                    "error": f"GlassHood could not read this part's AWS logs ({type(e).__name__})"}
     if status == "azure_logs":
         from src.collectors.azure_resources import query_logs
         try:
