@@ -341,7 +341,10 @@ def evaluate_rules(nodes: list, snapshot: dict,
             # condition left: its alarms end (findings and AI review alarms follow their own checks).
             checked |= {k for k in _active
                         if k[1] is not None and k[1] not in present
-                        and not str(k[0]).startswith(("finding:", "ai:", "model:", "provider:"))}
+                        and (not str(k[0]).startswith(("finding:", "ai:", "model:", "provider:"))
+                             # an AI alarm someone acknowledged ends with its part (REQ-GHA-029:
+                             # only an unacknowledged critical must wait for a person)
+                             or (str(k[0]).startswith("ai:") and _active[k].acknowledged))}
         new_alerts, resolved = _apply(candidates, checked, now)
         active = list(_active.values())
 
