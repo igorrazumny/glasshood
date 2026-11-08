@@ -120,13 +120,14 @@ const PROVIDER_WORDS = { normal: 'Running normally, as reported by the provider'
 export function withRecords(cards, records) {
   return (cards || []).map(c => {
     const record = records?.[c.product]
+    const notice = record?.critical_notice || null   // REQ-GHA-041 clause 7: no AI call behind it
     if (!record?.condition) {
-      return { ...c, state: 'not checked', critical: 0, warning: 0, notes: 0,
+      return { ...c, notice, state: 'not checked', critical: 0, warning: 0, notes: 0,
         line: records ? 'Not assessed yet' : 'Status not available yet' }
     }
     const alerts = record.alerts || []
     const open = alerts.filter(a => alarmLevel(a) !== 'info')
-    return { ...c, state: FROM_CONDITION[record.condition],
+    return { ...c, notice, state: FROM_CONDITION[record.condition],
       line: (c.outside ? PROVIDER_WORDS : OWN_WORDS)[record.condition],
       critical: open.filter(a => a.severity === 'critical').length,
       warning: open.filter(a => a.severity === 'warning').length,

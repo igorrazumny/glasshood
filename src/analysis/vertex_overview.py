@@ -16,6 +16,7 @@ from datetime import datetime, timedelta, timezone
 
 import httpx
 
+from src.analysis import ai_budget
 from src.config.settings import GCP_PROJECT_ID
 
 logger = logging.getLogger(__name__)
@@ -299,7 +300,8 @@ def _reserve_call():
             _spend.clear(); _spend.update(_new_day())
         if not _spend["durable_read"]:
             return _spend.get("read_error") or "today's model usage has not been read yet"
-        if _spend["durable_calls"] + _spend["local_calls"] >= DAILY_CALL_CAP:
+        # REQ-GHA-041: on the AI providers the limit is monthly money, not a number of calls
+        if PROVIDER != "openai" and _spend["durable_calls"] + _spend["local_calls"] >= DAILY_CALL_CAP:
             _spend["capped"] = True
             return f"daily cap of {DAILY_CALL_CAP} model calls reached"
         _spend["local_calls"] += 1
@@ -324,6 +326,7 @@ def _record_openai(model: str, usage: dict, searches: int = 0) -> None:
         _spend["local_in"] += tin
         _spend["local_out"] += tout
         _spend["local_cost"] = _spend.get("local_cost", 0.0) + cost
+    ai_budget.charge(ai_budget.BACKUP if model in CLAUDE_PRICES else ai_budget.MAIN, cost)
     _save_spend_file()
 
 
@@ -339,7 +342,8 @@ def get_spend() -> dict:
             "input_tokens": tin, "output_tokens": tout,
             "cost_usd": round(cost, 4),
             "capped": sp["capped"], "usage_read": sp["durable_read"], "read_error": sp["read_error"],
-            "daily_call_cap": DAILY_CALL_CAP, "model": MODEL,
+            "daily_call_cap": None if PROVIDER == "openai" else DAILY_CALL_CAP, "model": MODEL,
+            "providers": ai_budget.status() if PROVIDER == "openai" else None,
             "price_per_m_tokens_usd": ({"input": OPENAI_PRICES.get(MODEL, (0, 0, 0))[0],
                                         "output": OPENAI_PRICES.get(MODEL, (0, 0, 0))[1]} if PROVIDER == "openai"
                                        else {"input": PRICE_IN_PER_M, "output": PRICE_OUT_PER_M})}
@@ -347,6 +351,25 @@ def get_spend() -> dict:
 
 class CapReached(Exception):
     pass
+
+
+class ProviderRefused(RuntimeError):
+    """The provider turned GlassHood away for credit, quota, billing or its key."""
+    def __init__(self, message: str, reason: str):
+        super().__init__(message)
+        self.reason = reason
+
+
+def _refusal(status: int, code: str, text: str):
+    """REQ-GHA-041 clause 6: words for a refusal about the account; None for any other failure."""
+    words = f"{code} {text}".lower()
+    if status == 401:
+        return "the provider rejected the API key"
+    if status == 403:
+        return "the provider refused access for this API key"
+    if status == 402 or any(w in words for w in ("insufficient_quota", "credit balance", "billing")):
+        return "the provider reports no remaining credit or quota"
+    return None
 
 
 # --- Model call ---
@@ -369,6 +392,13 @@ def _call_openai(system_prompt: str, user_text: str, max_tokens: int, search: bo
     r = httpx.post("https://api.openai.com/v1/responses", json=body,
                    headers={"Authorization": f"Bearer {key}"}, timeout=180 if search else 90)
     if r.status_code != 200:
+        try:
+            err = r.json().get("error") or {}
+        except Exception:
+            err = {}
+        why = _refusal(r.status_code, str(err.get("code", "")), str(err.get("type", "")))
+        if why:
+            raise ProviderRefused(f"OpenAI HTTP {r.status_code}", why)
         raise RuntimeError(f"OpenAI HTTP {r.status_code}")
     data = r.json()
     searches = sum(1 for item in data.get("output") or [] if item.get("type") == "web_search_call")
@@ -401,6 +431,9 @@ def _call_claude(system_prompt: str, user_text: str, max_tokens: int) -> str:
             output_config={"effort": "low"},
             messages=[{"role": "user", "content": "Data (answer in JSON as instructed):\n" + user_text}])
     except anthropic.APIStatusError as e:
+        why = _refusal(e.status_code, "", str(e.message))
+        if why:
+            ai_budget.refused(ai_budget.BACKUP, why)
         raise RuntimeError(f"Claude HTTP {e.status_code}") from None
     except anthropic.APIConnectionError as e:
         raise RuntimeError(f"Claude could not be reached ({type(e).__name__})") from None
@@ -429,14 +462,30 @@ def call_model(system_prompt: str, user_text: str, max_tokens: int = 600,
     if PROVIDER == "openai":
         # the reserved call is on disk before the request goes out, so a crash mid-call
         # still counts it; if it cannot be saved, the call is not made
-        _reserve_and_save()
-        try:
-            return _call_openai(system_prompt, user_text, max_tokens, search, deep)
-        except (RuntimeError, httpx.HTTPError) as e:
-            # a web-search answer has no equivalent here: fail plainly rather than drop the search
-            if search or not os.getenv("ANTHROPIC_API_KEY"):
-                raise
-            logger.warning(f"OpenAI failed ({str(e) if isinstance(e, RuntimeError) else type(e).__name__}); trying Claude")
+        # REQ-GHA-041: the main provider while it may be called, else the backup
+        blocked = ai_budget.gate(ai_budget.MAIN)
+        if not blocked:
+            _reserve_and_save()
+            try:
+                return _call_openai(system_prompt, user_text, max_tokens, search, deep)
+            except ProviderRefused as e:
+                blocked = e.reason
+                ai_budget.refused(ai_budget.MAIN, e.reason)
+            except (RuntimeError, httpx.HTTPError) as e:
+                # a web-search answer has no equivalent here: fail plainly rather than drop the search
+                if search or not os.getenv("ANTHROPIC_API_KEY"):
+                    raise
+                logger.warning(f"OpenAI failed ({str(e) if isinstance(e, RuntimeError) else type(e).__name__}); trying Claude")
+        if blocked:
+            ai_budget.note(f"AI provider OpenAI is blocked: {blocked}.")
+            if search:
+                raise CapReached(f"OpenAI is blocked ({blocked}); Investigate deeper needs its web search")
+        backup = ai_budget.gate(ai_budget.BACKUP) or (None if os.getenv("ANTHROPIC_API_KEY") else "no key is configured")
+        if backup:
+            ai_budget.note(f"AI provider Anthropic is blocked: {backup}.")
+            raise CapReached(f"Anthropic is blocked: {backup}")
+        if blocked:
+            ai_budget.note("GlassHood is using its backup AI provider, Anthropic, because OpenAI is blocked.")
         _reserve_and_save()
         return _call_claude(system_prompt, user_text, max_tokens), []
     refused = _reserve_call()
@@ -787,7 +836,11 @@ def system_cards() -> dict:
         jobs = {k: dict(v) for k, v in _own_jobs.items()}
         for product in jobs:
             both.setdefault(product, {})
-    return {k: {"summary": v.get("summary"), "score": v.get("score"), "analyzed_at": v.get("analyzed_at"),
+    notice = next((a["title"] for a in ai_budget.alarms()), None) if PROVIDER == "openai" else None
+    if notice:
+        both.setdefault(ai_budget.GROUP, {})
+    return {k: {"critical_notice": notice if k == ai_budget.GROUP else None,
+                "summary": v.get("summary"), "score": v.get("score"), "analyzed_at": v.get("analyzed_at"),
                 "error": v.get("error"), "stale": _with_staleness(v).get("stale"),
                 "condition": v.get("condition"), "alerts": v.get("alerts"),
                 "job": jobs.get(k) or {"status": "complete"}} for k, v in both.items()}
@@ -997,6 +1050,13 @@ def _pending_scan_once(get_topology_fn) -> None:
         run_own_systems(get_topology_fn(), only_pending=True)
 
 
+def _sync_budget_alarms() -> None:
+    """REQ-GHA-041 clauses 7, 9 and 10: raised and ended here, with no AI call."""
+    if PROVIDER == "openai":
+        from src.rules.engine import track_ai_budget
+        track_ai_budget(ai_budget.alarms(), ai_budget.ALARM_PART)
+
+
 def _change_scan_once(get_topology_fn) -> None:
     """REQ-GHA-040 clause 7: a system whose parts changed state gets a new record soon."""
     from src.api.routes.manifests import _load_manifests
@@ -1032,6 +1092,7 @@ def _pending_loop(get_topology_fn, stop) -> None:
     next_change_scan = time.monotonic() + CHANGE_SCAN_S
     while not stop.wait(PENDING_SCAN_S):
         try:
+            _sync_budget_alarms()
             _pending_scan_once(get_topology_fn)
             if time.monotonic() >= next_change_scan:
                 next_change_scan = time.monotonic() + CHANGE_SCAN_S

@@ -344,7 +344,7 @@ def evaluate_rules(nodes: list, snapshot: dict,
             # condition left: its alarms end (findings and AI review alarms follow their own checks).
             checked |= {k for k in _active
                         if k[1] is not None and k[1] not in present
-                        and (not str(k[0]).startswith(("finding:", "ai:", "model:", "provider:"))
+                        and (not str(k[0]).startswith(("finding:", "ai:", "model:", "provider:", "budget:"))
                              # an AI alarm someone acknowledged ends with its part (REQ-GHA-029:
                              # only an unacknowledged critical must wait for a person)
                              or (str(k[0]).startswith("ai:") and _active[k].acknowledged))}
@@ -423,6 +423,22 @@ def track_ai_review(problems: list, reviewed_parts: set, labels: Optional[dict] 
             alert.explanation = p.get("explanation")
             candidates.append(alert)
         _apply(candidates, checked, now)
+
+
+def track_ai_budget(alarms: list, part: str) -> None:
+    """REQ-GHA-041: AI providers blocked by spending or refusal; an alarm ends when its block does."""
+    with _lock:
+        checked = {k for k in _active if str(k[0]).startswith("budget:")}
+        candidates = []
+        for a in alarms:
+            rule = {"id": "ai_budget", "group": a["group"], "severity": "critical", "kind": "alarm",
+                    "description": "AI provider blocked"}
+            checked.add((rule["group"], part))
+            alert = _candidate(rule, part, None, a["title"])
+            alert.title = a["title"]
+            alert.explanation = a["explanation"]
+            candidates.append(alert)
+        _apply(candidates, checked, time.time())
 
 
 def track_model_failures(failures: list, read: bool, labels: Optional[dict] = None) -> None:

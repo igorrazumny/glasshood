@@ -226,13 +226,6 @@ def test_without_a_claude_key_the_openai_failure_is_reported(openai, monkeypatch
         ov.call_model("s", "{}")
 
 
-def test_the_cap_also_stops_the_fallback(openai, claude, monkeypatch):
-    monkeypatch.setattr(ov, "DAILY_CALL_CAP", 1)
-    with patch("httpx.post", return_value=_failing()), pytest.raises(ov.CapReached):
-        ov.call_model("s", "{}")
-    claude.assert_not_called()
-
-
 def test_a_claude_refusal_is_a_failure_not_an_answer(openai, claude):
     claude.return_value.messages.create.return_value = _claude(text="", stop="refusal")
     with patch("httpx.post", return_value=_failing()), pytest.raises(RuntimeError, match="declined"):

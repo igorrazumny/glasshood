@@ -74,6 +74,7 @@ function SystemCard({ card: c, about, loadError, onOpen }) {
           : <span className="text-gray-500 dark:text-purple-300">No active alerts</span>}
         {c.notes > 0 && <span className="text-gray-500 dark:text-purple-300">{c.notes} configuration note{c.notes === 1 ? '' : 's'}</span>}
       </div>
+      {c.notice && <p className="text-sm font-medium text-red-700 dark:text-red-400 mt-2">Critical: {c.notice}</p>}
       <div className="mt-3 pt-3 border-t border-border/70 dark:border-purple-700/70 flex-1">
         <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-purple-300 mb-1">
           AI assessment{a.when ? ` · ${a.when}` : ''}
