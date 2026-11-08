@@ -251,14 +251,6 @@ export function statusReason(card) {
   return ''
 }
 
-// REQ-GHA-045 clause 4: the right-hand column lists only what needs attention, not the cards' text
-export function attentionItems(cards, descriptions) {
-  return (cards || []).filter(c => c.state !== 'healthy' || c.critical || c.warning).map(c => ({
-    id: c.id, label: c.label, word: statusWord(c.state), reason: statusReason(c),
-    issues: descriptions?.[c.product]?.issues || [],
-  }))
-}
-
 // REQ-GHA-045 clause 4: what the last monitoring cycle changed, from the existing comparison
 export function changeLines(diff, max = 5) {
   if (!diff || diff.first_run) return { none: 'Nothing to compare yet', lines: [], more: 0 }

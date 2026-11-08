@@ -2,7 +2,9 @@
 // Purpose: Main layout — header, topology, analysis, metrics bar
 // Supports live mode (authenticated, polling) and demo mode (static data, no auth)
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import PanelSplit from './PanelSplit'
+import { DEFAULT_SPLIT, clampSplit } from '../utils/panelSplit'
 import StatusHeader from './StatusHeader'
 import ProjectTree from './ProjectTree'
 import RightSidebar from './RightSidebar'
@@ -85,6 +87,23 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
     ? `/api/analysis?system=${encodeURIComponent(selectedManifest.product)}` : '/api/analysis'
   // REQ-GHA-037: each system's short AI assessment for its card
   const systemDescriptions = usePolling(isDemo ? null : '/api/analysis/systems', 60000)
+  const selections = usePolling(isDemo ? null : '/api/analysis/selections', 60000)
+  // REQ-GHA-046 clauses 13-16: the boundary starts at the default; a real account gets its own back
+  const [split, setSplit] = useState(DEFAULT_SPLIT)
+  const [alertsOpen, setAlertsOpen] = useState(false)
+  const splitBox = useRef(null)
+  const keepsSplit = !isDemo && !hideCosts   // the Live demo stores nothing and starts at the default
+  useEffect(() => {
+    if (!keepsSplit) return undefined
+    let live = true
+    apiFetch('/api/preferences/right-panel').then(r => (r.ok ? r.json() : null))
+      .then(d => { if (live && d?.split != null) setSplit(clampSplit(d.split)) }).catch(() => {})
+    return () => { live = false }
+  }, [keepsSplit])
+  const saveSplit = useCallback(v => {
+    if (!keepsSplit) return
+    apiFetch('/api/preferences/right-panel', { method: 'PUT', body: JSON.stringify({ split: v }) }).catch(() => {})
+  }, [keepsSplit])
   const liveAnalysis = usePolling(isDemo ? null : analysisUrl, 30000)
   const analysis = isDemo ? demo.analysis : liveAnalysis
   const manifestProjects = manifestData.filter(m => m && typeof m === 'object').map(m => ({
@@ -258,11 +277,13 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
         {/* REQ-GHA-024 clause 1: the AI overview first; alerts and warnings are the detail below.
             REQ-GHA-038: the overview takes at most half the panel and scrolls inside it, so
             the alarms below always have room */}
-        <div className="min-h-0 overflow-y-auto" style={{ maxHeight: '45%', flex: '0 1 auto' }}>
+        <div ref={splitBox} className="flex-1 min-h-0 flex flex-col">
+        <div className="min-h-0 overflow-y-auto" style={alertsOpen ? { flex: `0 0 ${split * 100}%` } : { flex: '1 1 0' }}>
           <AnalysisPanel data={analysis.data} topology={mapData} canvas={canvas} isDemo={isDemo}
             loading={!analysis.data}
-            scopeLabel={selectedCard ? selectedCard.label : groupSelected ? (GROUPS.find(g => g.id === activeProject)?.label || 'All monitored systems') : 'All monitored systems'}
+            scopeLabel={selectedCard ? selectedCard.label : groupSelected ? (GROUPS.find(g => g.id === activeProject)?.label || 'All systems') : 'All systems'}
             onOpenAlert={openAlert}
+            review={selections.data?.[groupSelected ? activeProject : 'all']}
             diff={groupSelected
               ? scopeDiff(topology.data?.topology_diff, owner, new Set(groupedCards(homeCards).flatMap(g => g.cards).map(c => c.id)))
               : topology.data?.topology_diff}
@@ -276,9 +297,11 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
         </div>
         {/* REQ-GHA-027: an anomaly is an alarm on its part (with its classification in the
             detail), so it is not listed a second time in a separate anomaly panel */}
-        <AlertPanel alerts={filteredAlerts} resolved={filteredResolved}
+        {alertsOpen && <PanelSplit value={split} containerRef={splitBox} onChange={setSplit} onDone={saveSplit} />}
+        <AlertPanel onOpenChange={setAlertsOpen} alerts={filteredAlerts} resolved={filteredResolved}
           systemOf={(!activeProject || groupSelected) && cards.length > 1 ? (a => systemLabel.get(owner.get(a.node_id)) || '') : null}
           rules={topology.data?.alarm_rules} onSelect={setSelectedAlert} />
+        </div>
         <div className="shrink-0">
           <SecurityPanel isDemo={isDemo} />
         </div>
@@ -294,7 +317,7 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
         {!isDemo && !topology.data && !topology.error ? (
           <Waiting text="Loading your systems…" />
         ) : showHome ? (
-          <SystemsHome cards={homeCards} line={portfolioLine(homeCards)} onOpen={setActiveProject} onOpenAlert={openAlert}
+          <SystemsHome title={groupSelected ? (GROUPS.find(g => g.id === activeProject)?.label || 'All systems') : 'All systems'} cards={homeCards} line={portfolioLine(homeCards)} onOpen={setActiveProject} onOpenAlert={openAlert}
             descriptions={systemDescriptions.data || {}} loading={!topology.data}
             loadError={topology.data ? null : topology.error}
             descriptionsError={systemDescriptions.error} />
