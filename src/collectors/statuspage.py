@@ -159,14 +159,15 @@ def incidents(fetch=None) -> tuple:
                 continue
             updates = ev.get("incident_updates") or []
             latest = (updates[0].get("body") if updates else "") or ""
-            impact = ev.get("impact") or "none"
+            impact = ev.get("impact") or "not stated"
             severity = "critical" if impact in ("critical", "major") and ev["_kind"] == "incident" else "warning"
             # REQ-GHA-038 clause 2: maintenance is Information only when the provider's own data
-            # shows no disruption: no impact beyond the maintenance itself, every part it names
-            # operational or under maintenance. Anything else keeps its level.
+            # says there is no disruption: impact explicitly "none" and every part it names
+            # operational. "maintenance", a missing impact or a part under maintenance may still
+            # mean planned unavailability, so those keep their level.
             states = {c.get("id"): c.get("status") for c in s["data"].get("components") or []}
-            if (ev["_kind"] == "maintenance" and impact in ("none", "maintenance")
-                    and all(states.get(c.get("id")) in ("operational", "under_maintenance") for c in named)):
+            if (ev["_kind"] == "maintenance" and ev.get("impact") == "none"
+                    and all(states.get(c.get("id")) == "operational" for c in named)):
                 severity = "info"
             where = ", ".join(c.get("name", "") for c in named[:8]) + (f" and {len(named) - 8} more" if len(named) > 8 else "")
             kind_words = ("an incident" if ev["_kind"] == "incident" else
