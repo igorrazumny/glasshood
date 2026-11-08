@@ -641,4 +641,5 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Priority:** P1
 - **Testable:** Yes (API + UI)
 - **Who builds:** Neo.
+- **Amended 2026-11-08 (owner):** Clause 4: the time on the record reads "evaluated", not "written", wherever an AI evaluation is timed. The time of an "Investigate deeper" report, which is a written report, stays "written".
 - **Status:** confirmed by the owner 2026-11-08 (full text).
