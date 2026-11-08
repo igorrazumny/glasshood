@@ -19,7 +19,7 @@ import { computeManifestLayout } from '../utils/manifestLayout'
 import { canvasNodes } from '../utils/canvasParts.js'
 import { clearToken, apiFetch, apiUrl } from '../utils/api'
 import { loadPanel, savePanel, fitPanels, landscapeInsets } from '../utils/panels'
-import { systemCards, systemOfNodes, portfolioLine, systemId, isGroupId, cardsInGroup, headerLine, GROUPS, groupedCards } from '../utils/systems'
+import { systemCards, systemOfNodes, portfolioLine, systemId, isGroupId, cardsInGroup, headerLine, GROUPS, groupedCards, staleDataLine } from '../utils/systems'
 import SystemsHome, { Waiting } from './SystemsHome'
 
 function useDemoData() {
@@ -266,6 +266,11 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
 
       <div className="flex-1 overflow-hidden transition-all duration-300"
         style={{ paddingLeft: leftShift, paddingRight: rightShift, paddingTop: 8, paddingBottom: 8 }}>
+        {!isDemo && topology.data && topology.error && topology.error !== 'Unauthorized' && (
+          <div className="mx-2 mb-2 px-3 py-1.5 rounded border border-yellow-300 dark:border-yellow-400/30 bg-yellow-50 dark:bg-yellow-400/10 text-xs text-yellow-800 dark:text-yellow-300">
+            {staleDataLine(topology.error, topology.lastUpdated)}
+          </div>
+        )}
         {!isDemo && !topology.data && !topology.error ? (
           <Waiting text="Loading your systems…" />
         ) : showHome ? (
