@@ -19,7 +19,7 @@ import { computeManifestLayout } from '../utils/manifestLayout'
 import { canvasNodes } from '../utils/canvasParts.js'
 import { clearToken, apiFetch, apiUrl, AUTH_FAILED_EVENT } from '../utils/api'
 import { loadPanel, savePanel, fitPanels, landscapeInsets } from '../utils/panels'
-import { systemCards, systemOfNodes, portfolioLine, systemId, isGroupId, cardsInGroup, headerLine, GROUPS, groupedCards, staleDataLine } from '../utils/systems'
+import { withRecords, systemCards, systemOfNodes, portfolioLine, systemId, isGroupId, cardsInGroup, headerLine, GROUPS, groupedCards, staleDataLine } from '../utils/systems'
 import SystemsHome, { Waiting } from './SystemsHome'
 
 function useDemoData() {
@@ -180,7 +180,9 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
   // REQ-GHA-035: each landscape file is one system; boxes carry their system (project/env)
   const allNodes = topology?.data?.nodes || []
   const owner = systemOfNodes(allNodes, manifestData)
-  const cards = systemCards(manifestData, allNodes, topology?.data?.alerts)
+  // REQ-GHA-040: every summary of a system reads its one saved record
+  const liveCards = systemCards(manifestData, allNodes, topology?.data?.alerts)
+  const cards = isDemo ? liveCards : withRecords(liveCards, systemDescriptions.data)
   const systemLabel = new Map(cards.map(c => [c.id, c.label]))
   // REQ-GHA-035 clause 9: a group (9Robots or external systems) shows its systems' cards
   const groupSelected = isGroupId(activeProject)

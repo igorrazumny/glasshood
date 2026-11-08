@@ -10,7 +10,7 @@ import pytest
 
 from src.analysis import vertex_overview as ov
 
-GOOD = {"score": 9, "summary": "Fine.", "issues": [], "recommendations": []}
+GOOD = {"score": 9, "condition": "normal", "summary": "Fine.", "issues": [], "recommendations": []}
 TOPOLOGY = {"nodes": [{"id": "a", "label": "A", "project": "sys", "status": "healthy", "metrics": {}}]}
 MANIFESTS = [{"product": "sys", "project_id": ""}, {"product": "ext", "kind": "outside_view"}]
 
@@ -20,8 +20,11 @@ def clean():
     with ov._lock:
         ov._own.clear()
         ov._own_jobs.clear()
+        ov._state_sig.clear()
+        ov._triggered_sig.clear()
+        ov._changed.clear()
     with patch("src.api.routes.manifests._load_manifests", return_value=MANIFESTS), \
-         patch.object(ov, "_log_lines", return_value=[]):
+         patch.object(ov, "_log_lines", return_value=[]), patch("src.rules.engine.get_alerts", return_value=[]):
         yield
 
 
@@ -151,3 +154,51 @@ def test_a_status_alarm_carries_what_the_check_observed():
     _, alert = engine._check_node_rule(rule, node)
     assert alert.check == {"result": "HTTP 503", "probe_type": "http", "status": "error"}
     assert alert.to_dict()["check"]["result"] == "HTTP 503"
+
+
+def test_condition_text_alerts_and_time_are_one_record():
+    alert = {"node_id": "a", "severity": "warning", "kind": "alarm", "title": "t", "evidence": ["x"]}
+    with patch("src.rules.engine.get_alerts", return_value=[alert, {"node_id": "other", "severity": "critical"}]):
+        run([{**GOOD, "condition": "attention"}])
+    card = ov.system_cards()["sys"]
+    assert card["condition"] == "attention" and card["summary"] == "Fine." and card["analyzed_at"]
+    assert [a["title"] for a in card["alerts"]] == ["t"] and "evidence" not in card["alerts"][0]
+
+
+def test_an_answer_without_a_condition_is_not_saved():
+    run([{**GOOD, "condition": None}], only_pending=True)
+    assert ov.get_own("sys")["job"]["status"] == "retrying"
+    assert not ov.get_own("sys")["summary"]
+
+
+def test_a_failed_update_keeps_the_last_whole_record():
+    run([{**GOOD, "condition": "failing"}])
+    run(RuntimeError("OpenAI HTTP 503"))
+    card = ov.system_cards()["sys"]
+    assert (card["condition"], card["summary"]) == ("failing", "Fine.") and card["error"]
+
+
+def changed():
+    return {"nodes": [{"id": "a", "label": "A", "project": "sys", "status": "error", "metrics": {}}]}
+
+
+def test_a_state_change_writes_a_new_record_once():
+    run([GOOD])
+    with patch.object(ov, "refresh_durable_spend"), \
+         patch.object(ov, "_generate", return_value={**GOOD, "condition": "failing"}) as gen:
+        ov._change_scan_once(lambda: TOPOLOGY)
+        assert gen.call_count == 0                       # unchanged
+        ov._change_scan_once(changed)
+        assert gen.call_count == 1
+        ov._change_scan_once(changed)
+        assert gen.call_count == 1                       # written from this state already
+    assert ov.system_cards()["sys"]["condition"] == "failing"
+
+
+def test_a_failing_rewrite_does_not_repeat_on_every_scan():
+    run([GOOD])
+    with patch.object(ov, "refresh_durable_spend"), patch.object(ov, "_generate", side_effect=RuntimeError("OpenAI HTTP 401")) as gen:
+        ov._change_scan_once(changed)
+        ov._change_scan_once(changed)
+    assert gen.call_count == 1
+    assert ov.system_cards()["sys"]["summary"] == "Fine."
