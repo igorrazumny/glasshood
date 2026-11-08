@@ -168,7 +168,7 @@ def test_the_page_shows_how_glasshood_is_reached_today():
     assert "an Azure Static Web App for the React app at app.glasshood.ai" in _HTML
     assert "reach GlassHood's API on Azure Container Apps through managed TLS ingress" in _HTML
     for href in re.findall(r'href="(https://glasshood\.ai/[^"]*)"', _HTML):
-        assert href in ("https://glasshood.ai/", "https://glasshood.ai/architecture/", "https://glasshood.ai/contact/"), href
+        assert href in ("https://glasshood.ai/", "https://glasshood.ai/architecture/", "https://glasshood.ai/contact/", "https://glasshood.ai/demo"), href
 
 
 def test_noindex_and_title():
