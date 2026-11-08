@@ -30,7 +30,8 @@ OPENAI_PRICES = {  # USD per million tokens (input, output, cached input), list 
     "gpt-5.4-nano": (0.20, 1.25, 0.02), "gpt-5.4-mini": (0.75, 4.50, 0.075),
 }
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-haiku-5-5")        # answers when OpenAI fails
-CLAUDE_PRICES = {"claude-haiku-5-5": (0.10, 0.50, 0.10)}            # USD per million tokens, list prices 2026-11
+CLAUDE_PRICES = {"claude-haiku-5-5": (0.10, 0.50, 0.10), "claude-sonnet-5-5": (2.00, 10.00, 0.20),
+                 "claude-opus-5-5": (4.00, 20.00, 0.20)}            # USD per million tokens, list prices 2026-11
 OPENAI_SEARCH_PRICE = float(os.getenv("OPENAI_SEARCH_PRICE", "0.01"))  # USD per web search call
 MODEL = OPENAI_MODEL if PROVIDER == "openai" else os.getenv("OVERVIEW_MODEL", "gemini-3.1-flash-lite")
 LOCATION = os.getenv("OVERVIEW_LOCATION", "global")
@@ -316,18 +317,35 @@ def _record_usage(usage: dict) -> None:
         _spend["local_out"] += tout
 
 
-def _record_openai(model: str, usage: dict, searches: int = 0) -> None:
+def _price(model: str) -> tuple:
+    """REQ-GHA-041: a call whose cost cannot be estimated is not made."""
+    prices = {**OPENAI_PRICES, **CLAUDE_PRICES}
+    if model not in prices:
+        raise RuntimeError(f"no price is known for model {model}")
+    return prices[model]
+
+
+def _charge_unanswered(provider: str, model: str, text: str, max_out: int) -> None:
+    """The request went out and no answer came back, so it may be billed: count its most."""
+    pin, pout, _ = _price(model)
+    ai_budget.charge(provider, len(text) / 3 / 1e6 * pin + max_out / 1e6 * pout, answered=False)
+
+
+def _record_openai(model: str, usage: dict, searches: int = 0, provider: str = ai_budget.MAIN) -> None:
     """Tokens and cost of one answer: cached input at its own price, plus web search calls."""
     tin, tout = int(usage.get("input_tokens") or 0), int(usage.get("output_tokens") or 0)
     cached = min(tin, int((usage.get("input_tokens_details") or {}).get("cached_tokens") or 0))
-    pin, pout, pcached = {**OPENAI_PRICES, **CLAUDE_PRICES}.get(model, (PRICE_IN_PER_M, PRICE_OUT_PER_M, PRICE_IN_PER_M))
+    pin, pout, pcached = _price(model)
     cost = (tin - cached) / 1e6 * pin + cached / 1e6 * pcached + tout / 1e6 * pout + searches * OPENAI_SEARCH_PRICE
     with _lock:
         _spend["local_in"] += tin
         _spend["local_out"] += tout
         _spend["local_cost"] = _spend.get("local_cost", 0.0) + cost
-    ai_budget.charge(ai_budget.BACKUP if model in CLAUDE_PRICES else ai_budget.MAIN, cost)
-    _save_spend_file()
+    ai_budget.charge(provider, cost)
+    try:
+        _save_spend_file()
+    except SpendNotSaved:
+        pass     # today's figures are for display only; the monthly totals decide
 
 
 def get_spend() -> dict:
@@ -363,11 +381,13 @@ class ProviderRefused(RuntimeError):
 def _refusal(status: int, code: str, text: str):
     """REQ-GHA-041 clause 6: words for a refusal about the account; None for any other failure."""
     words = f"{code} {text}".lower()
+    if code in ("organization_spend_limit_exceeded", "project_spend_limit_exceeded", "organization_usage_limit_exceeded"):
+        return f"the provider's own account limit is reached ({code})"
     if status == 401:
         return "the provider rejected the API key"
     if status == 403:
         return "the provider refused access for this API key"
-    if status == 402 or any(w in words for w in ("insufficient_quota", "credit balance", "billing")):
+    if status == 402 or any(w in words for w in ("insufficient_quota", "credit_balance", "credit balance", "billing")):
         return "the provider reports no remaining credit or quota"
     return None
 
@@ -389,8 +409,13 @@ def _call_openai(system_prompt: str, user_text: str, max_tokens: int, search: bo
         body["tools"] = [{"type": "web_search"}]
     else:
         body["text"] = {"format": {"type": "json_object"}}
-    r = httpx.post("https://api.openai.com/v1/responses", json=body,
-                   headers={"Authorization": f"Bearer {key}"}, timeout=180 if search else 90)
+    _price(model)
+    try:
+        r = httpx.post("https://api.openai.com/v1/responses", json=body,
+                       headers={"Authorization": f"Bearer {key}"}, timeout=180 if search else 90)
+    except httpx.HTTPError:
+        _charge_unanswered(ai_budget.MAIN, model, system_prompt + user_text, body["max_output_tokens"])
+        raise
     if r.status_code != 200:
         try:
             err = r.json().get("error") or {}
@@ -424,6 +449,7 @@ def _call_claude(system_prompt: str, user_text: str, max_tokens: int) -> str:
     """One Claude call, used only after OpenAI failed. The SDK's own retries are off: every
     attempt must be a call counted against today's cap."""
     import anthropic
+    _price(CLAUDE_MODEL)
     client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""), timeout=90, max_retries=0)
     try:
         response = client.messages.create(
@@ -436,23 +462,25 @@ def _call_claude(system_prompt: str, user_text: str, max_tokens: int) -> str:
             ai_budget.refused(ai_budget.BACKUP, why)
         raise RuntimeError(f"Claude HTTP {e.status_code}") from None
     except anthropic.APIConnectionError as e:
+        _charge_unanswered(ai_budget.BACKUP, CLAUDE_MODEL, system_prompt + user_text, max(2000, max_tokens * 3))
         raise RuntimeError(f"Claude could not be reached ({type(e).__name__})") from None
     usage = {"input_tokens": response.usage.input_tokens, "output_tokens": response.usage.output_tokens}
-    _record_openai(CLAUDE_MODEL, usage)
+    _record_openai(CLAUDE_MODEL, usage, provider=ai_budget.BACKUP)
     if response.stop_reason == "refusal":
         raise RuntimeError("Claude declined to answer")
     return "".join(b.text for b in response.content if b.type == "text")
 
 
-def _reserve_and_save() -> None:
-    """Count one call and put it on disk before it goes out; if either fails, no call is made."""
-    refused = _reserve_call()
-    if refused:
-        raise CapReached(refused)
+def _count_call() -> None:
+    """Today's number of calls, for display. REQ-GHA-041: only the monthly totals can block."""
+    with _lock:
+        if _spend.get("day") != _today():
+            _spend.clear(); _spend.update(_new_day())
+        _spend["local_calls"] += 1
     try:
         _save_spend_file()
-    except SpendNotSaved as e:
-        raise CapReached(str(e))
+    except SpendNotSaved:
+        pass
 
 
 def call_model(system_prompt: str, user_text: str, max_tokens: int = 600,
@@ -460,12 +488,10 @@ def call_model(system_prompt: str, user_text: str, max_tokens: int = 600,
     """One model call within today's cap (OpenAI, or Gemini on Vertex). Returns the answer's
     text and, when a web search was allowed and used, the pages it drew on ([{title, uri}])."""
     if PROVIDER == "openai":
-        # the reserved call is on disk before the request goes out, so a crash mid-call
-        # still counts it; if it cannot be saved, the call is not made
         # REQ-GHA-041: the main provider while it may be called, else the backup
         blocked = ai_budget.gate(ai_budget.MAIN)
         if not blocked:
-            _reserve_and_save()
+            _count_call()
             try:
                 return _call_openai(system_prompt, user_text, max_tokens, search, deep)
             except ProviderRefused as e:
@@ -486,7 +512,7 @@ def call_model(system_prompt: str, user_text: str, max_tokens: int = 600,
             raise CapReached(f"Anthropic is blocked: {backup}")
         if blocked:
             ai_budget.note("GlassHood is using its backup AI provider, Anthropic, because OpenAI is blocked.")
-        _reserve_and_save()
+        _count_call()
         return _call_claude(system_prompt, user_text, max_tokens), []
     refused = _reserve_call()
     if refused:
@@ -1054,6 +1080,7 @@ def _sync_budget_alarms() -> None:
     """REQ-GHA-041 clauses 7, 9 and 10: raised and ended here, with no AI call."""
     if PROVIDER == "openai":
         from src.rules.engine import track_ai_budget
+        ai_budget.monitor()
         track_ai_budget(ai_budget.alarms(), ai_budget.ALARM_PART)
 
 

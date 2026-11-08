@@ -5,6 +5,7 @@
 import collections
 import json
 import logging
+import math
 import os
 import tempfile
 import threading
@@ -25,7 +26,12 @@ _lines: collections.deque = collections.deque(maxlen=40)
 
 
 def limit(provider: str) -> float:
-    return float(os.getenv(f"{provider.upper()}_MONTHLY_LIMIT_USD", "20"))
+    """The configured limit; one that makes no sense allows nothing rather than everything."""
+    try:
+        value = float(os.getenv(f"{provider.upper()}_MONTHLY_LIMIT_USD", "20"))
+    except ValueError:
+        return 0.0
+    return value if math.isfinite(value) and value >= 0 else 0.0
 
 
 def _month() -> str:
@@ -58,7 +64,13 @@ def _read() -> dict:
         return _empty()
     with open(path) as f:
         data = json.load(f)
-    return data if data.get("month") == _month() else _empty()
+    if data.get("month") != _month():
+        return _empty()
+    for p in (MAIN, BACKUP):
+        cost = data[p]["cost"]
+        if isinstance(cost, bool) or not isinstance(cost, (int, float)) or not math.isfinite(cost) or cost < 0:
+            raise ValueError("a monthly total is not a valid amount")
+    return data
 
 
 def _write(data: dict) -> None:
@@ -70,19 +82,28 @@ def _write(data: dict) -> None:
 
 
 _unsaved: dict = {}              # provider -> why its total could not be saved
+_pending: dict = {}              # provider -> charges not yet on disk; never dropped
 
 
-def charge(provider: str, usd: float) -> None:
-    """Add one answered call; an answer also ends any refusal by that provider."""
-    with _lock:
-        try:
-            data = _read()
-            data[provider]["cost"] = round(data[provider]["cost"] + usd, 6)
+def _flush(provider: str, answered: bool = False) -> None:
+    """Call with _lock held: put what is owed on disk; a failure keeps it owed and blocks."""
+    try:
+        data = _read()
+        data[provider]["cost"] = round(data[provider]["cost"] + _pending.get(provider, 0.0), 6)
+        if answered:
             data[provider]["refused"] = None
-            _write(data)
-            _unsaved.pop(provider, None)
-        except Exception as e:
-            _unsaved[provider] = f"its monthly total could not be saved ({type(e).__name__})"
+        _write(data)
+        _pending.pop(provider, None)
+        _unsaved.pop(provider, None)
+    except Exception as e:
+        _unsaved[provider] = f"its monthly total could not be saved ({type(e).__name__})"
+
+
+def charge(provider: str, usd: float, answered: bool = True) -> None:
+    """Add one call's cost. A call that answered also ends any refusal by that provider."""
+    with _lock:
+        _pending[provider] = _pending.get(provider, 0.0) + usd
+        _flush(provider, answered)
 
 
 def refused(provider: str, reason: str) -> None:
@@ -92,14 +113,16 @@ def refused(provider: str, reason: str) -> None:
             data = _read()
             data[provider]["refused"] = reason
             _write(data)
-        except Exception as e:
-            _unsaved[provider] = f"its monthly total could not be saved ({type(e).__name__})"
+        except Exception:
+            pass                 # the refusal repeats on the next call; the line below still says it
     note(f"AI provider {NAMES[provider]} is blocked: {reason}.")
 
 
 def gate(provider: str):
     """Why no paid call may go to this provider, or None."""
     with _lock:
+        if _pending.get(provider):
+            _flush(provider)
         if provider in _unsaved:
             return _unsaved[provider]
         try:
@@ -124,7 +147,7 @@ def status() -> dict:
         why = gate(p) or entry.get("refused")
         if p == BACKUP and not os.getenv("ANTHROPIC_API_KEY") and not why:
             why = "no key is configured"
-        out[p] = {"spent": round(entry.get("cost", 0.0), 4), "limit": limit(p), "blocked": why}
+        out[p] = {"spent": round(entry.get("cost", 0.0) + _pending.get(p, 0.0), 4), "limit": limit(p), "blocked": why}
     return out
 
 
@@ -137,6 +160,23 @@ def note(line: str) -> None:
         _logged[line] = now
         _lines.append(f"{datetime.now(timezone.utc).isoformat(timespec='seconds')} WARNING {line}")
     logger.warning(line)
+
+
+_was_blocked: set = set()
+
+
+def monitor() -> None:
+    """Say every block and recovery in the log without needing a paid call to notice it."""
+    st = status()
+    blocked = {p for p, v in st.items() if v["blocked"]}
+    for p in blocked:
+        note(f"AI provider {NAMES[p]} is blocked: {st[p]['blocked']}.")
+    if MAIN in blocked and BACKUP not in blocked:
+        note("GlassHood is using its backup AI provider, Anthropic, because OpenAI is blocked.")
+    for p in _was_blocked - blocked:
+        note(f"AI provider {NAMES[p]} is no longer blocked.")
+    _was_blocked.clear()
+    _was_blocked.update(blocked)
 
 
 def recent_lines() -> list:
@@ -154,8 +194,10 @@ def alarms() -> list:
     if backup["blocked"]:
         return [{"group": "budget:all", "title": "AI evaluations have stopped: both AI providers are blocked",
                  "explanation": {"what": f"GlassHood can make no AI call. {NAMES[MAIN]}: {main['blocked']}. {NAMES[BACKUP]}: {backup['blocked']}. "
-                                         f"Spent this month: {amounts}. The last evaluations stay on screen. "
-                                         f"AI evaluations resume on {resumes()}, or earlier once the administrator resolves a block.",
+                                         f"Spent this month: {amounts}. The last evaluations stay on screen. " + (
+                                             f"AI evaluations resume on {resumes()}, or earlier if the administrator raises a limit."
+                                             if "monthly limit" in main["blocked"] and "monthly limit" in backup["blocked"]
+                                             else "AI evaluations resume only once the administrator resolves these blocks."),
                                  "suspicion": "", "directions": ["Administrator: raise a monthly limit, or resolve the provider's credit, billing or key problem."]}}]
     return [{"group": "budget:openai", "title": f"{NAMES[MAIN]} is blocked: GlassHood is running on its backup, {NAMES[BACKUP]}",
              "explanation": {"what": f"{NAMES[MAIN]}, the main AI provider, is blocked: {main['blocked']}. AI evaluations continue on {NAMES[BACKUP]}. "
