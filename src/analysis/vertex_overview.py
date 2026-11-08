@@ -25,9 +25,10 @@ logger = logging.getLogger(__name__)
 PROVIDER = os.getenv("AI_PROVIDER", "vertex").lower()
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.4-nano")            # overviews (almost all calls)
 OPENAI_MODEL_DEEP = os.getenv("OPENAI_MODEL_DEEP", "gpt-5.4-mini")  # AI log review, Investigate deeper
-OPENAI_PRICES = {  # USD per million tokens (input, output), list prices 2026-11
-    "gpt-5.4-nano": (0.20, 1.25), "gpt-5.4-mini": (0.75, 4.50),
+OPENAI_PRICES = {  # USD per million tokens (input, output, cached input), list prices 2026-11
+    "gpt-5.4-nano": (0.20, 1.25, 0.02), "gpt-5.4-mini": (0.75, 4.50, 0.075),
 }
+OPENAI_SEARCH_PRICE = float(os.getenv("OPENAI_SEARCH_PRICE", "0.01"))  # USD per web search call
 MODEL = OPENAI_MODEL if PROVIDER == "openai" else os.getenv("OVERVIEW_MODEL", "gemini-3.1-flash-lite")
 LOCATION = os.getenv("OVERVIEW_LOCATION", "global")
 PROJECT = os.getenv("OVERVIEW_PROJECT", GCP_PROJECT_ID)
@@ -202,11 +203,24 @@ def _spend_file():
     return os.path.join(d, "ai_spend.json") if d else None
 
 
+class SpendNotSaved(Exception):
+    pass
+
+
+_save_lock = threading.Lock()   # one writer at a time: snapshot, write and replace together
+
+
 def _file_today() -> dict:
     """Today's (UTC) calls, tokens and cost on OpenAI, from GlassHood's saved count (the
-    durable part: OpenAI's own usage needs an admin key GlassHood does not hold)."""
+    durable part: OpenAI's own usage needs an admin key GlassHood does not hold). With
+    nowhere writable to keep the count, no paid call is made: the cap fails closed."""
     path = _spend_file()
-    if not path or not os.path.exists(path):
+    if not path:
+        raise SpendNotSaved("no folder is set up to keep today's AI count (AI_STATE_DIR)")
+    folder = os.path.dirname(path)
+    if not os.path.isdir(folder) or not os.access(folder, os.W_OK):
+        raise SpendNotSaved("the folder that keeps today's AI count is not writable")
+    if not os.path.exists(path):
         return {"calls": 0, "in": 0, "out": 0, "cost": 0.0}
     with open(path) as f:
         data = json.load(f)
@@ -216,20 +230,29 @@ def _file_today() -> dict:
 
 
 def _save_spend_file() -> None:
+    """Write today's count. Raises SpendNotSaved, after stopping further paid calls, when it
+    cannot be written: an unsaved count would let a restart exceed the cap."""
+    import tempfile
     path = _spend_file()
-    if not path:
-        return
-    with _lock:
-        snap = {"day": _spend["day"], "calls": _spend["durable_calls"] + _spend["local_calls"],
-                "in": _spend["durable_in"] + _spend["local_in"], "out": _spend["durable_out"] + _spend["local_out"],
-                "cost": round(_spend.get("durable_cost", 0.0) + _spend.get("local_cost", 0.0), 6)}
-    try:
-        tmp = path + ".tmp"
-        with open(tmp, "w") as f:
-            json.dump(snap, f)
-        os.replace(tmp, path)
-    except Exception as e:
-        logger.warning(f"AI spend not saved ({type(e).__name__}): the cap would restart from the last saved count")
+    with _save_lock:
+        with _lock:
+            snap = {"day": _spend["day"], "calls": _spend["durable_calls"] + _spend["local_calls"],
+                    "in": _spend["durable_in"] + _spend["local_in"], "out": _spend["durable_out"] + _spend["local_out"],
+                    "cost": round(_spend.get("durable_cost", 0.0) + _spend.get("local_cost", 0.0), 6)}
+        try:
+            if not path:
+                raise OSError("AI_STATE_DIR not set")
+            fd, tmp = tempfile.mkstemp(prefix=".ai_spend.", dir=os.path.dirname(path))
+            with os.fdopen(fd, "w") as f:
+                json.dump(snap, f)
+            os.replace(tmp, path)
+        except Exception as e:
+            why = f"today's AI count could not be saved ({type(e).__name__})"
+            logger.warning(f"{why}: no further AI call until it can be")
+            with _lock:
+                _spend["durable_read"] = False
+                _spend["read_error"] = why
+            raise SpendNotSaved(why)
 
 
 def refresh_durable_spend() -> None:
@@ -238,7 +261,8 @@ def refresh_durable_spend() -> None:
         mon = _file_today() if PROVIDER == "openai" else _monitoring_today()
         err = None
     except Exception as e:
-        mon, err = None, f"today's model usage could not be read ({type(e).__name__})"
+        mon, err = None, (str(e) if isinstance(e, SpendNotSaved)
+                          else f"today's model usage could not be read ({type(e).__name__})")
     with _lock:
         if _spend.get("day") != _today():
             _spend.clear(); _spend.update(_new_day())
@@ -277,13 +301,16 @@ def _record_usage(usage: dict) -> None:
         _spend["local_out"] += tout
 
 
-def _record_openai(model: str, usage: dict) -> None:
+def _record_openai(model: str, usage: dict, searches: int = 0) -> None:
+    """Tokens and cost of one answer: cached input at its own price, plus web search calls."""
     tin, tout = int(usage.get("input_tokens") or 0), int(usage.get("output_tokens") or 0)
-    pin, pout = OPENAI_PRICES.get(model, (PRICE_IN_PER_M, PRICE_OUT_PER_M))
+    cached = min(tin, int((usage.get("input_tokens_details") or {}).get("cached_tokens") or 0))
+    pin, pout, pcached = OPENAI_PRICES.get(model, (PRICE_IN_PER_M, PRICE_OUT_PER_M, PRICE_IN_PER_M))
+    cost = (tin - cached) / 1e6 * pin + cached / 1e6 * pcached + tout / 1e6 * pout + searches * OPENAI_SEARCH_PRICE
     with _lock:
         _spend["local_in"] += tin
         _spend["local_out"] += tout
-        _spend["local_cost"] = _spend.get("local_cost", 0.0) + tin / 1e6 * pin + tout / 1e6 * pout
+        _spend["local_cost"] = _spend.get("local_cost", 0.0) + cost
     _save_spend_file()
 
 
@@ -300,7 +327,9 @@ def get_spend() -> dict:
             "cost_usd": round(cost, 4),
             "capped": sp["capped"], "usage_read": sp["durable_read"], "read_error": sp["read_error"],
             "daily_call_cap": DAILY_CALL_CAP, "model": MODEL,
-            "price_per_m_tokens_usd": {"input": PRICE_IN_PER_M, "output": PRICE_OUT_PER_M}}
+            "price_per_m_tokens_usd": ({"input": OPENAI_PRICES.get(MODEL, (0, 0, 0))[0],
+                                        "output": OPENAI_PRICES.get(MODEL, (0, 0, 0))[1]} if PROVIDER == "openai"
+                                       else {"input": PRICE_IN_PER_M, "output": PRICE_OUT_PER_M})}
 
 
 class CapReached(Exception):
@@ -329,7 +358,8 @@ def _call_openai(system_prompt: str, user_text: str, max_tokens: int, search: bo
     if r.status_code != 200:
         raise RuntimeError(f"OpenAI HTTP {r.status_code}")
     data = r.json()
-    _record_openai(model, data.get("usage") or {})
+    searches = sum(1 for item in data.get("output") or [] if item.get("type") == "web_search_call")
+    _record_openai(model, data.get("usage") or {}, searches)
     text, sources = "", []
     for item in data.get("output") or []:
         if item.get("type") == "web_search_call":
@@ -355,10 +385,13 @@ def call_model(system_prompt: str, user_text: str, max_tokens: int = 600,
     if refused:
         raise CapReached(refused)
     if PROVIDER == "openai":
+        # the reserved call is on disk before the request goes out, so a crash mid-call
+        # still counts it; if it cannot be saved, the call is not made
         try:
-            return _call_openai(system_prompt, user_text, max_tokens, search, deep)
-        finally:
             _save_spend_file()
+        except SpendNotSaved as e:
+            raise CapReached(str(e))
+        return _call_openai(system_prompt, user_text, max_tokens, search, deep)
     host = "aiplatform.googleapis.com" if LOCATION == "global" else f"{LOCATION}-aiplatform.googleapis.com"
     url = (f"https://{host}/v1/projects/{PROJECT}/locations/{LOCATION}"
            f"/publishers/google/models/{MODEL}:generateContent")
