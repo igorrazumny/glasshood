@@ -1,8 +1,8 @@
 // File: frontend/src/utils/api.js
 // Purpose: API fetch wrapper with Auth0 + legacy token + auto-reauth on 401
-import { newSession } from './pollCache.js'
+import { newSession, sessionEpoch } from './pollCache.js'
 
-import { WAKE } from '../config/wake'
+import { WAKE } from '../config/wake.js'
 
 // The API's address: same origin today, the app's own Azure address once the
 // frontend is served from app.glasshood.ai (REQ-GHA-018).
@@ -13,6 +13,8 @@ export function apiUrl(path) {
 // A sleep ended the session (REQ-GHA-018 clause 8): the app shows the login
 // screen instead of logging in again with stored credentials.
 export const SESSION_ENDED_EVENT = 'glasshood:session-ended'
+// The current session's credentials were refused for good: the app goes back to its login
+export const AUTH_FAILED_EVENT = 'glasshood:auth-failed'
 
 async function _isSessionEnded(resp) {
   try {
@@ -23,10 +25,23 @@ async function _isSessionEnded(resp) {
   }
 }
 
-function _endSession() {
-  clearToken()
-  window.dispatchEvent(new Event(SESSION_ENDED_EVENT))
+// A refusal ends the session only when the request belongs to the current one; an answer
+// to a request from an earlier session never logs out whoever is signed in now
+function _endSession(ep) {
+  if (sessionEpoch() === ep) {
+    clearToken()
+    window.dispatchEvent(new Event(SESSION_ENDED_EVENT))
+  }
   throw new Error('Session ended')
+}
+
+function _authFailed(ep) {
+  if (sessionEpoch() === ep) {
+    clearToken()
+    _auth0GetToken = null
+    window.dispatchEvent(new Event(AUTH_FAILED_EVENT))
+  }
+  throw new Error('Unauthorized')
 }
 
 // While the app is asleep its ingress refuses requests, so they fail as network
@@ -108,6 +123,7 @@ async function _getAuthHeader() {
 }
 
 export async function apiFetch(path, options = {}) {
+  let ep = sessionEpoch()
   const headers = { 'Content-Type': 'application/json', ...options.headers }
   const authHeader = await _getAuthHeader()
   if (authHeader) {
@@ -116,7 +132,7 @@ export async function apiFetch(path, options = {}) {
 
   let resp = await _fetchApp(path, { ...options, headers })
 
-  if (resp.status === 401 && await _isSessionEnded(resp)) _endSession()
+  if (resp.status === 401 && await _isSessionEnded(resp)) _endSession(ep)
 
   // Auto-reauth on 401
   if (resp.status === 401) {
@@ -131,23 +147,17 @@ export async function apiFetch(path, options = {}) {
       } catch {
         // Silent refresh failed — session expired
       }
-      if (resp.status === 401) {
-        clearToken()
-        _auth0GetToken = null
-        throw new Error('Unauthorized')
-      }
+      if (resp.status === 401) _authFailed(ep)
     } else {
       // Legacy: try stored credentials
       const ok = await _reauth()
       if (ok) {
+        ep = sessionEpoch()   // our own silent re-login started this session
         headers['Authorization'] = `Bearer ${_token}`
         resp = await _fetchApp(path, { ...options, headers })
       }
-      if (resp.status === 401 && await _isSessionEnded(resp)) _endSession()
-      if (resp.status === 401) {
-        clearToken()
-        throw new Error('Unauthorized')
-      }
+      if (resp.status === 401 && await _isSessionEnded(resp)) _endSession(ep)
+      if (resp.status === 401) _authFailed(ep)
     }
   }
 
