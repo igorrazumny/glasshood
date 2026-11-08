@@ -666,3 +666,24 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Testable:** Yes (API + UI)
 - **Who builds:** Neo.
 - **Status:** confirmed by the owner 2026-11-08 (full text).
+
+## REQ-GHA-042: When AI is offline each system says so and points to one alert; the last evaluations survive restarts
+
+- **Goal:** When GlassHood can make no AI call, every screen says so truthfully and points to one place with the details, and a restart never blanks what GlassHood already knows.
+- **Why:** Owner, 2026-11-08: having nothing on screen looks strange, but old data shown as current is not monitoring. When really blocked, show that it is blocked and point to the alert that holds the details.
+- **Target state:**
+  1. "AI offline" means no AI provider can be called (REQ-GHA-041 clause 9). When only the main provider is blocked and the backup is working, cards behave as normal.
+  2. While AI is offline, each system's card and each system or group summary shows a grey mark, never a healthy or failing colour, and one line: "AI evaluation offline since <time>. See alert <number> for details."
+  3. The alert number opens the one critical alert about AI being offline. That alert holds the reason, the amounts and what to do.
+  4. The line says the AI evaluation is offline. It never says the system is offline.
+  5. The last evaluation stays available under a closed section, "Last evaluation, <time>", with its text unchanged and whole. A system that has never been evaluated says so instead.
+  6. Inside a system's own view, the landscape boxes, their checks and the alarm list stay live, as today.
+  7. When AI can run again, cards return to normal without any action. Until a system's next evaluation is written, its card shows its last record with the time it was evaluated.
+  8. Every open alarm has a short number that stays the same while the alarm is open. It is shown in the alarm list and in the alarm's detail.
+  9. Each system's last record and each part's last analysis are saved and survive a restart. If a save fails, this is said in plain words and raises an alarm.
+  10. A restart does not start a new round of AI evaluations. The next evaluation of each system and part comes when it would have been due without the restart. A system or part with no saved evaluation is evaluated at once.
+  11. A record shown after a restart follows REQ-GHA-040: consistent with itself, with its original time.
+- **Priority:** P1
+- **Testable:** Yes (API + UI)
+- **Who builds:** Neo.
+- **Status:** confirmed by the owner 2026-11-08 (full text).
