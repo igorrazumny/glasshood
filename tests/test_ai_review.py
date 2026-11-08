@@ -459,3 +459,23 @@ class TestLandscapeName:
         [a] = _ai()
         assert a["title"] == "Confidential VM (MIG): Chat requests time out"
         assert "coldvault-mig-xjxr" not in a["title"]
+
+
+def test_an_acknowledged_ai_alarm_on_a_part_that_is_gone_ends():
+    from src.models.alert import Alert
+    from src.models.topology import Node
+    from unittest.mock import patch as _patch
+    eng._active.clear()
+    a = Alert(rule_id="ai_review", kind="ai", severity="critical", message="m", triggered_at="t",
+              node_id="vm-old", group="ai:x", first_seen="2026-11-07T11:52:48+00:00")
+    eng._active[("ai:x", "vm-old")] = a
+    rule = {"id": "node_error", "group": "status", "severity": "critical", "scope": "node",
+            "condition": {"metric": "status", "operator": "==", "value": "error"}}
+    with _patch.object(eng, "_rules", lambda path: [rule]):
+        eng.evaluate_rules([Node(id="vm-new", label="new", type="vm", status="healthy")], {})
+        assert ("ai:x", "vm-old") in eng._active          # unacknowledged critical waits for a person
+        eng.acknowledge_alert("ai:x", "vm-old", "admin@example.com")
+        eng.evaluate_rules([Node(id="vm-new", label="new", type="vm", status="healthy")], {})
+    assert ("ai:x", "vm-old") not in eng._active
+    assert eng.get_resolved()[0]["acknowledged_by"] == "admin@example.com"
+    eng._active.clear()
