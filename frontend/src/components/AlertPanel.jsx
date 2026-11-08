@@ -33,10 +33,13 @@ export default function AlertPanel({ alerts, resolved, rules, onSelect, systemOf
     try { localStorage.setItem(OPEN_KEY, JSON.stringify(next)) } catch { /* not remembered */ }
   }
   const counted = alerts.filter(a => a.kind !== 'example')
+  // REQ-GHA-038 clause 4: at most about half the panel; while a list is open it keeps room
+  // for its alarms however long the AI overview above is (that one is capped at half too)
+  const anyOpen = LEVELS.some(l => byLevel[l.id]?.length && isOpen(l.id))
 
   return (
     <div className="bg-card dark:bg-purple-800 border border-border dark:border-purple-700 rounded-lg p-3 mb-3 flex flex-col min-h-0"
-      style={{ maxHeight: '50vh' }}>
+      style={{ maxHeight: '50%', minHeight: anyOpen ? '40%' : undefined, flex: '1 1 auto' }}>
       <div className="flex items-center justify-between mb-2 flex-shrink-0">
         <div className="flex items-center gap-2">
           <AlertTriangle size={14} className="text-gray-500 dark:text-purple-300" />
