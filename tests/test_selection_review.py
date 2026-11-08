@@ -125,3 +125,26 @@ def test_failed_save_is_reported_and_retried_without_a_new_call():
     sr._reviews.clear(); sr._loaded[0] = False
     with patch.object(ov, "system_cards", return_value=cards):
         assert sr.get_reviews()["all"]["summary"] == "Fine."
+
+
+def test_a_failed_read_is_retried_before_anything_is_regenerated():
+    cards = {"a": _rec()}
+    _run(cards, "Fine.", 0); _run(cards, "Fine.", 100)
+    sr._reviews.clear(); sr._loaded[0] = False
+    with patch("builtins.open", side_effect=OSError):
+        assert _run(cards, "Other.", 200).call_count == 0
+    assert sr.problem[0]
+    assert _run(cards, "Other.", 400).call_count == 0
+    assert sr.problem[0] is None
+    with patch.object(ov, "system_cards", return_value=cards):
+        assert sr.get_reviews()["all"]["summary"] == "Fine."
+
+
+@pytest.mark.parametrize("login", ["demo@glasshood.example.com", "DEMO@GLASSHOOD.EXAMPLE.COM", "Demo@GlassHood.Example.Com"])
+def test_every_spelling_of_the_demo_login_is_refused(login):
+    c = TestClient(app, raise_server_exceptions=False)
+    with patch("src.api.routes.auth.GLASSHOOD_PASSWORD", "not-the-demo-one"):
+        token = c.post("/api/auth/login", json={"login": login, "password": "demo"}).json()["token"]
+    r = c.put("/api/preferences/right-panel", json={"split": 0.3}, headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 403
+    assert not (__import__("pathlib").Path(__import__("os").environ["AI_STATE_DIR"]) / "ui_prefs.json").exists()

@@ -44,16 +44,22 @@ def _file():
 
 
 def _load() -> None:
+    """A temporary read failure is retried: valid saved reviews are never paid for again."""
     with _lock:
         if _loaded[0]:
             return
-        _loaded[0] = True
         path = _file()
         try:
             if path and os.path.exists(path):
                 with open(path) as f:
                     _reviews.update(json.load(f))
-        except Exception as e:
+            _loaded[0] = True
+            problem[0] = None
+        except OSError as e:
+            problem[0] = f"the saved AI reviews could not be read ({type(e).__name__})"
+            logger.warning(problem[0])
+        except ValueError as e:      # a damaged file will not heal: the next review replaces it
+            _loaded[0] = True
             problem[0] = f"the saved AI reviews could not be read ({type(e).__name__})"
             logger.warning(problem[0])
 
@@ -117,6 +123,8 @@ def refresh_due(now: float = None) -> None:
     """Clause 11: a selection is rewritten only after one of its records changed and things settled."""
     from src.analysis import vertex_overview as ov
     _load()
+    if not _loaded[0]:
+        return
     if _unsaved[0]:
         _save()
     if ov.ai_offline():

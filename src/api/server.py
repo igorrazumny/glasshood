@@ -63,7 +63,7 @@ def _writes_need_operator(request: Request) -> None:
     from src.auth.rbac import require_role
     ctx = verify_token(request)
     if path in _OWN_PREFERENCES:
-        if ctx.get("user") == DEMO_LOGIN:
+        if str(ctx.get("user") or "").lower() == DEMO_LOGIN:
             raise HTTPException(status_code=403, detail="The Live demo stores nothing")
         return
     require_role(request, "operator")
