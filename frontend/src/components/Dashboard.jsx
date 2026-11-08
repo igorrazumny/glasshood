@@ -17,7 +17,7 @@ import VerificationReportModal from './VerificationReportModal'
 import { usePolling } from '../hooks/usePolling'
 import { computeManifestLayout } from '../utils/manifestLayout'
 import { canvasNodes } from '../utils/canvasParts.js'
-import { clearToken, apiFetch, apiUrl } from '../utils/api'
+import { clearToken, apiFetch, apiUrl, AUTH_FAILED_EVENT } from '../utils/api'
 import { loadPanel, savePanel, fitPanels, landscapeInsets } from '../utils/panels'
 import { systemCards, systemOfNodes, portfolioLine, systemId, isGroupId, cardsInGroup, headerLine, GROUPS, groupedCards, staleDataLine } from '../utils/systems'
 import SystemsHome, { Waiting } from './SystemsHome'
@@ -109,6 +109,15 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
     seen.add(key)
     return true
   })
+
+  // Auto-logout when the current session's credentials are refused for good; apiFetch says so
+  // only for a request of the current session, so a late refusal never logs out a newer user
+  useEffect(() => {
+    if (isDemo) return
+    const onFailed = () => onLogout?.()
+    window.addEventListener(AUTH_FAILED_EVENT, onFailed)
+    return () => window.removeEventListener(AUTH_FAILED_EVENT, onFailed)
+  }, [isDemo, onLogout])
 
   // Auto-logout when polling detects expired auth (401 → "Unauthorized")
   useEffect(() => {
