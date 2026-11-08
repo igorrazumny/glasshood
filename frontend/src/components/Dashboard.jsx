@@ -233,7 +233,7 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
         readOnly={hideCosts && !isDemo}
         onVerify={isDemo ? null : runVerification}
         scope={isDemo ? null : !topology.data ? { text: 'Loading your systems…', state: 'unknown' }
-          : cards.length > 1 ? headerLine(cards, activeProject) : null}
+          : headerLine(cards, activeProject)}
       />
       {projectNodes.length > 0 && (
         <ProjectTree

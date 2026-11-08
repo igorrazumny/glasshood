@@ -93,6 +93,7 @@ _own: dict = {}            # product -> overview of one of our own systems (REQ-
 _own_jobs: dict = {}       # product -> actual assessment execution state
 _state_sig: dict = {}      # product -> the part states its saved record was written from (REQ-GHA-040)
 _triggered_sig: dict = {}  # product -> the part states that last triggered a new record
+_outside_running: set = set()  # external systems with a record being written right now
 _changed: set = set()      # own systems whose parts changed state and await a new record
 _outside_sig: dict = {}    # box id -> what its last analysis was written from (rewritten only on change)
 _parts: dict = {}          # part id -> overview
@@ -916,18 +917,27 @@ def run_outside(parts: bool = True, topology: dict = None, only: set = None) -> 
                        "components": [x.get("name") for x in e.get("components") or []][:30],
                        "latest_update": ((e.get("incident_updates") or [{}])[0].get("body") or "")[:800],
                    } for e in p["events"]]}
+        with _lock:     # one run per system: old work can never overwrite a newer record
+            claimed = product not in _outside_running
+            _outside_running.add(product)
         try:
-            nodes = _system_nodes(topology or {}, product)
-            record = _system_record(_generate(OUTSIDE_SYSTEM_PROMPT, json.dumps(sanitize(payload), default=str)),
-                                    _open_alerts(nodes))
-            with _lock:
-                _outside[product] = record
-                _state_sig[product] = _signature(nodes)
+            if claimed:
+                # what the record says is fixed before the model is asked
+                nodes = _system_nodes(topology or {}, product)
+                sig, alerts = _signature(nodes), _open_alerts(nodes)
+                record = _system_record(_generate(OUTSIDE_SYSTEM_PROMPT, json.dumps(sanitize(payload), default=str)), alerts)
+                with _lock:
+                    _outside[product] = record
+                    _state_sig[product] = sig
         except Exception as e:
             why = _failure(e)
             logger.warning(f"outside overview failed for {p['name']}: {why}")
             with _lock:
                 _outside[product] = _keep_last_good(_outside.get(product), why)
+        finally:
+            if claimed:
+                with _lock:
+                    _outside_running.discard(product)
         if not parts:
             continue
         with _lock:
@@ -995,6 +1005,8 @@ def _change_scan_once(get_topology_fn) -> None:
         sig = _signature(_system_nodes(topology, product))
         with _lock:
             known = _state_sig.get(product)
+            if sig == known:
+                _triggered_sig.pop(product, None)   # back where it was: the next change counts again
             if known is None or sig in (known, _triggered_sig.get(product)):
                 continue
             _triggered_sig[product] = sig

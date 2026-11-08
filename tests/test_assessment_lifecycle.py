@@ -202,3 +202,56 @@ def test_a_failing_rewrite_does_not_repeat_on_every_scan():
         ov._change_scan_once(changed)
     assert gen.call_count == 1
     assert ov.system_cards()["sys"]["summary"] == "Fine."
+
+
+def test_a_state_that_returns_counts_as_a_new_change():
+    run([GOOD])
+    with patch.object(ov, "refresh_durable_spend"), patch.object(ov, "_generate", side_effect=RuntimeError("OpenAI HTTP 401")) as gen:
+        ov._change_scan_once(changed)
+        ov._change_scan_once(lambda: TOPOLOGY)
+        ov._change_scan_once(changed)
+    assert gen.call_count == 2
+
+
+def _provider(events=()):
+    return {"product": "ext", "name": "Ext", "page": "p", "read": True, "error": None, "components": [], "comps": {}, "events": list(events)}
+
+
+def _reset_ext():
+    with ov._lock:
+        ov._outside.clear()
+        ov._outside_running.clear()
+
+
+def test_two_runs_of_one_external_system_never_compete():
+    _reset_ext()
+    started, release = threading.Event(), threading.Event()
+    calls = []
+
+    def slow(*_):
+        calls.append(1)
+        started.set()
+        release.wait(5)
+        return GOOD
+    with patch("src.collectors.statuspage.published", return_value=[_provider()]), patch.object(ov, "_generate", side_effect=slow):
+        first = threading.Thread(target=ov.run_outside, kwargs={"parts": False, "topology": TOPOLOGY})
+        first.start()
+        assert started.wait(5)
+        ov.run_outside(parts=False, topology=TOPOLOGY)
+        release.set()
+        first.join(5)
+    assert len(calls) == 1 and not ov._outside_running
+
+
+def test_an_external_record_keeps_the_alerts_seen_before_the_model_was_asked():
+    _reset_ext()
+    topology = {"nodes": [{"id": "e", "project": "ext", "status": "healthy"}]}
+    live = []
+
+    def answer(*_):
+        live.append({"node_id": "e", "severity": "critical", "kind": "alarm", "title": "late"})
+        return GOOD
+    with patch("src.collectors.statuspage.published", return_value=[_provider()]), patch.object(ov, "_generate", side_effect=answer), \
+         patch("src.rules.engine.get_alerts", side_effect=lambda: list(live)):
+        ov.run_outside(parts=False, topology=topology)
+    assert ov.get_outside("ext")["alerts"] == []

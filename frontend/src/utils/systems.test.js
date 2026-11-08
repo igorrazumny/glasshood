@@ -208,4 +208,10 @@ test('a system with no record is never shown as working', () => {
   assert.equal(withRecords(base, null)[0].line, 'Status not available yet')
 })
 
+test('one system with no record does not read as operational', () => {
+  const [c] = withRecords([{ id: 'a', product: 'a', label: 'A', outside: false, state: 'healthy' }], {})
+  assert.equal(headerLine([c], null).text, 'Our systems: status not available')
+  assert.notEqual(headerLine([c], null).state, 'healthy')
+})
+
 if (failed) { console.error(`${failed} failed`); process.exit(1) }
