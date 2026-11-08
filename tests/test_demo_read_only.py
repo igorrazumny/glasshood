@@ -7,7 +7,7 @@ import pytest
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
-from src.api.server import _OPEN_WRITES, app
+from src.api.server import _OPEN_WRITES, _WORK_ON_READ, app
 
 WRITES = ("POST", "PUT", "PATCH", "DELETE")
 
@@ -49,6 +49,18 @@ def test_the_demo_role_is_refused_the_same_way_everywhere(client, method, path):
 def test_nobody_signed_out_can_write(client, method, path):
     r = client.request(method, path.replace("{", "").replace("}", ""), json={})
     assert r.status_code in (401, 403), f"{method} {path}: {r.status_code}"
+
+
+def test_a_read_that_does_work_is_refused_too(client):
+    assert "/api/compliance/report" in _WORK_ON_READ
+
+    def viewer(request):
+        request.state.user_context = _as("viewer")
+        return request.state.user_context
+    with patch("src.api.routes.auth.verify_token", side_effect=viewer), \
+         patch("src.api.routes.compliance.generate_report", side_effect=AssertionError("no report for the demo")):
+        r = client.get("/api/compliance/report", headers={"Authorization": "Bearer t"})
+    assert r.status_code == 403
 
 
 def test_the_open_list_is_only_sign_in_out_and_the_crash_report():

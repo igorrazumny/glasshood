@@ -49,10 +49,12 @@ logger = logging.getLogger(__name__)
 # REQ-GHA-043: every action that changes something or starts work needs an operator, including any
 # added later. Only signing in and out and the browser's crash report are open to the demo role.
 _OPEN_WRITES = {"/api/auth/login", "/api/auth/refresh", "/api/auth/logout", "/api/frontend-error"}
+_WORK_ON_READ = {"/api/compliance/report"}   # a GET that creates a report and adds to a shared audit log
 
 
 def _writes_need_operator(request: Request) -> None:
-    if request.method in ("GET", "HEAD", "OPTIONS") or request.url.path in _OPEN_WRITES:
+    path = request.url.path
+    if path in _OPEN_WRITES or (request.method in ("GET", "HEAD", "OPTIONS") and path not in _WORK_ON_READ):
         return
     from src.api.routes.auth import verify_token
     from src.auth.rbac import require_role
