@@ -4,6 +4,7 @@
 
 import { AlertOctagon, AlertTriangle, Eye, Loader2 } from 'lucide-react'
 import { assessmentLine, loadFailed } from '../utils/systems'
+import AiOfflineLine from './AiOfflineLine'
 import { groupedCards, portfolioLine } from '../utils/systems'
 
 const DOT = {
@@ -11,7 +12,7 @@ const DOT = {
   'not checked': 'bg-gray-400',
 }
 
-export default function SystemsHome({ cards, line, onOpen, descriptions = {}, loading = false, loadError = null, descriptionsError = null }) {
+export default function SystemsHome({ cards, line, onOpen, onOpenAlert, descriptions = {}, loading = false, loadError = null, descriptionsError = null }) {
   // REQ-GHA-035 clause 9: Proprietary systems and External systems, each with its own line
   // REQ-GHA-037 clause 6: while the systems load, say so
   if (!cards.length && loadError) return <Failed text={loadFailed('Your systems', loadError)} />
@@ -31,7 +32,7 @@ export default function SystemsHome({ cards, line, onOpen, descriptions = {}, lo
           {/* only the cards a group really has take space: they grow into spare width up to a
               comfortable maximum, then narrow, then stack */}
           <div className="flex flex-wrap gap-4">
-            {groupCards.map(c => <SystemCard key={c.id} card={c} about={descriptions[c.product]} loadError={descriptionsError} onOpen={onOpen} />)}
+            {groupCards.map(c => <SystemCard key={c.id} card={c} about={descriptions[c.product]} loadError={descriptionsError} onOpen={onOpen} onOpenAlert={onOpenAlert} />)}
           </div>
         </section>
       ))}
@@ -41,14 +42,16 @@ export default function SystemsHome({ cards, line, onOpen, descriptions = {}, lo
 
 // REQ-GHA-037: what a business owner needs — state in one line, open alarms, the AI's view of
 // the whole system, when it was checked — and a clear way in
-function SystemCard({ card: c, about, loadError, onOpen }) {
+function SystemCard({ card: c, about, loadError, onOpen, onOpenAlert }) {
   const a = assessmentLine(about, Date.now())
   if (!about && loadError) a.text = loadFailed('The assessment', loadError)
   else if (loadError && !a.problem) a.problem = loadFailed('A newer assessment', loadError)
   return (
-    <button onClick={() => onOpen(c.id)}
+    // a div, not a button: it holds the alert's link and the closed last evaluation
+    <div role="button" tabIndex={0} onClick={() => onOpen(c.id)}
+      onKeyDown={e => { if (e.key === 'Enter' && e.target === e.currentTarget) onOpen(c.id) }}
       style={{ flex: '1 1 320px', minWidth: 0, maxWidth: 520 }}
-      className="group text-left flex flex-col bg-card dark:bg-purple-800 border border-border dark:border-purple-700 rounded-xl p-5
+      className="group cursor-pointer text-left flex flex-col bg-card dark:bg-purple-800 border border-border dark:border-purple-700 rounded-xl p-5
         hover:border-accent-500 dark:hover:border-purple-400 hover:shadow-lg hover:-translate-y-0.5 transition">
       <div className="flex items-center gap-2">
         <span className={`w-2.5 h-2.5 rounded-full ${DOT[c.state] || DOT['not checked']}`} />
@@ -64,7 +67,10 @@ function SystemCard({ card: c, about, loadError, onOpen }) {
         )}
       </div>
       {(c.outside ? c.source : c.subtitle) && <div className="text-xs text-gray-500 dark:text-purple-300 mt-0.5">{c.outside ? c.source : c.subtitle}</div>}
-      <p className="text-[15px] font-medium text-gray-800 dark:text-purple-100 mt-3">{c.line}</p>
+      {c.offline
+        ? <p className="mt-3"><AiOfflineLine offline={c.offline} onOpenAlert={onOpenAlert} /></p>
+        : <p className="text-[15px] font-medium text-gray-800 dark:text-purple-100 mt-3">{c.line}</p>}
+      {!c.offline && (
       <div className="flex items-center gap-3 mt-1 text-sm">
         {c.critical + c.warning > 0
           ? <span className={`flex items-center gap-1 ${c.critical ? 'text-red-700 dark:text-red-400' : 'text-yellow-700 dark:text-yellow-400'}`}>
@@ -74,7 +80,16 @@ function SystemCard({ card: c, about, loadError, onOpen }) {
           : <span className="text-gray-500 dark:text-purple-300">No active alerts</span>}
         {c.notes > 0 && <span className="text-gray-500 dark:text-purple-300">{c.notes} configuration note{c.notes === 1 ? '' : 's'}</span>}
       </div>
+      )}
       {c.notice && <p className="text-sm font-medium text-red-700 dark:text-red-400 mt-2">Critical: {c.notice}</p>}
+      {c.offline ? (
+        <details className="mt-3 pt-3 border-t border-border/70 dark:border-purple-700/70 flex-1" onClick={e => e.stopPropagation()}>
+          <summary className="text-xs font-semibold text-gray-500 dark:text-purple-300 cursor-pointer">
+            {a.when && about?.summary ? `Last evaluation, ${a.when.replace(/^evaluated /, '')}` : 'Not evaluated yet'}
+          </summary>
+          {about?.summary && <p className="text-sm text-gray-700 dark:text-purple-100 leading-relaxed mt-1">{about.summary}</p>}
+        </details>
+      ) : (
       <div className="mt-3 pt-3 border-t border-border/70 dark:border-purple-700/70 flex-1">
         <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-purple-300 mb-1">
           AI assessment{a.when ? ` · ${a.when}` : ''}
@@ -88,10 +103,11 @@ function SystemCard({ card: c, about, loadError, onOpen }) {
           <span>{a.text}</span>
         </p>
       </div>
+      )}
       <div className="mt-4 flex items-center justify-end text-xs text-gray-500 dark:text-purple-300">
         <span className="text-sm font-medium text-accent-600 dark:text-accent-300 group-hover:translate-x-0.5 transition">See details →</span>
       </div>
-    </button>
+    </div>
   )
 }
 

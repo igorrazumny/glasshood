@@ -8,6 +8,7 @@ import { Brain, RefreshCw, AlertTriangle, CheckCircle, Server, Shield, Loader2 }
 import { apiFetch } from '../utils/api'
 import { statsSummary } from '../utils/canvasParts.js'
 import { overviewStamp, spendLine } from '../utils/overview.js'
+import AiOfflineLine from './AiOfflineLine'
 import { assessmentLine, listAssessments, loadFailed } from '../utils/systems.js'
 
 function ScoreBadge({ score }) {
@@ -63,7 +64,7 @@ function TopologyStats({ topology, canvas }) {
 
 // REQ-GHA-037 clauses 7 and 9: the title names what the overview covers; on the home view or
 // a group it lists each system's own short assessment; box counts only for one system
-function SystemsList({ cards, descriptions, loadError, systemsError }) {
+function SystemsList({ onOpenAlert, cards, descriptions, loadError, systemsError }) {
   if (!cards.length && systemsError) {
     return <p className="text-sm text-yellow-700 dark:text-yellow-300">{loadFailed('Your systems', systemsError)}</p>
   }
@@ -81,6 +82,11 @@ function SystemsList({ cards, descriptions, loadError, systemsError }) {
           <div className="text-sm font-semibold text-gray-800 dark:text-purple-100">
             {a.label}{a.when && <span className="font-normal text-xs text-gray-500 dark:text-purple-300"> · {a.when}</span>}
           </div>
+          {a.offline && <AiOfflineLine offline={a.offline} onOpenAlert={onOpenAlert} />}
+          {a.offline && a.last && (
+            <details><summary className="text-xs font-semibold text-gray-500 dark:text-purple-300 cursor-pointer">Last evaluation, {a.last.when?.replace(/^evaluated /, '')}</summary>
+              <p className="text-sm text-gray-600 dark:text-purple-200 leading-relaxed mt-1">{a.last.text}</p></details>
+          )}
           {a.problem && <div className="text-xs text-red-700 dark:text-red-400">{a.problem}</div>}
           {a.job && <div className="text-xs text-gray-500 dark:text-purple-300">{a.job}</div>}
           <p className="text-sm text-gray-600 dark:text-purple-200 leading-relaxed flex items-start gap-2">
@@ -94,7 +100,7 @@ function SystemsList({ cards, descriptions, loadError, systemsError }) {
 }
 
 export default function AnalysisPanel({ data, topology, canvas, scopeLabel = 'All monitored systems', listCards = null,
-                                        descriptions = null, showStats = true, loading = false,
+                                        descriptions = null, showStats = true, loading = false, onOpenAlert = null,
                                         fetchError = null, descriptionsError = null, systemsError = null }) {
   const [refreshing, setRefreshing] = useState(false)
   const [refreshNote, setRefreshNote] = useState('')
@@ -139,8 +145,8 @@ export default function AnalysisPanel({ data, topology, canvas, scopeLabel = 'Al
       </div>
 
       {/* REQ-GHA-024 clause 1: when it was written, right on top (the model is not named) */}
-      {!listCards && <p className="text-xs text-gray-500 dark:text-purple-300 -mt-2">{overviewStamp(analysis)}</p>}
-      {!listCards && analysis.error && (
+      {!listCards && !analysis.ai_offline && <p className="text-xs text-gray-500 dark:text-purple-300 -mt-2">{overviewStamp(analysis)}</p>}
+      {!listCards && !analysis.ai_offline && analysis.error && (
         <p className="text-xs text-yellow-700 dark:text-yellow-300">{analysis.error}{hasData ? ' — showing the last overview.' : ''}</p>
       )}
       {!listCards && life?.job && <p className="text-xs text-gray-500 dark:text-purple-300">{life.job}</p>}
@@ -152,7 +158,15 @@ export default function AnalysisPanel({ data, topology, canvas, scopeLabel = 'Al
       {refreshNote && <p className="text-xs text-gray-500 dark:text-purple-300">{refreshNote}</p>}
 
       {listCards ? (
-        <SystemsList cards={listCards} descriptions={descriptions} loadError={descriptionsError} systemsError={systemsError} />
+        <SystemsList onOpenAlert={onOpenAlert} cards={listCards} descriptions={descriptions} loadError={descriptionsError} systemsError={systemsError} />
+      ) : analysis.ai_offline ? (
+        <div className="flex flex-col gap-2">
+          <AiOfflineLine offline={analysis.ai_offline} onOpenAlert={onOpenAlert} />
+          {hasData
+            ? <details><summary className="text-xs font-semibold text-gray-500 dark:text-purple-300 cursor-pointer">Last evaluation, {overviewStamp(analysis).replace(/^Evaluated /, '')}</summary>
+                <p className="text-sm text-gray-700 dark:text-purple-100 leading-relaxed mt-1">{analysis.summary}</p></details>
+            : <p className="text-sm text-gray-500 dark:text-purple-300">Not evaluated yet.</p>}
+        </div>
       ) : !hasData ? (
         fetchError ? null : <p className="text-gray-500 dark:text-purple-300 text-sm flex items-center gap-2">
           {(life ? life.busy : !analysis.error) && <Loader2 size={14} className="animate-spin" />}

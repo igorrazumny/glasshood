@@ -37,6 +37,7 @@ def get_analysis_endpoint(request: Request, system: str = None):
             out = ov.get_own(system) or not_yet   # REQ-GHA-037: this system's own overview
     else:
         out = ov.get_system()
+    out["ai_offline"] = ov.ai_offline()
     if _is_operator(request):
         out["spend"] = ov.get_spend()
         out["refresh_in_s"] = ov.manual_refresh_allowed()

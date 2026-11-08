@@ -183,12 +183,36 @@ def note(line: str) -> None:
 
 
 _was_blocked: set = set()
+_since_here = [None]             # when AI went offline, if it could not be saved
+
+
+def offline_since():
+    """When AI went offline (kept across restarts), or None while it is not offline."""
+    with _lock:
+        try:
+            return _read().get("offline_since") or _since_here[0]
+        except Exception:
+            return _since_here[0]
+
+
+def _mark_offline(offline: bool) -> None:
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    with _lock:
+        _since_here[0] = (_since_here[0] or now) if offline else None
+        try:
+            data = _read()
+            if bool(data.get("offline_since")) != offline:
+                data["offline_since"] = (data.get("offline_since") or _since_here[0]) if offline else None
+                _write(data)
+        except Exception:
+            pass
 
 
 def monitor() -> None:
     """Say every block and recovery in the log without needing a paid call to notice it."""
     st = status()
     blocked = {p for p, v in st.items() if v["blocked"]}
+    _mark_offline(blocked == {MAIN, BACKUP})
     for p in blocked:
         note(f"AI provider {NAMES[p]} is blocked: {st[p]['blocked']}.")
     if MAIN in blocked and BACKUP not in blocked:

@@ -3,7 +3,7 @@
 // Run: node frontend/src/utils/systems.test.js
 
 import assert from 'node:assert/strict'
-import { TREE_LEFT, headerLine, withRecords, systemCards, systemOfNodes, portfolioLine, systemId, groupedCards, cardsInGroup, assessmentLine, listAssessments, loadFailed, staleDataLine } from './systems.js'
+import { TREE_LEFT, headerLine, withRecords, offlineLine, systemCards, systemOfNodes, portfolioLine, systemId, groupedCards, cardsInGroup, assessmentLine, listAssessments, loadFailed, staleDataLine } from './systems.js'
 
 let failed = 0
 function test(name, fn) {
@@ -218,6 +218,19 @@ test('a blocked AI provider is on the card even with no record', () => {
   const [c] = withRecords([{ id: 'g', product: 'g' }], { g: { critical_notice: 'OpenAI is blocked' } })
   assert.equal(c.notice, 'OpenAI is blocked')
   assert.equal(c.state, 'not checked')
+})
+
+test('AI offline: grey, one line, the number, and never a colour from the old record', () => {
+  const ai_offline = { since: '2026-11-08T16:10:00Z', alert: 48213 }
+  const [c] = withRecords([{ id: 'a', product: 'a', label: 'A', outside: false, state: 'healthy' }],
+    { a: { ai_offline, condition: 'failing', summary: 'old', alerts: [{ severity: 'critical' }] } })
+  assert.equal(c.state, 'not checked'); assert.equal(c.critical, 0)
+  assert.match(c.line, /^AI evaluation offline since .*\. See alert 48213 for details\.$/)
+  assert.doesNotMatch(c.line, /system/i)
+  assert.equal(headerLine([c], null).text, c.line)
+  assert.equal(headerLine([c], null).state, 'unknown')
+  const [row] = listAssessments([{ id: 'a', label: 'A', product: 'a' }], { a: { ai_offline, summary: 'old', analyzed_at: 1 } }, Date.now())
+  assert.equal(row.offline, ai_offline); assert.equal(row.last.text, 'old')
 })
 
 if (failed) { console.error(`${failed} failed`); process.exit(1) }
