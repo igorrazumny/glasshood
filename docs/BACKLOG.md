@@ -367,6 +367,9 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Who builds:** Neo.
 - **Status:** confirmed by Igor 2026-11-06 (full text); clause 6 amended by Igor the same night. Implemented: PR #52 (neo-shadow1 PROCEED for head 32f5898 after four rounds), merged 57cc123, live 2026-11-06 in image wif44 (revision 0000044). IAM: custom role glasshoodModelCaller (aiplatform.endpoints.predict only) granted to glasshood-azure-logs. First live run 00:35Z under the federated identity: system + 43 parts, 44 calls, about $0.009; Vertex AI, Cloud Monitoring and Cloud Logging calls all 200. Awaiting verification by the reviewer, including a signed-in look.
 
+- **Amended 2026-11-08 (owner direction):** A newly added monitored system receives its first assessment without waiting for the next three-hour round. Failed assessments restart with bounded attempts and may fall back from OpenAI to Claude using a credential held in Key Vault. All provider attempts remain within the durable call accounting and daily cap. The last good assessment keeps its original age when a refresh fails. The screen distinguishes a job that has not started, one running, a scheduled retry and a final failure; it never claims an absent assessment is being written. A retry must not create a competing run for the same system. Provider failures and exhausted limits are visible in plain language.
+- **Recovery implementation status, 2026-11-08:** in progress. A local draft adds own-system run locking, bounded retry/job state, new-system scans and truthful card states. Only Python syntax checked; not reviewed or deployed. Claude authentication/model listing succeeded, but inference validation and application fallback remain outstanding.
+
 ## REQ-GHA-025: GlassHood reads ColdVault's metrics with its own short-lived identity, never a stored key
 
 - **Goal:** GlassHood reads ColdVault's own metrics (`https://coldvault.ai/api/metrics`) only with an identity token that proves it is GlassHood and expires within about an hour. No shared key or password between the two systems exists anywhere.
@@ -472,7 +475,9 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
   4. The section "Technical details" is called "Details" and stays closed by default.
   5. The title and the text name the part as it appears on the landscape (for example "ColdVault app"), not an internal id such as "coldvault-mig-xjxr".
   6. The AI review writes this explanation when it raises the alarm. Opening the alarm costs nothing extra. The text is plain data and stays within the daily cost cap.
-  7. Alarms from rules and anomaly detection are unchanged.
+  7. Alarms from rules and anomaly detection are unchanged, except for the owner-approved extension below.
+- **Amended 2026-11-08 (owner direction):** Critical and medium rule/status alarm reports also give a meaningful business explanation: what happened and which part is involved, the impact supported by evidence or an explicit statement that impact is unknown, when the issue was first and last seen, the observed check result, evidence, possible causes labelled as hypotheses, and specific next steps for the responsible operator. Generic wording such as "investigate error spike" is insufficient for a failed health check. Opening a report must not invent an outage, cause or user impact.
+- **Report implementation status, 2026-11-08:** in progress. A local draft expands the standard alarm layout and recommendations; not reviewed, built or deployed. It still needs assessment against real rule, AI and provider alarms to avoid duplicate or unsupported explanations.
 - **Priority:** P2
 - **Testable:** Yes (API + UI; one live AI alarm)
 - **Who builds:** Neo.
@@ -546,12 +551,13 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
   6. GlassHood only reads each system, through that system's own read-only access without stored keys, as for ColdVault. Nothing is installed in or changed inside the monitored systems except granting that read-only access.
   7. A system or part GlassHood cannot read says so in plain words and is never shown as healthy.
   8. GlassHood's view of itself shows a problem in GlassHood (for example its collectors failing or its AI review not running) as an alarm on its own landscape.
-  9. (Amended 2026-11-08, owner-confirmed) The projects panel and the home view show the systems in two groups: "9Robots systems" (the systems GlassHood monitors from inside: ColdVault, GlassHood, TestRobin) and "External systems" (public systems watched only from what they publish: GitHub, Cloudflare). Each group shows how many of its systems need attention. A system's group follows from its landscape file (an outside view is external, every other one a 9Robots system). Selecting a group shows only that group's systems, their alarms and their overview; selecting one system works as before.
+  9. (Amended 2026-11-08, owner-confirmed) The projects panel and the home view show the systems in two groups: "Proprietary systems" (the systems GlassHood monitors from inside: ColdVault, GlassHood, TestRobin) and "External systems" (public systems watched only from what they publish: GitHub, Cloudflare). Each group shows how many of its systems need attention. A system's group follows from its landscape file (an outside view is external, every other one a proprietary system). Selecting a group shows only that group's systems, their alarms and their overview; selecting one system works as before. The label replaces "9Robots systems" at the owner's request for a personal reference implementation.
 - **Priority:** P2
 - **Testable:** Yes (UI + API)
 - **Who builds:** Neo. Granting read access in TestRobin's AWS account and on GlassHood's own Azure resources is an infrastructure change and needs the owner's yes.
-- **Status:** implemented 2026-11-08 except TestRobin (AWS role glasshood-readonly exists; collectors not written): home view and groups, per-system overviews, GlassHood monitors itself (Azure Reader + Log Analytics Reader). Not yet verified.
+- **Status:** in progress, 2026-11-08. Home view, grouping and GlassHood self-monitoring are implemented. TestRobin's collectors and initial landscape are deployed; full fresh-poll, logs and AI acceptance remain outstanding. The Proprietary systems label and expanded topology are authorized but pending implementation.
 - **TestRobin implementation, 2026-11-08:** AWS workload-identity resource probes and CloudWatch log reads added; landscape activation and runtime federation verification remain pending. Boto3 was approved by the owner before implementation.
+- **Activation update, 2026-11-08:** backend wif77 deployed and the five-part landscape uploaded. The health check was corrected to the application host. The landscape is visible through the live API; complete fresh-poll, logs and AI acceptance remain outstanding. A more detailed topology is approved for preparation from actual inventory, with unobservable checks explicitly unknown; additional read grants require separate approval.
 
 ## REQ-GHA-036: GlassHood also watches public systems it does not control, from what they publish
 
@@ -578,7 +584,7 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
   1. Each system card shows a short AI description of the system as a whole (two or three plain sentences: what it is doing now, whether the people using it are affected, what deserves attention), written for a business reader, with when it was written. For our own systems it is written from what GlassHood monitors inside them; for external systems from what the provider publishes.
   2. A card is visibly clickable: it reads like the homepage cards, with a line such as "See details", and highlights when the mouse is over it.
   3. The card keeps what a business owner needs: the state in one line, open alarms by severity, the AI description and when it was checked. Technical counts (number of parts, "not checked") move to the system's own view.
-  4. TestRobin appears among the 9Robots systems once its monitoring is connected (REQ-GHA-035).
+  4. TestRobin appears among the Proprietary systems once its monitoring is connected (REQ-GHA-035).
   5. On the entry screen both choices look clearly clickable and are equally tall; the main action stands out, the other has a visible border and readable text.
   6. (Confirmed 2026-11-08) While the systems, an AI assessment or a panel are loading or being written, the screen shows that they are coming (a spinner and a short line such as "Loading your systems" or "AI assessment being written"), never an empty area or "no report yet" that reads as broken; a failure is said in plain words.
   7. (Confirmed 2026-11-08) Every summary says what it covers: on the home view the header speaks per group (for example "Our systems: operating normally · External services: 1 needs attention") instead of one "All Systems Operational"; the right panel on the home view shows an assessment across all systems, titled so, or stays closed, never one system's overview as if it covered all; counts of boxes appear only inside a system's view.
@@ -587,7 +593,9 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Priority:** P1
 - **Testable:** Yes (UI)
 - **Who builds:** Neo.
-- **Status:** implemented 2026-11-08 except clause 4 (TestRobin): cards with AI assessment and age, business wording, scoped header and panel, loading spinners, projects tree. Not yet verified.
+- **Status:** in progress, 2026-11-08. Cards, business wording, scoped header/panel and projects tree are implemented; TestRobin appears after the landscape upload. Its first AI assessment and reliable job states are not yet accepted. Indentation, bounded card sizing and designer logos remain pending; the recovery draft is not deployed.
+
+- **Additional owner direction, 2026-11-08:** The two hierarchy steps from All systems to a group and from a group to a system use the same visible indentation, preserving the current group-to-system spacing. Home cards reserve only the columns needed for their group's actual systems: spare width is consumed before cards narrow, cards have a comfortable maximum width, and stack when the available width cannot fit them. Own-system cards/navigation use the existing designer-made logos with original colours and proportions; status remains a separate indicator. These presentation changes are pending, not deployed.
 
 ## REQ-GHA-038: Alarms are grouped by severity in collapsible lists
 
@@ -602,3 +610,11 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Testable:** Yes (UI)
 - **Who builds:** Neo.
 - **Status:** implemented 2026-11-08: severity lists (PR #123, under review by neo-shadow1). Not yet verified.
+
+## REQ-GHA-039: The public site is reachable at www.glasshood.ai
+
+- **Goal:** Visitors can open the same public GlassHood site at www.glasshood.ai as at glasshood.ai, over working HTTPS.
+- **Target state:** The www address serves the public site's pages and preserves their existing entry into the app/demo. HTTP is redirected to HTTPS. The www hostname has valid TLS and does not lead to a broken domain or a different site.
+- **Priority:** P2
+- **Testable:** Yes (public HTTPS, page content and entry links)
+- **Status:** implemented 2026-11-08 following owner approval. The public site's www hostname and DNS were configured, and HTTPS/www/demo/HTTP-to-HTTPS were checked in that session. No new domain change is needed for the monitoring recovery work.
