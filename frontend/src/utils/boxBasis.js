@@ -15,16 +15,15 @@ const BY_PROBE = {
   mcp_attestation: 'Attestation check answered',
 }
 const NOT_CHECKED = new Set(['not checked', 'not monitored', 'unknown', 'stale'])
+const FAILED = new Set(['error', 'degraded'])
 const NOT_IN_USE = new Set(['planned', 'disabled', 'deployed'])
 
 export function boxBasis(node) {
   const m = node?.metrics || {}
   if (NOT_IN_USE.has(node?.status)) return 'Set up but not in use'
-  if (NOT_CHECKED.has(node?.status)) {
-    const why = m._check_description || m.note
-    return why ? `Not checked: ${why}` : 'Not checked'
-  }
+  if (NOT_CHECKED.has(node?.status)) return `Not checked: ${m._check_description || m.note || 'no check result is available'}`
+  if (FAILED.has(node?.status)) return `Check result: ${m._check_description || 'the check did not pass'}`
   if (BY_PROBE[m._probe_type]) return BY_PROBE[m._probe_type]
   if (Object.keys(m).some(k => !k.startsWith('_') && k !== 'note')) return 'Measurements read'
-  return m._check_description || 'Not checked'
+  return m._check_description || 'Not checked: no check result is available'
 }

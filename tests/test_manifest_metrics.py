@@ -606,23 +606,41 @@ class TestVmCacheIsolation:
 
 
 class TestNoGreenWithoutCheck:
-    """REQ-GHA-044 clauses 2, 4 and 6."""
+    """REQ-GHA-044 clauses 2, 4, 5, 6 and 9."""
 
     @staticmethod
     def _node(**kw):
         from src.models.topology import Node
         return Node(id="n", label="n", type="lb", **kw)
 
-    def test_inventory_listing_is_not_green(self):
+    @staticmethod
+    def _guard(*boxes):
         from src.api.routes.topology import _no_green_without_check
-        n = self._node(status="healthy", source="discovered", metrics={})
-        _no_green_without_check([n])
-        assert n.status == "not checked" and n.metrics["_check_description"]
+        _no_green_without_check(list(boxes))
 
-    def test_checked_and_failed_boxes_keep_their_state(self):
-        from src.api.routes.topology import _no_green_without_check
-        a = self._node(status="healthy", source="discovered", metrics={"cpu": 1})
+    def test_any_source_without_evidence_is_not_green(self):
+        a = self._node(status="healthy", source="discovered", metrics={"ip": "192.0.2.1", "port_range": "443"})
+        b = self._node(status="healthy", source="manifest", metrics={})
+        self._guard(a, b)
+        assert (a.status, b.status) == ("not checked", "not checked")
+        assert a.metrics["_check_description"] and a.metrics["ip"] == "192.0.2.1"
+
+    def test_nested_child_does_not_borrow_green(self):
+        child = {"id": "c", "status": "healthy", "children": [{"id": "d", "status": "healthy"}]}
+        parent = self._node(status="healthy", source="discovered", metrics={"_last_poll": 1.0}, children=[child])
+        self._guard(parent)
+        assert parent.status == "healthy"
+        assert child["status"] == "not checked" and child["children"][0]["status"] == "not checked"
+
+    def test_checked_failed_and_inactive_keep_their_state(self):
+        a = self._node(status="healthy", source="manifest", metrics={"_probe_type": "http"})
         b = self._node(status="error", source="discovered", metrics={})
-        c = self._node(status="healthy", source="manifest", metrics={})
-        _no_green_without_check([a, b, c])
-        assert (a.status, b.status, c.status) == ("healthy", "error", "healthy")
+        c = self._node(status="planned", source="manifest", metrics={})
+        d = self._node(status="healthy", source="discovered", metrics={"latency_ms": 12})
+        self._guard(a, b, c, d)
+        assert (a.status, b.status, c.status, d.status) == ("healthy", "error", "planned", "healthy")
+
+    def test_not_checked_part_raises_no_alarm(self):
+        from src.rules.engine import _check_node_rule
+        rule = {"id": "r", "condition": {"metric": "cpu", "operator": ">", "value": 90}}
+        assert _check_node_rule(rule, self._node(status="not checked", metrics={"cpu": 99})) == (False, None)

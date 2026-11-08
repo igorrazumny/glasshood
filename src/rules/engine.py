@@ -112,6 +112,9 @@ def _check_node_rule(rule: dict, node: Node,
     metric_name = cond.get("metric")
     if not metric_name:
         return False, None
+    # REQ-GHA-044 clause 5: a part that is not checked raises no alarm
+    if node.status in ("not checked", "not monitored"):
+        return False, None
 
     # A rule may name the exact parts it is for (REQ-GHA-035: GlassHood's own work boxes)
     if rule.get("parts") and node.id not in rule["parts"]:
