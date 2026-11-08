@@ -369,7 +369,7 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 
 - **Amended 2026-11-08 (owner direction):** A newly added monitored system receives its first assessment without waiting for the next three-hour round. Failed assessments restart with bounded attempts and may fall back from OpenAI to Claude using a credential held in Key Vault. All provider attempts remain within the durable call accounting and daily cap. The last good assessment keeps its original age when a refresh fails. The screen distinguishes a job that has not started, one running, a scheduled retry and a final failure; it never claims an absent assessment is being written. A retry must not create a competing run for the same system. Provider failures and exhausted limits are visible in plain language.
 - **Amended 2026-11-08 (Igor: "for demo system we don't care if it is too old, as long as some text is shown which is real on any point of time in history"):** Clause 7: an assessment always shows its last real text with the time it was written. It carries no warning or badge about its age. A failed update is still said in plain words.
-- **Recovery implementation status, 2026-11-08:** implemented on a branch, awaiting review; not deployed. One assessment per system at a time; up to three attempts, none for a failure that would repeat (daily cap, missing configuration, a rejected request); first assessment within seconds of a new system appearing, independent of the three-hour round. Owner-approved fallback: Claude Haiku 5.5 through the official Anthropic SDK after an OpenAI failure, each attempt counted against the daily cap. Calls that use web search do not fall back. Live inference on Claude remains to be checked at deployment.
+- **Recovery implementation status, 2026-11-08:** live in image wif78, revision glasshood--0000083 (PR #145, review proceed recorded there). Claude Haiku 5.5 answered one live call through the fallback. Calls that use web search do not fall back. A signed-in browser check by the owner is outstanding.
 
 ## REQ-GHA-025: GlassHood reads ColdVault's metrics with its own short-lived identity, never a stored key
 
@@ -478,7 +478,7 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
   6. The AI review writes this explanation when it raises the alarm. Opening the alarm costs nothing extra. The text is plain data and stays within the daily cost cap.
   7. Alarms from rules and anomaly detection are unchanged, except for the owner-approved extension below.
 - **Amended 2026-11-08 (owner direction):** Critical and medium rule/status alarm reports also give a meaningful business explanation: what happened and which part is involved, the impact supported by evidence or an explicit statement that impact is unknown, when the issue was first and last seen, the observed check result, evidence, possible causes labelled as hypotheses, and specific next steps for the responsible operator. Generic wording such as "investigate error spike" is insufficient for a failed health check. Opening a report must not invent an outage, cause or user impact.
-- **Report implementation status, 2026-11-08:** implemented on a branch, awaiting review; not deployed. Rule and status alarms state what happened, what was checked, timing, and impact as supported or unknown; a value past its threshold is not presented as unavailability. AI and provider alarms keep their own explanation.
+- **Report implementation status, 2026-11-08:** live in image wif78 (PR #145). Rule and status alarms state what the check observed, with possible causes and a next step that follow the kind of check; AI and provider alarms keep their own explanation; notes and examples report no failed check.
 - **Priority:** P2
 - **Testable:** Yes (API + UI; one live AI alarm)
 - **Who builds:** Neo.
@@ -596,7 +596,7 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Who builds:** Neo.
 - **Status:** in progress, 2026-11-08. Cards, business wording, scoped header/panel and projects tree are implemented; TestRobin appears after the landscape upload. Its first AI assessment and reliable job states are not yet accepted. Indentation, bounded card sizing and designer logos remain pending; the recovery draft is not deployed.
 
-- **Additional owner direction, 2026-11-08:** The two hierarchy steps from All systems to a group and from a group to a system use the same visible indentation, preserving the current group-to-system spacing. Home cards reserve only the columns needed for their group's actual systems: spare width is consumed before cards narrow, cards have a comfortable maximum width, and stack when the available width cannot fit them. Own-system cards/navigation use the existing designer-made logos with original colours and proportions; status remains a separate indicator. These presentation changes are pending, not deployed.
+- **Additional owner direction, 2026-11-08:** The two hierarchy steps from All systems to a group and from a group to a system use the same visible indentation, preserving the current group-to-system spacing. Home cards reserve only the columns needed for their group's actual systems: spare width is consumed before cards narrow, cards have a comfortable maximum width, and stack when the available width cannot fit them. Own-system cards use the existing designer-made logos with original colours and proportions; status remains a separate indicator. Live 2026-11-08 (PRs #146, #147). Owner decision the same day: the navigation keeps text names, logos are on cards only.
 
 - **Additional owner direction, 2026-11-08:** The bar at the bottom of the screen shows RAM only; uptime, requests per hour and active users are removed from it.
 
@@ -621,3 +621,22 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Priority:** P2
 - **Testable:** Yes (public HTTPS, page content and entry links)
 - **Status:** implemented 2026-11-08 following owner approval. The public site's www hostname and DNS were configured, and HTTPS/www/demo/HTTP-to-HTTPS were checked in that session. No new domain change is needed for the monitoring recovery work.
+
+## REQ-GHA-040: A system's stated condition and its AI assessment are one record
+
+- **Goal:** What GlassHood says about a system's condition and what its AI assessment says can never disagree.
+- **Why:** Owner, 2026-11-08: a card said "Running normally" above AI text describing a problem. "Status should be always derived from overview, and then saved together."
+- **Target state:**
+  1. For each system, the condition, its coloured mark, the alert count, the AI text and the time written are one saved record. They are written together and always read together.
+  2. The condition comes from the AI assessment itself, in the same answer as its text: operating normally, needs attention, or not working properly.
+  3. Every summary of a system or group uses this record: the card, the header line, the group and sidebar marks, and the "needs attention" counts. None of them is computed separately from live checks.
+  4. A record shown later is consistent with itself, whatever its age. The one time shown on the card, "written", applies to all of it. The separate "Checked" time is removed from the card.
+  5. If an update fails, the last whole record stays and the failure is said in plain words. Parts of two records are never mixed.
+  6. A system with no record yet says it has not been assessed. It is never shown as working normally.
+  7. A record is written on the normal schedule, on a person's refresh, and soon after any part of the system changes state. A change of state still triggers a new record within the daily AI call cap.
+  8. Inside a system's own view, the landscape boxes, their checks and the alarm list stay live, as today. They are the current facts behind the record, and the record is the assessment of them at the time it was written.
+  9. External systems follow the same rules, from what the provider publishes.
+- **Priority:** P1
+- **Testable:** Yes (API + UI)
+- **Who builds:** Neo.
+- **Status:** confirmed by the owner 2026-11-08 (full text).
