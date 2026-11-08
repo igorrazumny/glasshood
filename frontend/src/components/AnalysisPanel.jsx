@@ -9,7 +9,7 @@ import { apiFetch } from '../utils/api'
 import { statsSummary } from '../utils/canvasParts.js'
 import { overviewStamp, spendLine } from '../utils/overview.js'
 import AiOfflineLine from './AiOfflineLine'
-import { assessmentLine, changeLines, loadFailed } from '../utils/systems.js'
+import { assessmentLine, changeLines, loadFailed, selectionNotice } from '../utils/systems.js'
 
 function ScoreBadge({ score }) {
   if (score === null || score === undefined) return null
@@ -92,13 +92,14 @@ function SystemsList({ onOpenAlert, cards, review, loadError, systemsError, diff
   if (off) return <AiOfflineLine offline={off.offline} onOpenAlert={onOpenAlert} />
   return (
     <div>
-      {loadError && <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-1">{loadFailed('A newer review', loadError)}</p>}
+      {loadError && <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-1">{loadFailed(review?.summary ? 'A newer review' : 'The AI review', loadError)}</p>}
+      {selectionNotice(review) && <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-1">{selectionNotice(review)}</p>}
       {review?.summary
         ? <>
             <p className="text-xs text-gray-500 dark:text-purple-300 mb-1">{overviewStamp(review)}</p>
             <p className="text-sm text-gray-700 dark:text-purple-100 leading-[1.55]">{review.summary}</p>
           </>
-        : !loadError && <p className="text-gray-500 dark:text-purple-300 text-sm flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> AI evaluation in progress…</p>}
+        : !loadError && !review?.update_failed && <p className="text-gray-500 dark:text-purple-300 text-sm flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> AI evaluation in progress…</p>}
       <Changes diff={diff} />
     </div>
   )
@@ -106,7 +107,7 @@ function SystemsList({ onOpenAlert, cards, review, loadError, systemsError, diff
 
 export default function AnalysisPanel({ data, topology, canvas, scopeLabel = 'All systems', listCards = null,
                                         descriptions = null, showStats = true, loading = false, onOpenAlert = null,
-                                        fetchError = null, descriptionsError = null, systemsError = null, diff = null, review = null }) {
+                                        fetchError = null, descriptionsError = null, systemsError = null, diff = null, review = null, reviewError = null }) {
   const [refreshing, setRefreshing] = useState(false)
   const [refreshNote, setRefreshNote] = useState('')
   const [open, setOpen] = useState(true)   // REQ-GHA-045 clause 7: the reader can fold it away
@@ -166,7 +167,7 @@ export default function AnalysisPanel({ data, topology, canvas, scopeLabel = 'Al
       {refreshNote && <p className="text-xs text-gray-500 dark:text-purple-300">{refreshNote}</p>}
 
       {listCards ? (
-        <SystemsList onOpenAlert={onOpenAlert} cards={listCards} review={review} loadError={descriptionsError} systemsError={systemsError} diff={diff} />
+        <SystemsList onOpenAlert={onOpenAlert} cards={listCards} review={review} loadError={reviewError} systemsError={systemsError} diff={diff} />
       ) : analysis.ai_offline ? (
         <div className="flex flex-col gap-2">
           <AiOfflineLine offline={analysis.ai_offline} onOpenAlert={onOpenAlert} />

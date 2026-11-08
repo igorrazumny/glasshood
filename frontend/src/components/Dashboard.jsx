@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import PanelSplit from './PanelSplit'
-import { DEFAULT_SPLIT, clampSplit } from '../utils/panelSplit'
+import { DEFAULT_SPLIT, loadSplit } from '../utils/panelSplit'
 import StatusHeader from './StatusHeader'
 import ProjectTree from './ProjectTree'
 import RightSidebar from './RightSidebar'
@@ -96,8 +96,7 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
   useEffect(() => {
     if (!keepsSplit) return undefined
     let live = true
-    apiFetch('/api/preferences/right-panel').then(r => (r.ok ? r.json() : null))
-      .then(d => { if (live && d?.split != null) setSplit(clampSplit(d.split)) }).catch(() => {})
+    loadSplit(apiFetch).then(v => { if (live && v != null) setSplit(v) }).catch(() => {})
     return () => { live = false }
   }, [keepsSplit])
   const saveSplit = useCallback(v => {
@@ -284,6 +283,7 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
             scopeLabel={selectedCard ? selectedCard.label : groupSelected ? (GROUPS.find(g => g.id === activeProject)?.label || 'All systems') : 'All systems'}
             onOpenAlert={openAlert}
             review={selections.data?.[groupSelected ? activeProject : 'all']}
+            reviewError={isDemo ? null : selections.error}
             diff={groupSelected
               ? scopeDiff(topology.data?.topology_diff, owner, new Set(groupedCards(homeCards).flatMap(g => g.cards).map(c => c.id)))
               : topology.data?.topology_diff}

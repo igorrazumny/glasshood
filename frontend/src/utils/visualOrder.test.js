@@ -30,3 +30,11 @@ import { clampSplit } from './panelSplit.js'
 assert.equal(clampSplit(0.01), 0.15)
 assert.equal(clampSplit(0.99), 0.85)
 assert.equal(clampSplit('x'), 0.5)
+
+import { loadSplit } from './panelSplit.js'
+import { selectionNotice } from './systems.js'
+assert.equal(await loadSplit(async () => ({ split: 0.3 })), 0.3)
+assert.equal(await loadSplit(async () => ({ split: null })), null)
+assert.equal(selectionNotice({ summary: 'x', current: true }), null)
+assert.match(selectionNotice({ summary: 'x', current: false }), /newer review.*before the newest/)
+assert.match(selectionNotice({ summary: 'x', current: false, update_failed: true }), /could not be written.*before the newest/)

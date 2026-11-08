@@ -273,3 +273,10 @@ export function scopeDiff(diff, owner, cardIds) {
   return { ...diff, added: (diff.added || []).filter(inScope), changed: (diff.changed || []).filter(c => inScope(c.id)),
     removed: removed.filter(inScope), unassigned: removed.filter(id => !owner.has(id)).length }
 }
+
+// REQ-GHA-046 clause 7: a review written before the newest evaluations says so
+export function selectionNotice(review) {
+  if (!review || review.current !== false) return review?.update_failed ? 'The latest update of this review could not be written.' : null
+  const older = review.summary ? ' This text is from before the newest evaluations.' : ''
+  return (review.update_failed ? 'The latest update of this review could not be written.' : 'A newer review is being written.') + older
+}

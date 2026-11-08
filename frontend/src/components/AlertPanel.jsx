@@ -27,7 +27,7 @@ export default function AlertPanel({ alerts, resolved, rules, onSelect, systemOf
   const byLevel = alarmsByLevel(alerts)
   const defaults = defaultOpen(byLevel)
   const isOpen = id => (id in chosen ? chosen[id] : defaults[id])
-  const anyOpen = hasAny && LEVELS.some(l => byLevel[l.id]?.length && isOpen(l.id))
+  const anyOpen = hasAny && (showResolved || LEVELS.some(l => byLevel[l.id]?.length && isOpen(l.id)))
   useEffect(() => { onOpenChange?.(anyOpen) }, [anyOpen, onOpenChange])
   if (!hasAny) return null
   const toggle = id => {
