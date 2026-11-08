@@ -600,6 +600,8 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 
 - **Additional owner direction, 2026-11-08:** The bar at the bottom of the screen shows RAM only; uptime, requests per hour and active users are removed from it.
 
+- **Additional owner direction, 2026-11-08:** Work in progress is called an AI evaluation, because reading the logs and judging the system is the larger part of it: the screen says an AI evaluation is in progress, never that an assessment is being written.
+
 ## REQ-GHA-038: Alarms are grouped by severity in collapsible lists
 
 - **Goal:** The alarm area shows what matters first, without being flooded by notes, and never takes over the panel.

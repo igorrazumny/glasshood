@@ -114,10 +114,10 @@ def test_a_selected_external_system_never_shows_another_systems_overview():
          patch.object(ov, "get_system", return_value={"summary": "ColdVault is healthy", "score": 9}):
         c = TestClient(app)
         body = c.get("/api/analysis?system=cloudflare").json()
-        assert body["summary"] == "" and "not been written yet" in body["error"]
+        assert body["summary"] == "" and "has not run yet" in body["error"]
         assert c.get("/api/analysis?system=nope").status_code == 404
         # an own system without its own overview yet says so; never the combined one in its place
-        assert "not been written yet" in c.get("/api/analysis?system=coldvault").json()["error"]
+        assert "has not run yet" in c.get("/api/analysis?system=coldvault").json()["error"]
         assert c.get("/api/analysis").json()["summary"] == "ColdVault is healthy"
 
 

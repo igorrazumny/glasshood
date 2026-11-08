@@ -156,7 +156,7 @@ export default function AnalysisPanel({ data, topology, canvas, scopeLabel = 'Al
       ) : !hasData ? (
         fetchError ? null : <p className="text-gray-500 dark:text-purple-300 text-sm flex items-center gap-2">
           {(life ? life.busy : !analysis.error) && <Loader2 size={14} className="animate-spin" />}
-          {life ? life.text : analysis.error ? 'No overview yet.' : (loading || !data ? 'Loading the AI overview…' : 'AI overview being written…')}
+          {life ? life.text : analysis.error ? 'No overview yet.' : (loading || !data ? 'Loading the AI overview…' : 'AI evaluation in progress…')}
         </p>
       ) : (
         <>
