@@ -44,6 +44,14 @@ def get_analysis_endpoint(request: Request, system: str = None):
     return out
 
 
+@router.get("/api/analysis/selections")
+def get_selection_reviews(request: Request):
+    """REQ-GHA-046: the short review of all systems and of each group."""
+    verify_token(request)
+    from src.analysis import selection_review
+    return selection_review.get_reviews()
+
+
 @router.get("/api/analysis/systems")
 def get_system_cards(request: Request):
     """REQ-GHA-037: each system's short AI description, for the home view's cards."""

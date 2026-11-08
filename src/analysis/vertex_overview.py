@@ -52,7 +52,8 @@ LINE_CHARS = 300
 SYSTEM_PROMPT = """You write a short health overview of a running cloud system for a business reader.
 You get every part with its status, its check result and metrics, plus recent log lines.
 Statuses: healthy; degraded; error; "not checked" means the state of that part is unknown
-(never call it a problem for that reason alone, and never say it is working). Findings in the alerts are configuration notes. Refer to parts by their label, never by their id.
+(never call it a problem for that reason alone, and never say it is working). Findings in the alerts are configuration notes.
+Weigh what you report by importance: real faults first. A minor observation or configuration note is never a main issue, and one finding is mentioned once, however many parts it touches. Refer to parts by their label, never by their id.
 "condition" is "normal" when nothing needs attention, "attention" when the system works but something needs attention, "failing" when an essential function is not working. It must agree with your summary.
 Answer in JSON only:
 {"score": 1-10, "condition": "normal, attention or failing", "summary": "one or two plain sentences on the overall state",
@@ -961,7 +962,7 @@ def run_own_systems(topology: dict, only_pending: bool = False) -> None:
             full = _system_nodes({"nodes": nodes}, product)
             sig, alerts = _signature(full), _open_alerts(full)
             payload = sanitize({"system": product, "parts": parts, "recent_logs": logs,
-                                "open_alerts": [{"severity": a.get("severity"), "title": a.get("title")} for a in alerts],
+                                "open_alerts": [{"severity": a.get("severity"), "kind": a.get("kind"), "title": a.get("title")} for a in alerts],
                                 "states": {s: statuses.count(s) for s in set(statuses)}})
             record = _system_record(_generate(SYSTEM_PROMPT, json.dumps(payload, default=str)), alerts)
             with _lock:
@@ -1008,7 +1009,7 @@ def system_cards() -> dict:
     return {k: {"ai_offline": off, "critical_notice": notice if k == ai_budget.GROUP else None,
                 "summary": v.get("summary"), "score": v.get("score"), "analyzed_at": v.get("analyzed_at"),
                 "error": v.get("error"), "stale": _with_staleness(v).get("stale"),
-                "condition": v.get("condition"), "alerts": v.get("alerts"), "issues": v.get("issues") or [],
+                "condition": v.get("condition"), "alerts": v.get("alerts"),
                 "job": jobs.get(k) or {"status": "complete"}} for k, v in both.items()}
 
 
@@ -1276,6 +1277,8 @@ def _pending_loop(get_topology_fn, stop) -> None:
             if time.monotonic() >= next_change_scan:
                 next_change_scan = time.monotonic() + CHANGE_SCAN_S
                 _change_scan_once(get_topology_fn)
+            from src.analysis import selection_review
+            selection_review.refresh_due()
         except Exception as e:
             logger.error(f"new-system assessment scan failed: {type(e).__name__}")
 
