@@ -3,7 +3,7 @@
 // Run: node frontend/src/utils/systems.test.js
 
 import assert from 'node:assert/strict'
-import { systemCards, systemOfNodes, portfolioLine, systemId, groupedCards, cardsInGroup } from './systems.js'
+import { systemCards, systemOfNodes, portfolioLine, systemId, groupedCards, cardsInGroup, assessmentLine } from './systems.js'
 
 let failed = 0
 function test(name, fn) {
@@ -89,6 +89,19 @@ test('systems are grouped as 9Robots systems and external systems', () => {
 test('a group with no systems is not shown', () => {
   const groups = groupedCards(systemCards([manifests[0]], nodes, alerts))
   assert.deepEqual(groups.map(g => g.group.label), ['9Robots systems'])
+})
+
+test('an old assessment and a failed refresh are both said, the old text kept', () => {
+  const now = Date.UTC(2026, 10, 8, 1, 37)
+  const a = assessmentLine({ summary: 'ColdVault is running normally.', analyzed_at: (now - 24 * 3600e3) / 1000,
+    stale: true, error: 'daily cap reached' }, now)
+  assert.equal(a.text, 'ColdVault is running normally.')
+  assert.match(a.when, /^written 7 Nov/)
+  assert.match(a.old, /24 h old/)
+  assert.equal(a.problem, 'Latest update failed: daily cap reached')
+  const fresh = assessmentLine({ summary: 'ok', analyzed_at: (now - 600e3) / 1000, stale: false }, now)
+  assert.equal(fresh.old, null); assert.equal(fresh.problem, null); assert.match(fresh.when, /^written \d\d:\d\d$/)
+  assert.equal(assessmentLine(null, now).text, 'Being written; it appears within a few minutes.')
 })
 
 if (failed) { console.error(`${failed} failed`); process.exit(1) }
