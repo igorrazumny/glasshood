@@ -177,4 +177,11 @@ test('each step down the projects tree is the same distance', () => {
   assert.equal(TREE_LEFT.system - group, 11)
 })
 
+test('only our own systems carry a logo', () => {
+  const [cv, cf] = systemCards(manifests, nodes, alerts)
+  assert.equal(cv.logo, '/logos/coldvault.png')
+  assert.equal(cf.logo, null)
+  assert.equal(systemCards([{ product: 'other', environment: 'x' }], [], [])[0].logo, null)
+})
+
 if (failed) { console.error(`${failed} failed`); process.exit(1) }
