@@ -602,6 +602,8 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 
 - **Additional owner direction, 2026-11-08:** Work in progress is called an AI evaluation, because reading the logs and judging the system is the larger part of it: the screen says an AI evaluation is in progress, never that an assessment is being written.
 
+- **Additional owner direction, 2026-11-08:** The ColdVault card uses ColdVault's current logo. On one page the name in every logo appears at the same text size; the logo's overall height may differ if needed to achieve that.
+
 ## REQ-GHA-038: Alarms are grouped by severity in collapsible lists
 
 - **Goal:** The alarm area shows what matters first, without being flooded by notes, and never takes over the panel.
