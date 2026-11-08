@@ -509,8 +509,8 @@ def test_home_answers_what_it_is_the_problem_it_solves_and_how_it_works():
     assert home.count("Click to read the section &rarr;") == 3
     assert home.rstrip().endswith('<script src="/architecture/app.js"></script>\n</body>\n</html>')
     css = _read(_PUB / "assets/site.css")
-    assert ".pd-hidden-until-reveal{display:none}" in css
-    assert ".pd-page.revealed .pd-hidden-until-reveal{display:block;" in css
+    assert ".pd-hidden-until-reveal{display:block;padding-bottom:96px}" in css  # sections visible on load (2026-11-08)
+    assert ".pd-hidden-until-reveal{display:none}" not in css
     assert 'content:"Click to read the section →"' in css
     # The behaviour is the architecture page's own script, unchanged: it reveals the sections and scrolls.
     js = _read(_ARCH / "app.js")
