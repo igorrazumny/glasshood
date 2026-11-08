@@ -7,6 +7,7 @@ import { apiFetch } from '../utils/api'
 import { alarmTitle, alarmWhen, alarmKindLabel, alarmTag, alarmRef } from '../utils/alarms'
 import InvestigationPanel from './InvestigationPanel'
 import { dateTime } from '../utils/time'
+import { ruleReport } from '../utils/ruleReport'
 
 // REQ-009: severity styles pair light (bg-100 + text-700 + border-300) with
 // dark (bg-500/10 + text-400 + border-500/30) so the icon + badge read on
@@ -24,47 +25,6 @@ const SEVERITY_STYLE = {
     color: 'text-blue-700 dark:text-blue-400',
     bg: 'bg-blue-100 dark:bg-blue-500/10',
     border: 'border-blue-300 dark:border-blue-500/30' },
-}
-
-function recommendAction(alert) {
-  const msg = (alert.message || '').toLowerCase()
-  const rule = (alert.rule_id || '').toLowerCase()
-  if (rule.startsWith('correlated:')) return 'Investigate data integrity — correlated operational + statistical anomaly detected'
-  if (rule.startsWith('anomaly')) return 'Statistical anomaly detected in infrastructure metrics. The system identified a significant deviation from the established baseline. Check the anomaly details in the right panel for z-score, confidence level, and baseline comparison. If the anomaly persists across multiple polling cycles, investigate the underlying infrastructure component.'
-  let next = 'Check this component and its immediate dependencies, then confirm service health from the user-facing endpoint.'
-  if (msg.includes('health') || msg.includes('probe') || msg.includes('check failed')) {
-    next = 'Open the configured health endpoint directly and confirm it returns a successful response without a redirect. Then compare the application and load-balancer health checks.'
-  } else if (msg.includes('cpu')) next = 'Check recent CPU use and workload changes; scale only if the resource is sustaining user-visible demand.'
-  else if (msg.includes('latency') || msg.includes('slow')) next = 'Compare response time at the entry point with the application and its dependencies to find where delay begins.'
-  else if (msg.includes('cve') || msg.includes('vulnerab')) next = 'Review the affected package and patch guidance with the service owner before changing the deployed image.'
-  else if (msg.includes('disk')) next = 'Check free space and recent growth, then identify what is consuming storage before cleanup or expansion.'
-  else if (msg.includes('memory') || msg.includes('ram')) next = 'Review memory use and recent workload changes; check for sustained growth before resizing or restarting.'
-  else if (msg.includes('disconnected') || msg.includes('offline')) next = 'Check connectivity from the caller through the immediate dependency and confirm whether the service is reachable.'
-  return next
-}
-
-function ruleBusinessContext(alert) {
-  const part = alert.part_label || alert.node_label || 'This component'
-  const title = alert.title || alert.message || 'A monitored check failed'
-  const first = alert.first_seen || alert.triggered_at
-  const last = alert.last_seen || first
-  // a value past its threshold says nothing about availability; only a failed status check does
-  const impact = alert.metric_value != null
-    ? `A measured value for ${part} is past its threshold. This does not show that the service is unavailable, and the effect on users is not known from this check.`
-    : alert.severity === 'critical'
-      ? `The failed check means GlassHood cannot confirm that ${part} is available. This check alone does not establish whether users are affected.`
-      : `The check found a problem with ${part}. The available evidence does not establish user impact; verify it before treating this as an outage.`
-  const signal = alert.metric_name && alert.metric_value != null
-    ? `${alert.metric_name}: ${alert.metric_value}${alert.threshold != null ? ` (threshold ${alert.threshold})` : ''}.`
-    : alert.reasons?.length
-      ? alert.reasons.join(' ')
-      : 'No diagnostic evidence is attached to this check; the cause is not yet known.'
-  const timing = first
-    ? last && last !== first
-      ? `Observed since ${dateTime(first)}; last checked ${dateTime(last)}.`
-      : `First observed ${dateTime(first)}.`
-    : 'The first observation time is unavailable.'
-  return { title, impact, signal, timing, action: recommendAction(alert) }
 }
 
 export default function AlertDetailModal({ alert, onClose, currentUser = '' }) {
@@ -92,7 +52,7 @@ export default function AlertDetailModal({ alert, onClose, currentUser = '' }) {
   const Icon = style.icon
   const isCorrelated = (alert.rule_id || '').startsWith('correlated:')
   const isAnomaly = (alert.rule_id || '').startsWith('anomaly')
-  const ruleContext = ruleBusinessContext(alert)
+  const ruleContext = ruleReport(alert)
   // AI and provider alarms carry their own explanation; a rule's wording would repeat or contradict it
   const showRuleContext = alert.kind !== 'ai' && !ex && !/^(ai|provider|model):/.test(alert.group || alert.rule_id || '')
   // REQ-004: per-alert classification snapshot recorded at alert creation
@@ -275,6 +235,14 @@ export default function AlertDetailModal({ alert, onClose, currentUser = '' }) {
               <span className="text-xs font-semibold text-gray-500 dark:text-purple-300 uppercase">What GlassHood checked</span>
               <p className="text-sm text-gray-700 dark:text-purple-100 mt-1 leading-relaxed">{ruleContext.signal}</p>
             </div>
+            {ruleContext.causes.length > 0 && (
+              <div className="rounded-lg p-3 bg-surface dark:bg-purple-900/50 border border-border dark:border-purple-700">
+                <span className="text-xs font-semibold text-gray-500 dark:text-purple-300 uppercase">Possible causes (not confirmed)</span>
+                <ul className="list-disc ml-4 mt-1 text-sm text-gray-700 dark:text-purple-100 leading-relaxed">
+                  {ruleContext.causes.map(c => <li key={c}>{c}</li>)}
+                </ul>
+              </div>
+            )}
             </>}
 
             {/* Metric value vs threshold */}

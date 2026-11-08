@@ -644,8 +644,9 @@ def poll_all_manifest_nodes(manifests_dir: str = "config/manifests") -> None:
 
     now = time.time()
     with _lock:
-        for result in results:
+        for node, result in zip(nodes_to_poll, results):
             _metrics_cache[result["node_id"]] = {
+                "probe_type": ((node.get("monitoring") or {}).get("probe") or {}).get("type"),
                 "status": result["status"],
                 "metrics": result["metrics"],
                 "check_description": result.get("check_description"),

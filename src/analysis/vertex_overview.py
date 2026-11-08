@@ -672,7 +672,7 @@ def _worth_retrying(e: Exception) -> bool:
 def _assessment_due(product: str) -> bool:
     """Call with _lock held: does this system still need a first or a retried assessment?"""
     job, current = _own_jobs.get(product, {}), _own.get(product) or {}
-    if job.get("status") == "running" or (current.get("summary") and not current.get("error")):
+    if job.get("status") in ("running", "failed") or (current.get("summary") and not current.get("error")):
         return False
     return job.get("attempts", 0) < OWN_ATTEMPTS and time.time() >= job.get("retry_at", 0)
 
@@ -723,7 +723,7 @@ def run_own_systems(topology: dict, only_pending: bool = False) -> None:
                     _own_jobs[product] = {"status": "retrying", "attempts": attempts,
                                           "retry_at": time.time() + 60 * attempts}
                 else:
-                    _own_jobs[product] = {"status": "failed", "attempts": OWN_ATTEMPTS}
+                    _own_jobs[product] = {"status": "failed", "attempts": attempts}
 
 
 def get_own(product: str):

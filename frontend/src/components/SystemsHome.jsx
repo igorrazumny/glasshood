@@ -73,14 +73,12 @@ function SystemCard({ card: c, about, loadError, onOpen }) {
         <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-purple-300 mb-1">
           AI assessment{a.when ? ` · ${a.when}` : ''}
         </div>
-        {a.old && (
-          <div className="text-xs text-yellow-700 dark:text-yellow-400 mb-1">{a.old}</div>
-        )}
         {a.problem && (
           <div className="text-xs text-red-700 dark:text-red-400 mb-1">{a.problem}</div>
         )}
+        {a.job && <div className="text-xs text-gray-500 dark:text-purple-300 mb-1">{a.job}</div>}
         <p className="text-sm text-gray-700 dark:text-purple-100 leading-relaxed flex items-start gap-2">
-          {a.busy && !loadError && <Loader2 size={14} className="animate-spin mt-0.5 flex-shrink-0" />}
+          {a.busy && !a.job && !loadError && <Loader2 size={14} className="animate-spin mt-0.5 flex-shrink-0" />}
           <span>{a.text}</span>
         </p>
       </div>

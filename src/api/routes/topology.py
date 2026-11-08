@@ -216,6 +216,7 @@ def _build_topology() -> dict:
         extra_metrics = {
             **mdata.get("metrics", {}),
             "_check_description": mdata.get("check_description"),
+            "_probe_type": mdata.get("probe_type"),
             "_last_poll": mdata.get("last_poll"),
             "_poll_interval_s": mdata.get("poll_interval_s"),
             "_parent": mdata.get("_parent"),
@@ -273,6 +274,7 @@ def _build_topology() -> dict:
             metrics={
                 **mdata.get("metrics", {}),
                 "_check_description": mdata.get("check_description"),
+                "_probe_type": mdata.get("probe_type"),
                 "_last_poll": mdata.get("last_poll"),
                 "_poll_interval_s": mdata.get("poll_interval_s"),
                 "_parent": mdata.get("_parent"),

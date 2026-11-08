@@ -81,8 +81,8 @@ function SystemsList({ cards, descriptions, loadError, systemsError }) {
           <div className="text-sm font-semibold text-gray-800 dark:text-purple-100">
             {a.label}{a.when && <span className="font-normal text-xs text-gray-500 dark:text-purple-300"> · {a.when}</span>}
           </div>
-          {a.old && <div className="text-xs text-yellow-700 dark:text-yellow-400">{a.old}</div>}
           {a.problem && <div className="text-xs text-red-700 dark:text-red-400">{a.problem}</div>}
+          {a.job && <div className="text-xs text-gray-500 dark:text-purple-300">{a.job}</div>}
           <p className="text-sm text-gray-600 dark:text-purple-200 leading-relaxed flex items-start gap-2">
             {a.waiting && <Loader2 size={13} className="animate-spin mt-0.5 flex-shrink-0" />}
             <span>{a.text}</span>
@@ -123,9 +123,6 @@ export default function AnalysisPanel({ data, topology, canvas, scopeLabel = 'Al
         <div className="flex items-center gap-2">
           <Brain size={16} className="text-accent-500 dark:text-accent-300" />
           <span className="text-base font-semibold text-gray-900 dark:text-white">AI overview · {scopeLabel}</span>
-          {analysis.stale && hasData && (
-            <span className="text-xs bg-yellow-100 dark:bg-yellow-400/10 text-yellow-700 dark:text-yellow-400 px-1.5 py-0.5 rounded">stale</span>
-          )}
         </div>
         {spend && (
           <button

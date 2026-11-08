@@ -135,3 +135,19 @@ def test_the_scan_does_not_wait_for_a_long_round():
         while not scans and time.monotonic() < deadline:
             time.sleep(0.01)
     assert scans
+
+
+def test_a_failure_on_the_first_try_records_one_attempt():
+    run(RuntimeError("OpenAI HTTP 401"), only_pending=True)
+    assert ov.get_own("sys")["job"] == {"status": "failed", "attempts": 1}
+
+
+def test_a_status_alarm_carries_what_the_check_observed():
+    from types import SimpleNamespace
+    from src.rules import engine
+    node = SimpleNamespace(id="a", label="A", type="ingress", status="error",
+                           metrics={"_check_description": "HTTP 503", "_probe_type": "http"})
+    rule = {"id": "r", "severity": "critical", "condition": {"metric": "status", "operator": "==", "value": "error"}}
+    _, alert = engine._check_node_rule(rule, node)
+    assert alert.check == {"result": "HTTP 503", "probe_type": "http", "status": "error"}
+    assert alert.to_dict()["check"]["result"] == "HTTP 503"

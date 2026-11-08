@@ -116,27 +116,27 @@ export function portfolioLine(cards) {
   return parts.join(' · ')
 }
 
-// REQ-GHA-037 with REQ-GHA-024 clause 7: an AI assessment says when it was written, says
-// plainly when it is old or its latest refresh failed, and keeps the last good text as old
-export function assessmentLine(about, nowMs, maxAgeS = 3 * 3600) {
-  if (!about) return { when: null, text: 'Assessment has not started yet.', old: null, problem: null, busy: false }
+// REQ-GHA-037 with REQ-GHA-024 clause 7 (amended 2026-11-08): an assessment says when it was
+// written and keeps the last real text whatever its age; what is happening now is said apart
+export function assessmentLine(about, nowMs) {
+  if (!about) return { when: null, text: 'Assessment has not started yet.', problem: null, busy: false, job: null }
   const at = about.analyzed_at ? about.analyzed_at * 1000 : null
-  const ageS = at ? (nowMs - at) / 1000 : null
   const sameDay = at && new Date(at).toDateString() === new Date(nowMs).toDateString()
   // REQ-GHA-030: every time carries its zone
   const when = at ? (sameDay ? `written ${clock(at)}` : `written ${dateTime(at)}`) : null
-  const hours = ageS ? Math.round(ageS / 3600) : 0
-  const old = at && (about.stale || ageS > maxAgeS)
-    ? `This assessment is ${hours >= 1 ? `${hours} h` : `${Math.round(ageS / 60)} min`} old; the system may have changed since.` : null
   const problem = about.error ? `Latest update failed: ${about.error}` : null
   const state = about.job?.status
+  const tries = about.job?.attempts
   const busy = state === 'running' || state === 'retrying'
   const pending = state === 'running' ? 'Assessment is being written.'
     : state === 'retrying' ? 'The assessment failed; another attempt is scheduled.'
-      : state === 'failed' ? 'The assessment failed after repeated attempts.'
+      : state === 'failed' ? (tries > 1 ? `The assessment failed after ${tries} attempts.` : 'The assessment failed.')
         : 'Assessment has not started yet.'
-  const text = about.summary || pending
-  return { when, text, old, problem, busy }
+  // beside a kept text, the job's state is its own line
+  const job = !about.summary ? null : state === 'running' ? 'A new assessment is being written.'
+    : state === 'retrying' ? 'Another attempt at updating this is scheduled.'
+      : state === 'failed' ? 'It will be tried again at the next scheduled round.' : null
+  return { when, text: about.summary || pending, problem, busy, job }
 }
 
 // REQ-GHA-037 clause 6: a read that failed is said in plain words, never shown as loading
@@ -159,7 +159,7 @@ export function listAssessments(cards, descriptions, nowMs, loadError = null) {
     const line = assessmentLine(about, nowMs)
     if (!about && loadError) return { id: c.id, label: c.label, waiting: false, ...line, text: loadFailed('The assessment', loadError) }
     if (loadError) return { id: c.id, label: c.label, waiting: false, ...line, problem: line.problem || loadFailed('A newer assessment', loadError) }
-    return { id: c.id, label: c.label, waiting: line.busy, ...line }
+    return { id: c.id, label: c.label, waiting: line.busy && !line.job, ...line }
   })
 }
 

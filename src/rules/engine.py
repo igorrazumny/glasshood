@@ -129,10 +129,13 @@ def _check_node_rule(rule: dict, node: Node,
         value = node.status
         op_fn = _OPS.get(cond.get("operator", "=="))
         if op_fn and op_fn(value, cond.get("value")):
-            return True, _candidate(
+            alert = _candidate(
                 rule, node.id, label,
                 f"{rule.get('description', rule['id'])}: {label} status={value}",
                 metric_name="status")
+            alert.check = {"result": node.metrics.get("_check_description"),
+                           "probe_type": node.metrics.get("_probe_type"), "status": value}
+            return True, alert
         return True, None
 
     # Numeric metric check
@@ -251,7 +254,7 @@ def _apply(candidates: list[Alert], checked: set, now: float) -> tuple[list, lis
             new.append(top)
             continue
         for field in ("rule_id", "kind", "severity", "message", "title", "part_label", "metric_name",
-                      "metric_value", "threshold", "anomaly_classification", "evidence"):
+                      "metric_value", "threshold", "anomaly_classification", "evidence", "check"):
             setattr(current, field, getattr(top, field))
         if top.explanation:  # a review that wrote none keeps the earlier one (REQ-GHA-031)
             current.explanation = top.explanation
