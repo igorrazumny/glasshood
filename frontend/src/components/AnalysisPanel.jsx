@@ -6,7 +6,7 @@
 import { useState } from 'react'
 import { Brain, RefreshCw, AlertTriangle, CheckCircle, Server, Shield, Loader2 } from 'lucide-react'
 import { apiFetch } from '../utils/api'
-import { statsNodes } from '../utils/canvasParts.js'
+import { statsSummary } from '../utils/canvasParts.js'
 import { overviewStamp, spendLine } from '../utils/overview.js'
 import { listAssessments, loadFailed } from '../utils/systems.js'
 
@@ -25,15 +25,9 @@ function ScoreBadge({ score }) {
 
 function TopologyStats({ topology, canvas }) {
   // REQ-GHA-023 clause 5: count what the canvas draws (statsNodes waits for the topology).
-  const nodes = statsNodes(topology, canvas)
-  if (!nodes) return null
-
-  const total = nodes.length
-  const byStatus = {}
-  for (const n of nodes) {
-    const s = n.status || 'unknown'
-    byStatus[s] = (byStatus[s] || 0) + 1
-  }
+  const summary = statsSummary(topology, canvas)
+  if (!summary) return null
+  const { total, byStatus, overall } = summary
   // REQ-009: status color pairs — light uses semantic-700, dark uses -400.
   const statusColor = {
     healthy: 'text-green-700 dark:text-green-400', deployed: 'text-green-700 dark:text-green-400',
@@ -58,9 +52,9 @@ function TopologyStats({ topology, canvas }) {
           </span>
         ))}
       </div>
-      {topology.overall_status && (
+      {overall && (
         <div className="mt-1.5 text-sm text-gray-500 dark:text-purple-300">
-          Overall: <span className={statusColor[topology.overall_status] || 'text-gray-700 dark:text-purple-100'}>{topology.overall_status}</span>
+          Overall: <span className={statusColor[overall] || 'text-gray-700 dark:text-purple-100'}>{overall}</span>
         </div>
       )}
     </div>

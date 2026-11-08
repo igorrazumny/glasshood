@@ -1,0 +1,10 @@
+requirement: REQ-GHA-035
+scenarios:
+  - id: TC-REQ-GHA-035-SELECTION-01
+    preconditions: An internal system is healthy and an external system has an error part.
+    steps: [Select the external system, select the internal system.]
+    expected: Each overview counts only its visible parts and derives Overall from those parts.
+  - id: TC-REQ-GHA-035-SELECTION-02
+    preconditions: The selected system has only unassessed parts.
+    steps: [Open the system overview.]
+    expected: The overview never labels it healthy because another system is healthy.

@@ -3,7 +3,7 @@
 // Run: node frontend/src/utils/canvasParts.test.js
 
 import assert from 'node:assert/strict'
-import { canvasNodes, attestationBadge, nearestSide, groupAttestationBadge, statsNodes, worstStatus, fitViewBox, anchorPoint, edgeStyle, boxSizes, isSpacer, connectionEdge, nestedChildIds, flowAnchors, elbowPath, routeEdge, pathD, labelPoint, placedPosition } from './canvasParts.js'
+import { canvasNodes, statsSummary, attestationBadge, nearestSide, groupAttestationBadge, statsNodes, worstStatus, fitViewBox, anchorPoint, edgeStyle, boxSizes, isSpacer, connectionEdge, nestedChildIds, flowAnchors, elbowPath, routeEdge, pathD, labelPoint, placedPosition } from './canvasParts.js'
 
 let failed = 0
 function test(name, fn) {
@@ -225,6 +225,20 @@ test('a manifest pos places a box; further VMs stack below the group pos', () =>
   assert.deepEqual(placedPosition({}, g, 0, {}, () => 162), { x: 1080, y: 509 })
   assert.deepEqual(placedPosition({}, g, 1, {}, () => 162), { x: 1080, y: 691 })
   assert.equal(placedPosition({}, {}, 0, {}), null)
+})
+
+test('selected canvas counts and status ignore the portfolio status and other systems', () => {
+  const portfolio = { overall_status: 'healthy', nodes: [{ id: 'own', status: 'healthy' }] }
+  const summary = statsSummary(portfolio, [{ id: 'external-a', status: 'error' }, { id: 'external-b', status: 'healthy' }])
+  assert.deepEqual(summary, { total: 2, byStatus: { error: 1, healthy: 1 }, overall: 'error' })
+  assert.equal(statsSummary(portfolio, [{ id: 'own', status: 'healthy' }]).overall, 'healthy')
+})
+
+test('empty and unassessed selected canvases do not become healthy', () => {
+  const portfolio = { overall_status: 'healthy', nodes: [{ id: 'other', status: 'healthy' }] }
+  assert.equal(statsSummary(portfolio, []), null)
+  assert.equal(statsSummary(portfolio, [{ id: 'unread', status: 'not checked' }]).overall, 'not checked')
+  assert.equal(statsSummary(portfolio, [{ id: 'idle', status: 'idle' }]).overall, 'idle')
 })
 
 if (failed) { console.error(`${failed} failed`); process.exit(1) }
