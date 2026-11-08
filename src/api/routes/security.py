@@ -31,14 +31,13 @@ def findings_summary(request: Request):
 
 class FindingStatusRequest(BaseModel):
     status: str  # acknowledged, mitigated, accepted
-    user: str
 
 
 @router.post("/api/security/findings/{cve_id}/status")
 def update_status(request: Request, cve_id: str, body: FindingStatusRequest):
     """Update remediation status of a CVE finding. ALCOA+ audit-trailed."""
-    verify_token(request)
-    found = update_finding_status(cve_id, body.status, body.user)
+    ctx = verify_token(request)
+    found = update_finding_status(cve_id, body.status, ctx.get("user") or "unknown")   # REQ-GHA-043 clause 4
     if not found:
         raise HTTPException(status_code=404, detail="CVE finding not found or invalid status")
     return {"status": "updated", "cve_id": cve_id, "new_status": body.status}
