@@ -70,3 +70,17 @@ backwards across the group's streams, with the usual seven-day quiet fallback.
 The same location supplies the system/part AI overview, review and investigation.
 Production landscapes remain outside this repository. Activating a new landscape
 requires the configured role's read access and verification in the running workload.
+
+## Explicit backend activation
+
+After approval for a deployment, `make image IMAGE=<versioned-image>` builds and
+pushes an amd64 image from the committed `HEAD` archive, excluding local files.
+Set `REVISION=<reviewed-commit>` to build another committed revision. Then
+`make deploy-image IMAGE=<same-image>` runs the existing Container App prepare
+procedure (image, CORS and termination grace; no scaling or identity change).
+
+An approved landscape upload uses `make upload-landscape LANDSCAPE=<local-file>
+STORAGE_ACCOUNT=<account> SHARE=<share> REMOTE_PATH=<filename>`. It uses the current
+Azure login with file backup intent; that login must already have the required
+file-data permissions. The target does not retrieve storage account keys or grant
+roles. These are separate explicit targets, so publishing code does not activate it.
