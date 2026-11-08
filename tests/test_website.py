@@ -289,7 +289,7 @@ def test_home_has_the_two_colour_hero_and_cards_with_icons():
     home = _read(_PUB / "index.html")
     # REQ-GHA-018 clauses 1 and 14, amended 2026-11-07 (third): the hero says what GlassHood is, as in Igor's summary.
     assert ('<h1 class="hero-title"><span class="hero-title-first">AI monitoring for integration pipelines</span> '
-            '<span class="hero-title-rest">and complex systems.</span></h1>') in home
+            '<span class="hero-title-rest">and complex systems</span></h1>') in home
     hero = " ".join(home.split('<p class="hero-text">', 1)[1].split("</p>", 1)[0].split())
     assert hero == ("GlassHood shows business and IT where an integration pipeline or other complex system stands, end to end "
                     "and down to each component. AI reads the logs of every component, and a dashboard shows the state of the "
@@ -459,7 +459,7 @@ _HOME_CARDS = {
     "what-it-is": ("What it is",
         "AI monitoring and dashboard services for business and IT, down to each component.",
         "GlassHood is AI monitoring with dashboards, for business and IT alike. It connects to a running integration "
-        "pipeline or other complex system — today a solution on Google Cloud, read from Azure — and shows where the whole "
+        "pipeline or other complex system and shows where the whole "
         "system and each of its components stand, live. Rules and anomaly detection raise alerts from the measurements, and "
         "every 3 hours an AI review reads each component's logs and raises its own alarms, labelled as found by the AI "
         "review. A short AI overview says in plain words how the whole system is doing and what needs attention, and each "
@@ -550,3 +550,39 @@ def test_home_title_and_description_say_what_glasshood_is():
     desc = re.search(r'<meta name="description" content="([^"]+)">', home).group(1)
     assert desc == f"{_TAGLINE}: dashboard services for business and IT, down to each component."
     assert f'<meta property="og:description" content="{desc}">' in home
+
+
+_STATUS = "Live and operational: try it at glasshood.ai/demo"
+_ONE_STACK_LIMITS = ("today a solution on Google Cloud", "different target", "writing new collectors",
+                     "In this use case")
+
+
+def _text(page):
+    import html as _html
+    return " ".join(_html.unescape(re.sub(r"<[^>]+>", "", page)).split())
+
+
+def test_home_shows_where_we_are_above_the_cards():
+    home = _read(_PUB / "index.html")
+    section = re.search(r'<section class="wrap home-detail" id="where-we-are">(.*?)</section>', home, re.S).group(1)
+    assert "<h2>Where we are</h2>" in section and _STATUS in _text(section)
+    assert '<a href="https://glasshood.ai/demo">glasshood.ai/demo</a>' in section
+    assert home.index('id="where-we-are"') < home.index('<section class="wrap features"')
+    assert home.index('id="where-we-are"') < home.index("pd-hidden-until-reveal")
+
+
+def test_architecture_shows_where_we_are():
+    arch = _read(_ARCH / "index.html")
+    status = arch.split('<p class="pd-hero"><strong>Where we are.</strong>', 1)[1].split("</p>", 1)[0]
+    assert _STATUS in _text(status)
+
+
+def test_the_heading_is_the_product_line():
+    assert _TAGLINE in _text(re.search(r"<h1.*?</h1>", _read(_PUB / "index.html"), re.S).group(0))
+
+
+@pytest.mark.parametrize("page", (_PUB / "index.html", _ARCH / "index.html"), ids=("home", "architecture"))
+def test_no_page_limits_glasshood_to_one_cloud_or_stack(page):
+    text = _text(_read(page))
+    for limit in _ONE_STACK_LIMITS:
+        assert limit not in text, limit

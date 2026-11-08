@@ -37,6 +37,7 @@
       logs and measurements of every component, deterministic checks run first and AI on top, and one dashboard
       shows business and IT where the system and each component stand.
     </p>
+    <p class="pd-hero"><strong>Where we are.</strong> Live and operational: try it at <a href="https://glasshood.ai/demo">glasshood.ai/demo</a></p>
 
     <!-- High-level overview diagram (borderless, full card-width) -->
     <div class="arch-diagram arch-diagram--overview">
@@ -219,7 +220,7 @@
           keys</strong> (detail under Implementation). Even a full compromise of the engine cannot write to
           the monitored cloud project.
         </p>
-        <p>In this use case &mdash; monitoring a solution on Google Cloud &mdash; the collectors read:</p>
+        <p>For example, when monitoring a solution on Google Cloud, the collectors read:</p>
         <ul class="tight">
           <li><strong>Asset / topology discovery</strong> &mdash; enumerates the target&rsquo;s compute resources to build the topology graph, every 10&nbsp;minutes.</li>
           <li><strong>Monitoring metrics</strong> &mdash; load-balancer latency, request count over the last hour and VM CPU, every 10&nbsp;minutes.</li>
@@ -242,8 +243,7 @@
         </p>
         <p>
           The cross-cloud part is the host/target separation &mdash; the engine runs on one cloud and reads a
-          system on another, with no stored keys. Pointing it at a different target&rsquo;s stack means writing
-          new collectors, not just changing config. The architectural decision is the model itself:
+          system on another, with no stored keys. The architectural decision is the model itself:
           pull-based, read-only by construction.
         </p>
       </section>
