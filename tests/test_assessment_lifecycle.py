@@ -125,8 +125,7 @@ def test_the_scan_does_not_wait_for_a_long_round():
     order = []
 
     def thread(target=None, **_):
-        order.append(target)
-        return type("T", (), {"start": lambda self: None})()
+        return type("T", (), {"start": lambda self: order.append(target)})()
 
     def long_round(_):
         order.append("round")
