@@ -102,3 +102,77 @@ def test_log_reads_give_up_after_repeated_refusals(monkeypatch):
             pytest.raises(RuntimeError, match="429"):
         ov._read_entries({}, sleep=lambda s: None)
     assert post.call_count == 4
+
+
+def test_concurrent_saves_never_replace_a_newer_count_with_an_older_one(openai, monkeypatch):
+    # shadow C1: saver A snapshots calls=1, B saves calls=2, then A finishes
+    import threading
+    started, release = threading.Event(), threading.Event()
+    real_dump = json.dump
+
+    def slow_dump(obj, f, *a, **k):
+        if obj["calls"] == 1 and not release.is_set():
+            started.set()
+            release.wait(2)
+        return real_dump(obj, f, *a, **k)
+    monkeypatch.setattr(ov.json, "dump", slow_dump)
+    with ov._lock:
+        ov._spend["local_calls"] = 1
+    a = threading.Thread(target=ov._save_spend_file)
+    a.start()
+    started.wait(2)
+
+    def b():
+        with ov._lock:
+            ov._spend["local_calls"] = 2
+        ov._save_spend_file()
+    tb = threading.Thread(target=b)
+    tb.start()
+    release.set()
+    a.join(); tb.join()
+    assert json.loads((openai / "ai_spend.json").read_text())["calls"] == 2
+
+
+def test_no_writable_folder_means_no_paid_call(tmp_path, monkeypatch):
+    # shadow C2: the cap must not fail open
+    monkeypatch.setattr(ov, "PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("AI_STATE_DIR", str(tmp_path / "missing"))
+    with ov._lock:
+        ov._spend.clear(); ov._spend.update(ov._new_day())
+    ov.refresh_durable_spend()
+    assert ov.get_spend()["usage_read"] is False and "not writable" in ov.get_spend()["read_error"]
+    with patch("httpx.post") as post, pytest.raises(ov.CapReached):
+        ov.call_model("s", "{}")
+    post.assert_not_called()
+
+
+def test_the_call_is_counted_on_disk_before_it_is_sent(openai):
+    seen = {}
+
+    def post(*a, **k):
+        seen["calls_on_disk"] = json.loads((openai / "ai_spend.json").read_text())["calls"]
+        return _answer()
+    with patch("httpx.post", side_effect=post):
+        ov.call_model("s", "{}")
+    assert seen["calls_on_disk"] == 1
+
+
+def test_a_failed_save_stops_further_calls(openai, monkeypatch):
+    with patch("httpx.post", return_value=_answer()):
+        ov.call_model("s", "{}")
+    monkeypatch.setattr(ov.os, "replace", lambda *a: (_ for _ in ()).throw(OSError("disk full")))
+    with patch("httpx.post") as post, pytest.raises(ov.CapReached, match="could not be saved"):
+        ov.call_model("s", "{}")
+    post.assert_not_called()
+    assert ov.get_spend()["usage_read"] is False
+
+
+def test_web_search_and_cached_input_are_priced(openai):
+    search = {"type": "web_search_call", "action": {"query": "q"}}
+    usage = {"input_tokens": 1_000_000, "output_tokens": 0, "input_tokens_details": {"cached_tokens": 1_000_000}}
+    resp = SimpleNamespace(status_code=200, json=lambda: {"output": [search, search], "usage": usage})
+    with patch("httpx.post", return_value=resp):
+        ov.call_model("s", "{}", search=True, deep=True)
+    # mini cached input $0.075 for 1M + two searches at $0.01
+    assert ov.get_spend()["cost_usd"] == pytest.approx(0.095)
