@@ -80,8 +80,11 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
   const manifestData = Array.isArray(manifests?.data) ? manifests.data : []
   // REQ-GHA-036 clause 7: an external system's own AI overview when it is selected
   const selectedManifest = manifestData.find(m => systemId(m) === activeProject)
-  const analysisUrl = selectedManifest?.kind === 'outside_view'
+  // REQ-GHA-037: any selected system shows its own overview
+  const analysisUrl = selectedManifest
     ? `/api/analysis?system=${encodeURIComponent(selectedManifest.product)}` : '/api/analysis'
+  // REQ-GHA-037: each system's short AI assessment for its card
+  const systemDescriptions = usePolling(isDemo ? null : '/api/analysis/systems', 60000)
   const liveAnalysis = usePolling(isDemo ? null : analysisUrl, 30000)
   const analysis = isDemo ? demo.analysis : liveAnalysis
   // REQ-GHA-023 clause 5: "nodes monitored" counts exactly what the canvas draws.
@@ -252,7 +255,8 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
       <div className="flex-1 overflow-hidden transition-all duration-300"
         style={{ paddingLeft: leftShift, paddingRight: rightShift, paddingTop: 8, paddingBottom: 8 }}>
         {showHome ? (
-          <SystemsHome cards={homeCards} line={portfolioLine(homeCards)} onOpen={setActiveProject} />
+          <SystemsHome cards={homeCards} line={portfolioLine(homeCards)} onOpen={setActiveProject}
+            descriptions={systemDescriptions.data || {}} />
         ) : (
           <TopologyMap key={activeProject || 'all'} data={mapData} error={topology.error} isDemo={isDemo} hideCosts={hideCosts}
             onNodeSelect={setSelectedNode} focusProjectId={mapManifests.length ? null : activeProject} manifests={mapManifests} />

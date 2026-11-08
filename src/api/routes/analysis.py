@@ -29,18 +29,25 @@ def get_analysis_endpoint(request: Request, system: str = None):
         kinds = {m.get("product"): m.get("kind") for m in _load_manifests()}
         if system not in kinds:
             raise HTTPException(status_code=404, detail=f"Unknown system {system!r}")
+        not_yet = {"score": None, "summary": "", "issues": [], "recommendations": [], "analyzed_at": None,
+                   "stale": True, "error": "The AI overview for this system has not been written yet"}
         if kinds[system] == "outside_view":
-            out = ov.get_outside(system) or {
-                "score": None, "summary": "", "issues": [], "recommendations": [], "analyzed_at": None,
-                "stale": True, "error": "The AI overview for this system has not been written yet"}
+            out = ov.get_outside(system) or not_yet
         else:
-            out = ov.get_system()
+            out = ov.get_own(system) or not_yet   # REQ-GHA-037: this system's own overview
     else:
         out = ov.get_system()
     if _is_operator(request):
         out["spend"] = ov.get_spend()
         out["refresh_in_s"] = ov.manual_refresh_allowed()
     return out
+
+
+@router.get("/api/analysis/systems")
+def get_system_cards(request: Request):
+    """REQ-GHA-037: each system's short AI description, for the home view's cards."""
+    verify_token(request)
+    return ov.system_cards()
 
 
 @router.post("/api/analysis/refresh")

@@ -51,18 +51,22 @@ export function systemOfNodes(nodes, manifests) {
   return out
 }
 
+// REQ-GHA-037: the state in words a business owner uses; counts of unchecked parts stay in the system view
 function plainLine(statuses, outside) {
   const read = statuses.filter(s => s && !NOT_READ.has(s) && s !== 'idle')
   if (!statuses.length) return 'No parts reported yet'
-  if (!read.length) return 'Not checked yet: no part could be read'
+  if (!read.length) return 'Not checked yet'
   const count = s => read.filter(x => x === s).length
+  const parts = n => `${n} part${n === 1 ? '' : 's'}`
   const worst = worstStatus(read)
-  const unread = statuses.length - read.length - statuses.filter(s => s === 'idle').length
-  const tail = unread > 0 ? ` · ${unread} not checked` : ''
-  const who = outside ? 'reported by the provider' : 'checked'
-  if (worst === 'error') return `${count('error')} part${count('error') === 1 ? '' : 's'} failing, ${who}${tail}`
-  if (worst === 'degraded') return `${count('degraded')} part${count('degraded') === 1 ? '' : 's'} with problems, ${who}${tail}`
-  return `All ${read.length} ${outside ? 'reported' : 'checked'} parts working${tail}`
+  if (outside) {
+    if (worst === 'error') return `The provider reports outages in ${parts(count('error'))}`
+    if (worst === 'degraded') return `The provider reports problems in ${parts(count('degraded'))}`
+    return 'Running normally, as reported by the provider'
+  }
+  if (worst === 'error') return `Not working properly: ${parts(count('error'))} failing`
+  if (worst === 'degraded') return `Running, with problems in ${parts(count('degraded'))}`
+  return 'Running normally'
 }
 
 // One card per system: name, outside view or ours, state, one plain line, open alarms, last check

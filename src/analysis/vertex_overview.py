@@ -82,6 +82,7 @@ Answer in JSON only:
 _lock = threading.Lock()
 _system: dict = {}
 _outside: dict = {}        # product -> overview of that external system
+_own: dict = {}            # product -> overview of one of our own systems (REQ-GHA-037)
 _outside_sig: dict = {}    # box id -> what its last analysis was written from (rewritten only on change)
 _parts: dict = {}          # part id -> overview
 _spend: dict = {}  # today's accounting, see refresh_durable_spend
@@ -599,6 +600,51 @@ def run_system(topology: dict) -> None:
             _system = _keep_last_good(_system, why)
 
 
+def run_own_systems(topology: dict) -> None:
+    """REQ-GHA-037: an overview of each of our own systems on its own, for its card and its
+    view. A system's recent log lines are included when they live in the project read here."""
+    by_product: dict = {}
+    for n in topology.get("nodes", []):
+        if n.get("project"):
+            by_product.setdefault(n["project"], []).append(n)
+    try:
+        from src.api.routes.manifests import _load_manifests
+        projects = {m.get("product"): m.get("project_id") for m in _load_manifests() if m.get("kind") != "outside_view"}
+    except Exception:
+        projects = {}
+    for product, nodes in by_product.items():
+        if product not in projects:
+            continue  # external systems have their own overview (run_outside)
+        try:
+            parts = [rec for rec, _ in _walk_parts({"nodes": nodes})]
+            statuses = [p.get("status") for p in parts]
+            logs = _log_lines("", SYSTEM_WARN_LINES, SYSTEM_SAMPLE_LINES) if projects.get(product) == PROJECT else []
+            payload = sanitize({"system": product, "parts": parts, "recent_logs": logs,
+                                "states": {s: statuses.count(s) for s in set(statuses)}})
+            result = _generate(SYSTEM_PROMPT, json.dumps(payload, default=str))
+            with _lock:
+                _own[product] = _now_entry(result)
+        except Exception as e:
+            why = _failure(e)
+            logger.warning(f"overview of {product} failed: {why}")
+            with _lock:
+                _own[product] = _keep_last_good(_own.get(product), why)
+
+
+def get_own(product: str):
+    with _lock:
+        entry = _own.get(product)
+    return _with_staleness(entry) if entry else None
+
+
+def system_cards() -> dict:
+    """{product: short overview} for every system that has one, for the home view's cards."""
+    with _lock:
+        both = {**{k: dict(v) for k, v in _own.items()}, **{k: dict(v) for k, v in _outside.items()}}
+    return {k: {"summary": v.get("summary"), "score": v.get("score"), "analyzed_at": v.get("analyzed_at"),
+                "error": v.get("error"), "stale": _with_staleness(v).get("stale")} for k, v in both.items()}
+
+
 def _run_part(rec: dict, log_filter: str, edges: list) -> None:
     pid = rec["id"]
     try:
@@ -619,6 +665,7 @@ def _run_part(rec: dict, log_filter: str, edges: list) -> None:
 def run_all(topology: dict) -> None:
     refresh_durable_spend()
     run_system(topology)
+    run_own_systems(topology)
     edges = topology.get("edges", [])
     failed = 0
     with ThreadPoolExecutor(max_workers=4, thread_name_prefix="overview") as ex:
