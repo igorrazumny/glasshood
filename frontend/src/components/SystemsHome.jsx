@@ -53,7 +53,10 @@ function SystemCard({ card: c, about, loadError, onOpen }) {
         hover:border-accent-500 dark:hover:border-purple-400 hover:shadow-lg hover:-translate-y-0.5 transition">
       <div className="flex items-center gap-2">
         <span className={`w-2.5 h-2.5 rounded-full ${DOT[c.state] || DOT['not checked']}`} />
-        <span className="text-lg font-semibold text-gray-900 dark:text-purple-50">{c.label}</span>
+        {/* the white plate keeps the logo's own colours readable on the dark theme */}
+        {c.logo
+          ? <span className="bg-white rounded px-1.5 py-1 inline-flex"><img src={c.logo} alt={c.label} className="h-7 w-auto" /></span>
+          : <span className="text-lg font-semibold text-gray-900 dark:text-purple-50">{c.label}</span>}
         {c.outside && (
           <span className="ml-auto flex items-center gap-1 text-[10px] uppercase tracking-wide px-1.5 py-px rounded border border-gray-300 dark:border-purple-500 text-gray-500 dark:text-purple-300"
             title="Built only from what the provider publishes; GlassHood has no access inside it">
