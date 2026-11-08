@@ -290,6 +290,8 @@ def _build_topology() -> dict:
     # so a stopped loop shows as stopped
     _refresh_self(nodes)
 
+    _no_green_without_check(nodes)
+
     # REQ-GHA-035: every box names the system (landscape file) it belongs to
     _tag_systems(nodes)
 
@@ -403,6 +405,27 @@ def _build_topology() -> dict:
     _apply_anomaly_classification(result, anomaly_list)
 
     return result
+
+
+# REQ-GHA-044 clause 2: what shows a check really happened. Inventory fields (an address, a
+# port) describe a resource; they say nothing about whether it works.
+_CHECK_EVIDENCE = ("_probe_type", "_check_description", "_last_poll", "latency_ms", "cpu_percent", "ram_percent")
+_NO_CHECK = "No check confirms this part is working"
+
+
+def _no_green_without_check(boxes: list) -> None:
+    """REQ-GHA-044 clauses 2, 4 and 9: every box in the tree, from every source."""
+    for box in boxes or ():
+        is_dict = isinstance(box, dict)
+        status = box.get("status") if is_dict else box.status
+        metrics = (box.get("metrics") if is_dict else box.metrics) or {}
+        if status == "healthy" and not any(metrics.get(k) is not None for k in _CHECK_EVIDENCE):
+            metrics = {**metrics, "_check_description": _NO_CHECK}
+            if is_dict:
+                box["status"], box["metrics"] = "not checked", metrics
+            else:
+                box.status, box.metrics = "not checked", metrics
+        _no_green_without_check(box.get("children") if is_dict else box.children)
 
 
 def _refresh_self(nodes: list) -> None:

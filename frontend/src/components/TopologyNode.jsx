@@ -8,6 +8,7 @@
 // canvas. STATUS_COLORS mirrors the TopologyMap palette so border colors,
 // status dots, and the global STATUS_COLORS in TopologyMap stay in lockstep.
 
+import { boxBasis } from '../utils/boxBasis'
 import { attestationBadge } from '../utils/canvasParts.js'
 
 export const NODE_W = 140
@@ -247,7 +248,7 @@ export default function TopologyNode({ node, x, y, selected, onClick, onMouseDow
     ? [node.label, node.project_id || null]
     : splitLabel(node.label)
 
-  const tooltipText = `${node.label}\n${node.status}${node.type ? ' (' + node.type + ')' : ''}`
+  const tooltipText = `${node.label}\n${node.status}${node.type ? ' (' + node.type + ')' : ''}\nBased on: ${boxBasis(node)}`
 
   return (
     <g

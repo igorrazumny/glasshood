@@ -500,8 +500,9 @@ def _poll_node(node_config: dict) -> dict:
         # Nodes with logs-only monitoring are still monitored
         logs_config = monitoring.get("logs", [])
         if logs_config:
-            return {"node_id": node_id, "status": "healthy", "metrics": {},
-                    "check_description": "Logs configured — monitoring via log analysis"}
+            # REQ-GHA-044 clause 2: logs being configured proves nothing about the part
+            return {"node_id": node_id, "status": "not checked", "metrics": {},
+                    "check_description": "Only logs are configured; no check confirms this part is working"}
         return {"node_id": node_id, "status": "not monitored", "metrics": {}}
 
     node_metrics = {}
