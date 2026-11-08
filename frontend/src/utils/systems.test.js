@@ -3,7 +3,7 @@
 // Run: node frontend/src/utils/systems.test.js
 
 import assert from 'node:assert/strict'
-import { headerLine, systemCards, systemOfNodes, portfolioLine, systemId, groupedCards, cardsInGroup, assessmentLine, listAssessments, loadFailed } from './systems.js'
+import { headerLine, systemCards, systemOfNodes, portfolioLine, systemId, groupedCards, cardsInGroup, assessmentLine, listAssessments, loadFailed, staleDataLine } from './systems.js'
 
 let failed = 0
 function test(name, fn) {
@@ -160,6 +160,13 @@ test('a failed refresh is said beside an assessment that is kept', () => {
     { one: { summary: 'Fine', analyzed_at: (now - 600e3) / 1000 } }, now, 'Failed to fetch')
   assert.equal(row.text, 'Fine')
   assert.equal(row.problem, 'A newer assessment could not be loaded (Failed to fetch); trying again.')
+})
+
+test('a failed refresh with older data says so and when that data is from', () => {
+  // shadow on #130: a failed topology refresh must not look current
+  const line = staleDataLine('Failed to fetch', Date.parse('2026-11-08T01:00:00Z'))
+  assert.match(line, /^Could not refresh \(Failed to fetch\); showing the data from \d\d:\d\d \S+\. Trying again\.$/)
+  assert.equal(staleDataLine(null, Date.now()), null)
 })
 
 if (failed) { console.error(`${failed} failed`); process.exit(1) }

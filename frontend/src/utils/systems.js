@@ -138,6 +138,12 @@ export function loadFailed(what, error) {
   return `${what} could not be loaded (${String(error).replace(/^\d{3}:\s*/, '').slice(0, 120)}); trying again.`
 }
 
+// REQ-GHA-037 clause 6: a refresh that failed while older data stays on screen
+export function staleDataLine(error, lastUpdatedMs) {
+  if (!error || !lastUpdatedMs) return null
+  return `Could not refresh (${String(error).replace(/^\d{3}:\s*/, '').slice(0, 120)}); showing the data from ${clock(lastUpdatedMs)}. Trying again.`
+}
+
 // REQ-GHA-037 clause 9 with REQ-GHA-024: the list of per-system assessments on the home view
 // or a group says, for each system, when it was written, whether it is old and whether the
 // latest update failed, exactly as that system's card does
