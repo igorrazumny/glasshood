@@ -91,6 +91,7 @@ export function getUserRole() {
 async function _reauth() {
   const raw = sessionStorage.getItem('glasshood_creds')
   if (!raw) return false
+  const ep = sessionEpoch()
   try {
     const { login: loginEmail, password } = JSON.parse(raw)
     const resp = await _fetchApp('/api/auth/login', {
@@ -100,6 +101,8 @@ async function _reauth() {
     })
     if (!resp.ok) return false
     const data = await resp.json()
+    // a logout or another login while this ran: never bring the old session back
+    if (sessionEpoch() !== ep) return false
     setToken(data.token)
     return true
   } catch {
@@ -133,6 +136,10 @@ export async function apiFetch(path, options = {}) {
   let resp = await _fetchApp(path, { ...options, headers })
 
   if (resp.status === 401 && await _isSessionEnded(resp)) _endSession(ep)
+
+  // A refusal of a request from an earlier session is only reported: no silent re-login,
+  // no retry, nothing cleared, so it never touches whoever is signed in now
+  if (resp.status === 401 && sessionEpoch() !== ep) throw new Error('Unauthorized')
 
   // Auto-reauth on 401
   if (resp.status === 401) {
