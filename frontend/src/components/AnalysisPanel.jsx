@@ -4,12 +4,12 @@
 // surface so the panel reads correctly in both themes.
 
 import { useState } from 'react'
-import { Brain, RefreshCw, AlertTriangle, CheckCircle, Server, Shield, Loader2 } from 'lucide-react'
+import { Brain, ChevronDown, ChevronRight, RefreshCw, AlertTriangle, CheckCircle, Server, Shield, Loader2 } from 'lucide-react'
 import { apiFetch } from '../utils/api'
 import { statsSummary } from '../utils/canvasParts.js'
 import { overviewStamp, spendLine } from '../utils/overview.js'
 import AiOfflineLine from './AiOfflineLine'
-import { assessmentLine, listAssessments, loadFailed } from '../utils/systems.js'
+import { assessmentLine, attentionItems, changeLines, loadFailed } from '../utils/systems.js'
 
 function ScoreBadge({ score }) {
   if (score === null || score === undefined) return null
@@ -64,7 +64,20 @@ function TopologyStats({ topology, canvas }) {
 
 // REQ-GHA-037 clauses 7 and 9: the title names what the overview covers; on the home view or
 // a group it lists each system's own short assessment; box counts only for one system
-function SystemsList({ onOpenAlert, cards, descriptions, loadError, systemsError }) {
+function Changes({ diff }) {
+  const { none, lines, more, unassigned } = changeLines(diff)
+  return (
+    <div className="mt-3">
+      <h3 className="text-xs font-semibold text-gray-500 dark:text-purple-300 mb-1">Changed since the last check</h3>
+      {none && <p className="text-sm text-gray-600 dark:text-purple-200">{none}</p>}
+      {lines.length > 0 && <ul className="list-disc ml-4 text-sm text-gray-600 dark:text-purple-200">{lines.map(l => <li key={l}>{l}</li>)}</ul>}
+      {more > 0 && <p className="text-xs text-gray-500 dark:text-purple-300">and {more} more</p>}
+      {unassigned > 0 && <p className="text-xs text-gray-500 dark:text-purple-300">{unassigned} removed part{unassigned === 1 ? '' : 's'} could not be matched to a system</p>}
+    </div>
+  )
+}
+
+function SystemsList({ onOpenAlert, cards, descriptions, loadError, systemsError, diff }) {
   if (!cards.length && systemsError) {
     return <p className="text-sm text-yellow-700 dark:text-yellow-300">{loadFailed('Your systems', systemsError)}</p>
   }
@@ -75,36 +88,49 @@ function SystemsList({ onOpenAlert, cards, descriptions, loadError, systemsError
       </p>
     )
   }
-  return (
-    <ul className="space-y-3">
-      {listAssessments(cards, descriptions, Date.now(), loadError).map(a => (
-        <li key={a.id}>
-          <div className="text-sm font-semibold text-gray-800 dark:text-purple-100">
-            {a.label}{a.when && <span className="font-normal text-xs text-gray-500 dark:text-purple-300"> · {a.when}</span>}
+  const off = cards.find(c => c.offline)
+  if (off) return <AiOfflineLine offline={off.offline} onOpenAlert={onOpenAlert} />
+  const items = attentionItems(cards, descriptions)
+  // a failed reload is said first: saved cards alone cannot promise that all is well now
+  const failed = loadError ? <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-1">{loadFailed('A newer assessment', loadError)}</p> : null
+  if (!items.length) {
+    return (
+      <div>
+        {failed}
+        {!loadError && (
+          <div className="flex items-center gap-2 text-green-700 dark:text-green-400 text-sm">
+            <CheckCircle size={12} /><span>Nothing needs attention</span>
           </div>
-          {a.offline && <AiOfflineLine offline={a.offline} onOpenAlert={onOpenAlert} />}
-          {a.offline && a.last && (
-            <details><summary className="text-xs font-semibold text-gray-500 dark:text-purple-300 cursor-pointer">Last evaluation, {a.last.when?.replace(/^evaluated /, '')}</summary>
-              <p className="text-sm text-gray-600 dark:text-purple-200 leading-relaxed mt-1">{a.last.text}</p></details>
-          )}
-          {a.offline && !a.last && <div className="text-sm text-gray-500 dark:text-purple-300">Not evaluated yet.</div>}
-          {a.problem && <div className="text-xs text-red-700 dark:text-red-400">{a.problem}</div>}
-          {a.job && <div className="text-xs text-gray-500 dark:text-purple-300">{a.job}</div>}
-          <p className="text-sm text-gray-600 dark:text-purple-200 leading-relaxed flex items-start gap-2">
-            {a.waiting && <Loader2 size={13} className="animate-spin mt-0.5 flex-shrink-0" />}
-            <span>{a.text}</span>
-          </p>
-        </li>
-      ))}
-    </ul>
+        )}
+        <Changes diff={diff} />
+      </div>
+    )
+  }
+  return (
+    <div>
+      <h3 className="text-xs font-semibold text-gray-500 dark:text-purple-300 mb-1">Needs attention</h3>
+      {failed}
+      <ul className="space-y-3">
+        {items.map(a => (
+          <li key={a.id}>
+            <div className="text-sm font-semibold text-gray-800 dark:text-purple-100">
+              {a.label} <span className="font-normal text-xs text-gray-500 dark:text-purple-300">{a.word}{a.reason ? ` · ${a.reason}` : ''}</span>
+            </div>
+            {a.issues.length > 0 && <ul className="list-disc ml-4 text-sm text-gray-600 dark:text-purple-200">{a.issues.map(i => <li key={String(i)}>{String(i)}</li>)}</ul>}
+          </li>
+        ))}
+      </ul>
+      <Changes diff={diff} />
+    </div>
   )
 }
 
 export default function AnalysisPanel({ data, topology, canvas, scopeLabel = 'All monitored systems', listCards = null,
                                         descriptions = null, showStats = true, loading = false, onOpenAlert = null,
-                                        fetchError = null, descriptionsError = null, systemsError = null }) {
+                                        fetchError = null, descriptionsError = null, systemsError = null, diff = null }) {
   const [refreshing, setRefreshing] = useState(false)
   const [refreshNote, setRefreshNote] = useState('')
+  const [open, setOpen] = useState(true)   // REQ-GHA-045 clause 7: the reader can fold it away
 
   const handleRefresh = async () => {
     setRefreshing(true)
@@ -129,10 +155,11 @@ export default function AnalysisPanel({ data, topology, canvas, scopeLabel = 'Al
     <div className="mb-2 bg-card dark:bg-purple-800 border border-border dark:border-purple-700 rounded-lg p-4 flex flex-col gap-3">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+        <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="flex items-center gap-2 text-left">
+          {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           <Brain size={16} className="text-accent-500 dark:text-accent-300" />
           <span className="text-base font-semibold text-gray-900 dark:text-white">AI overview · {scopeLabel}</span>
-        </div>
+        </button>
         {spend && (
           <button
             onClick={handleRefresh}
@@ -145,6 +172,7 @@ export default function AnalysisPanel({ data, topology, canvas, scopeLabel = 'Al
         )}
       </div>
 
+      <div className={`${open ? 'flex' : 'hidden'} flex-col gap-3`}>
       {/* REQ-GHA-024 clause 1: when it was written, right on top (the model is not named) */}
       {!listCards && !analysis.ai_offline && <p className="text-xs text-gray-500 dark:text-purple-300 -mt-2">{overviewStamp(analysis)}</p>}
       {!listCards && !analysis.ai_offline && analysis.error && (
@@ -159,7 +187,7 @@ export default function AnalysisPanel({ data, topology, canvas, scopeLabel = 'Al
       {refreshNote && <p className="text-xs text-gray-500 dark:text-purple-300">{refreshNote}</p>}
 
       {listCards ? (
-        <SystemsList onOpenAlert={onOpenAlert} cards={listCards} descriptions={descriptions} loadError={descriptionsError} systemsError={systemsError} />
+        <SystemsList onOpenAlert={onOpenAlert} cards={listCards} descriptions={descriptions} loadError={descriptionsError} systemsError={systemsError} diff={diff} />
       ) : analysis.ai_offline ? (
         <div className="flex flex-col gap-2">
           <AiOfflineLine offline={analysis.ai_offline} onOpenAlert={onOpenAlert} />
@@ -225,6 +253,7 @@ export default function AnalysisPanel({ data, topology, canvas, scopeLabel = 'Al
       )}
 
       {showStats && <TopologyStats topology={topology} canvas={canvas} />}
+      </div>
     </div>
   )
 }

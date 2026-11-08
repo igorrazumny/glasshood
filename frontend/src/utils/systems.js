@@ -17,6 +17,8 @@ export const GROUPS = [
 export const TREE_LEFT = { groupChevron: 22, system: 60 }
 
 // REQ-GHA-037: the designers' own logos, for our own systems only
+// REQ-GHA-045 clause 2: the domain each of our own systems is reached at
+const DOMAINS = { glasshood: 'glasshood.ai', coldvault: 'coldvault.ai', testrobin: 'testrobin.ai' }
 const LOGOS = { glasshood: '/glasshood-logo-full.png', coldvault: '/logos/coldvault.png', testrobin: '/logos/testrobin.png' }
 
 export const isGroupId = id => GROUPS.some(g => g.id === id)
@@ -96,8 +98,9 @@ export function systemCards(manifests, nodes, alerts) {
     const outside = m.kind === 'outside_view'
     cards.push({
       id, product: m.product, label: m.solution || m.display_name || m.product || 'System',
-      subtitle: m.display_name && m.display_name !== m.solution ? m.display_name : '',
-      source: outside && m.source ? `Source: ${String(m.source).replace(/^https?:\/\//, '').replace(/\/$/, '')}` : '',
+      subtitle: DOMAINS[m.product] || (m.display_name && m.display_name !== m.solution ? m.display_name : ''),
+      source: outside && m.source ? String(m.source).replace(/^https?:\/\//, '').replace(/\/$/, '') : '',
+      sourceUrl: outside && /^https?:\/\//.test(String(m.source || '')) ? String(m.source) : null,
       notes,
       outside,
       logo: outside ? null : LOGOS[m.product] || null,
@@ -209,14 +212,12 @@ export function listAssessments(cards, descriptions, nowMs, loadError = null) {
 
 // REQ-GHA-037 clause 7: the header says what it covers — per group on the home view,
 // the selected system's own state when one is chosen
-const SYSTEM_WORDS = { healthy: 'operating normally', degraded: 'needs attention', error: 'not working properly',
-  'not checked': 'status not available' }
 
 export function headerLine(cards, activeProject) {
   const off = cards.find(c => c.offline)
   if (off) return { text: off.line, state: 'unknown', offline: off.offline }
   const one = cards.find(c => c.id === activeProject)
-  if (one) return { text: `${one.label}: ${SYSTEM_WORDS[one.state] || 'status not available'}`, state: one.state }
+  if (one) return { text: `${one.label}: ${statusWord(one.state)}`, state: one.state }
   const groups = groupedCards(cardsInGroup(cards, isGroupId(activeProject) ? activeProject : null))
   if (!groups.length) return { text: 'Loading your systems…', state: 'unknown' }
   const parts = groups.map(({ group, cards: gc }) => {
@@ -237,4 +238,46 @@ export function headerLine(cards, activeProject) {
     : own.some(c => c.state === 'degraded' || c.critical) || ext.some(c => c.state === 'error' || c.state === 'degraded' || c.critical) ? 'degraded'
     : [...own, ...ext].every(c => c.state === 'healthy') ? 'healthy' : 'unknown'
   return { text: parts.join(' · '), state }
+}
+
+// REQ-GHA-045 clause 5: one word per state, wherever a system's status is summarised, and the reason first
+const STATUS_WORD = { healthy: 'Healthy', degraded: 'Needs attention', error: 'Degraded' }
+export function statusWord(state) { return STATUS_WORD[state] || 'Unknown' }
+
+export function statusReason(card) {
+  const n = (card.critical || 0) + (card.warning || 0)
+  if (n) return `${n} alert${n === 1 ? '' : 's'}${card.critical ? ` (${card.critical} critical)` : ''}`
+  if (card.notes) return `${card.notes} configuration note${card.notes === 1 ? '' : 's'}`
+  return ''
+}
+
+// REQ-GHA-045 clause 4: the right-hand column lists only what needs attention, not the cards' text
+export function attentionItems(cards, descriptions) {
+  return (cards || []).filter(c => c.state !== 'healthy' || c.critical || c.warning).map(c => ({
+    id: c.id, label: c.label, word: statusWord(c.state), reason: statusReason(c),
+    issues: descriptions?.[c.product]?.issues || [],
+  }))
+}
+
+// REQ-GHA-045 clause 4: what the last monitoring cycle changed, from the existing comparison
+export function changeLines(diff, max = 5) {
+  if (!diff || diff.first_run) return { none: 'Nothing to compare yet', lines: [], more: 0 }
+  const name = c => c.after?.label || c.before?.label || c.id
+  const all = [
+    ...(diff.changed || []).map(c => (c.before?.status !== c.after?.status
+      ? `${name(c)}: ${c.before?.status} to ${c.after?.status}` : `${name(c)}: details changed`)),
+    ...(diff.added || []).map(id => `${id}: new`),
+    ...(diff.removed || []).map(id => `${id}: removed`),
+  ]
+  return { none: all.length ? null : 'No changes', lines: all.slice(0, max), more: Math.max(0, all.length - max), unassigned: diff.unassigned || 0 }
+}
+
+// REQ-GHA-037 clause 7 applies to the changes too: a group's panel lists only that group's parts.
+// A removed part no longer belongs to any system, so it is counted apart, never attributed.
+export function scopeDiff(diff, owner, cardIds) {
+  if (!diff || diff.first_run) return diff
+  const inScope = id => cardIds.has(owner.get(id))
+  const removed = diff.removed || []
+  return { ...diff, added: (diff.added || []).filter(inScope), changed: (diff.changed || []).filter(c => inScope(c.id)),
+    removed: removed.filter(inScope), unassigned: removed.filter(id => !owner.has(id)).length }
 }

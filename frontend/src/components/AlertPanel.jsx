@@ -9,7 +9,7 @@
 
 import { useState } from 'react'
 import { AlertTriangle, CheckCircle, ChevronRight, ChevronDown } from 'lucide-react'
-import { alarmTitle, alarmWhen, resolvedWhen, notCheckedNames, alarmTag, LEVELS, alarmsByLevel, defaultOpen } from '../utils/alarms'
+import { alarmTitle, alarmWhen, alarmAgo, resolvedWhen, notCheckedNames, alarmTag, LEVELS, alarmsByLevel, defaultOpen } from '../utils/alarms'
 
 const OPEN_KEY = 'glasshood.alarmLists'
 
@@ -39,7 +39,7 @@ export default function AlertPanel({ alerts, resolved, rules, onSelect, systemOf
 
   return (
     <div className="bg-card dark:bg-purple-800 border border-border dark:border-purple-700 rounded-lg p-3 mb-3 flex flex-col min-h-0"
-      style={{ maxHeight: '50%', minHeight: anyOpen ? '40%' : undefined, flex: anyOpen ? '1 1 auto' : '0 0 auto' }}>
+      style={{ minHeight: anyOpen ? '40%' : undefined, flex: anyOpen ? '1 1 auto' : '0 0 auto' }}>
       <div className="flex items-center justify-between mb-2 flex-shrink-0">
         <div className="flex items-center gap-2">
           <AlertTriangle size={14} className="text-gray-500 dark:text-purple-300" />
@@ -81,7 +81,7 @@ export default function AlertPanel({ alerts, resolved, rules, onSelect, systemOf
                           )}
                           {alert.number ? <span className="text-gray-500 dark:text-purple-300 mr-1">{alert.number}</span> : null}{alarmTitle(alert)}
                         </p>
-                        <p className="text-xs text-gray-500 dark:text-purple-300 mt-0.5">{alarmWhen(alert)}</p>
+                        <p className="text-xs text-gray-500 dark:text-purple-300 mt-0.5" title={alarmWhen(alert)}>{alarmAgo(alert)}</p>
                       </div>
                     </div>
                   ))}
