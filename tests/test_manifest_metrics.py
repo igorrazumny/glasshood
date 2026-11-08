@@ -642,5 +642,5 @@ class TestNoGreenWithoutCheck:
 
     def test_not_checked_part_raises_no_alarm(self):
         from src.rules.engine import _check_node_rule
-        rule = {"id": "r", "condition": {"metric": "cpu", "operator": ">", "value": 90}}
+        rule = {"id": "r", "condition": {"metric": "cpu", "operator": ">", "threshold": 90}}
         assert _check_node_rule(rule, self._node(status="not checked", metrics={"cpu": 99})) == (False, None)

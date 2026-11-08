@@ -19,7 +19,7 @@ import { computeManifestLayout } from '../utils/manifestLayout'
 import { canvasNodes } from '../utils/canvasParts.js'
 import { clearToken, apiFetch, apiUrl, AUTH_FAILED_EVENT } from '../utils/api'
 import { loadPanel, savePanel, fitPanels, landscapeInsets } from '../utils/panels'
-import { withRecords, systemCards, systemOfNodes, portfolioLine, systemId, isGroupId, cardsInGroup, headerLine, GROUPS, groupedCards, staleDataLine } from '../utils/systems'
+import { withRecords, systemCards, systemOfNodes, portfolioLine, systemId, isGroupId, cardsInGroup, headerLine, GROUPS, groupedCards, staleDataLine, scopeDiff } from '../utils/systems'
 import SystemsHome, { Waiting } from './SystemsHome'
 
 function useDemoData() {
@@ -263,7 +263,9 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
             loading={!analysis.data}
             scopeLabel={selectedCard ? selectedCard.label : groupSelected ? (GROUPS.find(g => g.id === activeProject)?.label || 'All monitored systems') : 'All monitored systems'}
             onOpenAlert={openAlert}
-            diff={topology.data?.topology_diff}
+            diff={groupSelected
+              ? scopeDiff(topology.data?.topology_diff, owner, new Set(groupedCards(homeCards).flatMap(g => g.cards).map(c => c.id)))
+              : topology.data?.topology_diff}
             listCards={!isDemo && !selectedCard && (cards.length > 1 || !topology.data)
               ? groupedCards(homeCards).flatMap(g => g.cards) : null}
             descriptions={systemDescriptions.data || {}}

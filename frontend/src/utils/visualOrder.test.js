@@ -18,3 +18,12 @@ assert.equal(changeLines({ first_run: true }).none, 'Nothing to compare yet')
 assert.equal(changeLines({ added: [], removed: [], changed: [] }).none, 'No changes')
 assert.deepEqual(changeLines({ added: ['b'], removed: [], changed: [{ id: 'a', before: { label: 'A', status: 'healthy' }, after: { label: 'A', status: 'error' } }] }).lines, ['A: healthy to error', 'b: new'])
 assert.equal(changeLines({ added: ['a', 'b', 'c'], removed: [], changed: [] }, 2).more, 1)
+
+import { scopeDiff } from './systems.js'
+const owners = new Map([['own', 'c1'], ['cf', 'c2']])
+const d = { added: [], removed: ['gone'], changed: [{ id: 'cf', before: { status: 'healthy' }, after: { status: 'error' } }, { id: 'own', before: { status: 'healthy' }, after: { status: 'error' } }] }
+const s = scopeDiff(d, owners, new Set(['c1']))
+assert.deepEqual(s.changed.map(c => c.id), ['own'])
+assert.deepEqual(s.removed, [])
+assert.equal(s.unassigned, 1)
+assert.equal(changeLines(s).unassigned, 1)

@@ -65,13 +65,14 @@ function TopologyStats({ topology, canvas }) {
 // REQ-GHA-037 clauses 7 and 9: the title names what the overview covers; on the home view or
 // a group it lists each system's own short assessment; box counts only for one system
 function Changes({ diff }) {
-  const { none, lines, more } = changeLines(diff)
+  const { none, lines, more, unassigned } = changeLines(diff)
   return (
     <div className="mt-3">
       <h3 className="text-xs font-semibold text-gray-500 dark:text-purple-300 mb-1">Changed since the last check</h3>
       {none && <p className="text-sm text-gray-600 dark:text-purple-200">{none}</p>}
       {lines.length > 0 && <ul className="list-disc ml-4 text-sm text-gray-600 dark:text-purple-200">{lines.map(l => <li key={l}>{l}</li>)}</ul>}
       {more > 0 && <p className="text-xs text-gray-500 dark:text-purple-300">and {more} more</p>}
+      {unassigned > 0 && <p className="text-xs text-gray-500 dark:text-purple-300">{unassigned} removed part{unassigned === 1 ? '' : 's'} could not be matched to a system</p>}
     </div>
   )
 }

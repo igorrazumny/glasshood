@@ -269,5 +269,15 @@ export function changeLines(diff, max = 5) {
     ...(diff.added || []).map(id => `${id}: new`),
     ...(diff.removed || []).map(id => `${id}: removed`),
   ]
-  return { none: all.length ? null : 'No changes', lines: all.slice(0, max), more: Math.max(0, all.length - max) }
+  return { none: all.length ? null : 'No changes', lines: all.slice(0, max), more: Math.max(0, all.length - max), unassigned: diff.unassigned || 0 }
+}
+
+// REQ-GHA-037 clause 7 applies to the changes too: a group's panel lists only that group's parts.
+// A removed part no longer belongs to any system, so it is counted apart, never attributed.
+export function scopeDiff(diff, owner, cardIds) {
+  if (!diff || diff.first_run) return diff
+  const inScope = id => cardIds.has(owner.get(id))
+  const removed = diff.removed || []
+  return { ...diff, added: (diff.added || []).filter(inScope), changed: (diff.changed || []).filter(c => inScope(c.id)),
+    removed: removed.filter(inScope), unassigned: removed.filter(id => !owner.has(id)).length }
 }
