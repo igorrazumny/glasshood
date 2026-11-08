@@ -133,9 +133,9 @@ a:hover{text-decoration:underline}
 .pd-card-overlay-text{display:inline-flex;align-items:center;gap:8px;background:var(--blue);color:#fff;
   padding:10px 14px;border-radius:12px;font-size:17px;font-weight:500;box-shadow:0 4px 16px rgba(0,0,0,.12);
   white-space:nowrap}
-.pd-hidden-until-reveal{display:none}
-.pd-page.revealed .pd-hidden-until-reveal{display:block;padding-bottom:96px}
-.pd-page.revealed .features{padding-bottom:24px}
+/* Sections are visible on load; the cards scroll to them. */
+.pd-hidden-until-reveal{display:block;padding-bottom:96px}
+.features{padding-bottom:24px}
 .home-detail{padding-top:28px;padding-bottom:28px;scroll-margin-top:24px}
 .home-detail h2{margin:0 0 14px;font-size:22px;line-height:1.3;font-weight:700;color:var(--blue);letter-spacing:-.01em}
 .home-detail p{margin:0;max-width:760px;font-size:19px;line-height:1.55;color:var(--sub)}
@@ -178,8 +178,8 @@ textarea.field{resize:vertical;min-height:120px}
 @media (max-width:767px){
   .hero-body{padding-top:56px;padding-bottom:48px}
   .hero-text{margin-bottom:32px}
-  .features{padding-bottom:64px}
-  .pd-page.revealed .pd-hidden-until-reveal{padding-bottom:64px}
+  .features{padding-bottom:24px}
+  .pd-hidden-until-reveal{padding-bottom:64px}
   .page{padding-top:40px;padding-bottom:64px}
 }
 @media (max-width:600px){
