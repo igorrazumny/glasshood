@@ -119,7 +119,7 @@ export function portfolioLine(cards) {
 // REQ-GHA-037 with REQ-GHA-024 clause 7: an AI assessment says when it was written, says
 // plainly when it is old or its latest refresh failed, and keeps the last good text as old
 export function assessmentLine(about, nowMs, maxAgeS = 3 * 3600) {
-  if (!about) return { when: null, text: 'Being written; it appears within a few minutes.', old: null, problem: null }
+  if (!about) return { when: null, text: 'Assessment has not started yet.', old: null, problem: null, busy: false }
   const at = about.analyzed_at ? about.analyzed_at * 1000 : null
   const ageS = at ? (nowMs - at) / 1000 : null
   const sameDay = at && new Date(at).toDateString() === new Date(nowMs).toDateString()
@@ -129,8 +129,14 @@ export function assessmentLine(about, nowMs, maxAgeS = 3 * 3600) {
   const old = at && (about.stale || ageS > maxAgeS)
     ? `This assessment is ${hours >= 1 ? `${hours} h` : `${Math.round(ageS / 60)} min`} old; the system may have changed since.` : null
   const problem = about.error ? `Latest update failed: ${about.error}` : null
-  const text = about.summary || (about.error ? 'No assessment yet.' : 'Being written; it appears within a few minutes.')
-  return { when, text, old, problem }
+  const state = about.job?.status
+  const busy = state === 'running' || state === 'retrying'
+  const pending = state === 'running' ? 'Assessment is being written.'
+    : state === 'retrying' ? 'The assessment failed; another attempt is scheduled.'
+      : state === 'failed' ? 'The assessment failed after repeated attempts.'
+        : 'Assessment has not started yet.'
+  const text = about.summary || pending
+  return { when, text, old, problem, busy }
 }
 
 // REQ-GHA-037 clause 6: a read that failed is said in plain words, never shown as loading
@@ -153,7 +159,7 @@ export function listAssessments(cards, descriptions, nowMs, loadError = null) {
     const line = assessmentLine(about, nowMs)
     if (!about && loadError) return { id: c.id, label: c.label, waiting: false, ...line, text: loadFailed('The assessment', loadError) }
     if (loadError) return { id: c.id, label: c.label, waiting: false, ...line, problem: line.problem || loadFailed('A newer assessment', loadError) }
-    return { id: c.id, label: c.label, waiting: !about?.summary && !about?.error, ...line }
+    return { id: c.id, label: c.label, waiting: line.busy, ...line }
   })
 }
 

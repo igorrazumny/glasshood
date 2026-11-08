@@ -80,7 +80,7 @@ function SystemCard({ card: c, about, loadError, onOpen }) {
           <div className="text-xs text-red-700 dark:text-red-400 mb-1">{a.problem}</div>
         )}
         <p className="text-sm text-gray-700 dark:text-purple-100 leading-relaxed flex items-start gap-2">
-          {!about?.summary && !about?.error && !loadError && <Loader2 size={14} className="animate-spin mt-0.5 flex-shrink-0" />}
+          {a.busy && !loadError && <Loader2 size={14} className="animate-spin mt-0.5 flex-shrink-0" />}
           <span>{a.text}</span>
         </p>
       </div>

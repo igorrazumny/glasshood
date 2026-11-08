@@ -176,3 +176,71 @@ def test_web_search_and_cached_input_are_priced(openai):
         ov.call_model("s", "{}", search=True, deep=True)
     # mini cached input $0.075 for 1M + two searches at $0.01
     assert ov.get_spend()["cost_usd"] == pytest.approx(0.095)
+
+
+# --- Claude answers when OpenAI fails (REQ-GHA-024, amended 2026-11-08) ---
+
+def _failing():
+    return SimpleNamespace(status_code=503, json=lambda: {})
+
+
+def _claude(text='{"summary": "ok"}', stop="end_turn"):
+    return SimpleNamespace(stop_reason=stop, usage=SimpleNamespace(input_tokens=1000, output_tokens=200),
+                           content=[SimpleNamespace(type="thinking"), SimpleNamespace(type="text", text=text)])
+
+
+@pytest.fixture
+def claude(openai, monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-claude")
+    with patch("anthropic.Anthropic") as client:
+        yield client
+
+
+def test_claude_answers_when_openai_fails_and_both_calls_count(openai, claude):
+    claude.return_value.messages.create.return_value = _claude()
+    with patch("httpx.post", return_value=_failing()):
+        text, sources = ov.call_model("s", "{}")
+    assert (text, sources) == ('{"summary": "ok"}', [])
+    assert claude.call_args.kwargs["max_retries"] == 0
+    assert claude.return_value.messages.create.call_args.kwargs["model"] == "claude-haiku-5-5"
+    spend = ov.get_spend()
+    assert spend["calls"] == 2
+    assert spend["cost_usd"] == pytest.approx(1000 / 1e6 * 0.10 + 200 / 1e6 * 0.50, abs=1e-4)
+
+
+def test_no_claude_call_when_openai_answers(openai, claude):
+    with patch("httpx.post", return_value=_answer()):
+        ov.call_model("s", "{}")
+    claude.assert_not_called()
+
+
+def test_a_web_search_call_never_falls_back(openai, claude):
+    with patch("httpx.post", return_value=_failing()), pytest.raises(RuntimeError, match="OpenAI HTTP 503"):
+        ov.call_model("s", "{}", search=True, deep=True)
+    claude.assert_not_called()
+
+
+def test_without_a_claude_key_the_openai_failure_is_reported(openai, monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    with patch("httpx.post", return_value=_failing()), pytest.raises(RuntimeError, match="OpenAI HTTP 503"):
+        ov.call_model("s", "{}")
+
+
+def test_the_cap_also_stops_the_fallback(openai, claude, monkeypatch):
+    monkeypatch.setattr(ov, "DAILY_CALL_CAP", 1)
+    with patch("httpx.post", return_value=_failing()), pytest.raises(ov.CapReached):
+        ov.call_model("s", "{}")
+    claude.assert_not_called()
+
+
+def test_a_claude_refusal_is_a_failure_not_an_answer(openai, claude):
+    claude.return_value.messages.create.return_value = _claude(text="", stop="refusal")
+    with patch("httpx.post", return_value=_failing()), pytest.raises(RuntimeError, match="declined"):
+        ov.call_model("s", "{}")
+
+
+def test_the_real_sdk_accepts_this_request_shape():
+    import inspect
+    import anthropic
+    params = inspect.signature(anthropic.Anthropic(api_key="x").messages.create).parameters
+    assert {"model", "max_tokens", "system", "messages", "output_config"} <= set(params)
