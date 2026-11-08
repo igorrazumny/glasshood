@@ -85,4 +85,13 @@ test('shows the server reason of a refused request', () => {
   assert.equal(errorText(new Error('Unauthorized')), 'Unauthorized')
 })
 
+test('the newest alarm comes first within the same severity and kind', () => {
+  const list = [
+    { id: 'old', severity: 'warning', first_seen: '2026-11-07T10:00:00+00:00' },
+    { id: 'new', severity: 'warning', first_seen: '2026-11-08T00:30:00+00:00' },
+    { id: 'crit-old', severity: 'critical', first_seen: '2026-11-06T10:00:00+00:00' },
+  ]
+  assert.deepEqual(sortAlarms(list).map(a => a.id), ['crit-old', 'new', 'old'])
+})
+
 if (failed) { console.error(`${failed} failed`); process.exit(1) }

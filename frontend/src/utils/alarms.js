@@ -41,7 +41,9 @@ export function sortAlarms(alerts) {
   const order = { critical: 0, warning: 1, info: 2 }
   return [...(alerts || [])].sort((a, b) =>
     ((order[a.severity] ?? 3) - (order[b.severity] ?? 3)) ||
-    ((alarmKindLabel(a) ? 1 : 0) - (alarmKindLabel(b) ? 1 : 0)))
+    ((alarmKindLabel(a) ? 1 : 0) - (alarmKindLabel(b) ? 1 : 0)) ||
+    // REQ-GHA-027 (amended 2026-11-08): newest first within the same severity and kind
+    String(b.first_seen || b.triggered_at || '').localeCompare(String(a.first_seen || a.triggered_at || '')))
 }
 
 // REQ-GHA-029: the tag in front of an alarm's title ("AI review" for one the AI found)
