@@ -21,13 +21,13 @@ test('age reads in plain words', () => {
 
 test('stamp names the time and the age, never the model', () => {
   const s = overviewStamp({ analyzed_at: now / 1000 - 3600, model: 'gemini-3.1-flash-lite' }, now)
-  assert.match(s, /^Updated \S+.*, 1 h ago$/)
+  assert.match(s, /^Evaluated \S+.*, 1 h ago$/)
   assert.doesNotMatch(s, /gemini/)
 })
 
 test('no overview yet says so', () => {
-  assert.equal(overviewStamp({ analyzed_at: null, model: 'm' }, now), 'Not written yet')
-  assert.equal(overviewStamp(undefined, now), 'Not written yet')
+  assert.equal(overviewStamp({ analyzed_at: null, model: 'm' }, now), 'Not evaluated yet')
+  assert.equal(overviewStamp(undefined, now), 'Not evaluated yet')
 })
 
 test('spend line shows calls, cost and cap; says when the cap stopped it', () => {

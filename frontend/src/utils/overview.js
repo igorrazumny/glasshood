@@ -13,8 +13,8 @@ export function ago(tsSeconds, now = Date.now()) {
 }
 
 export function overviewStamp(o, now = Date.now()) {
-  if (!o?.analyzed_at) return 'Not written yet'
-  return `Updated ${clock(o.analyzed_at * 1000)}, ${ago(o.analyzed_at, now)}`
+  if (!o?.analyzed_at) return 'Not evaluated yet'
+  return `Evaluated ${clock(o.analyzed_at * 1000)}, ${ago(o.analyzed_at, now)}`
 }
 
 export function spendLine(sp) {

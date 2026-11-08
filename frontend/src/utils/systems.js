@@ -147,19 +147,19 @@ export function portfolioLine(cards) {
 // REQ-GHA-037 with REQ-GHA-024 clause 7 (amended 2026-11-08): an assessment says when it was
 // written and keeps the last real text whatever its age; what is happening now is said apart
 export function assessmentLine(about, nowMs) {
-  if (!about) return { when: null, text: 'Assessment has not started yet.', problem: null, busy: false, job: null }
+  if (!about) return { when: null, text: 'AI evaluation has not started yet.', problem: null, busy: false, job: null }
   const at = about.analyzed_at ? about.analyzed_at * 1000 : null
   const sameDay = at && new Date(at).toDateString() === new Date(nowMs).toDateString()
   // REQ-GHA-030: every time carries its zone
-  const when = at ? (sameDay ? `written ${clock(at)}` : `written ${dateTime(at)}`) : null
+  const when = at ? (sameDay ? `evaluated ${clock(at)}` : `evaluated ${dateTime(at)}`) : null
   const problem = about.error ? `Latest update failed: ${about.error}` : null
   const state = about.job?.status
   const tries = about.job?.attempts
   const busy = state === 'running' || state === 'retrying'
   const pending = state === 'running' ? 'AI evaluation in progress.'
-    : state === 'retrying' ? 'The assessment failed; another attempt is scheduled.'
-      : state === 'failed' ? (tries > 1 ? `The assessment failed after ${tries} attempts.` : 'The assessment failed.')
-        : 'Assessment has not started yet.'
+    : state === 'retrying' ? 'The AI evaluation failed; another attempt is scheduled.'
+      : state === 'failed' ? (tries > 1 ? `The AI evaluation failed after ${tries} attempts.` : 'The AI evaluation failed.')
+        : 'AI evaluation has not started yet.'
   // beside a kept text, the job's state is its own line
   const job = !about.summary ? null : state === 'running' ? 'A new AI evaluation is in progress.'
     : state === 'retrying' ? 'Another attempt at updating this is scheduled.'
