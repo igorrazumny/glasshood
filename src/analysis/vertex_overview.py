@@ -96,6 +96,9 @@ _own: dict = {}            # product -> overview of one of our own systems (REQ-
 _own_jobs: dict = {}       # product -> actual assessment execution state
 _state_sig: dict = {}      # product -> the part states its saved record was written from (REQ-GHA-040)
 _triggered_sig: dict = {}  # product -> the part states that last triggered a new record
+_last_round = [0.0]        # when the last full round of evaluations finished
+_records_lock = threading.Lock()   # capture and publish together: an older snapshot cannot land last
+_records_problem = [None]  # why the evaluations could not be saved, in words
 _outside_running: set = set()  # external systems with a record being written right now
 _changed: set = set()      # own systems whose parts changed state and await a new record
 _outside_sig: dict = {}    # box id -> what its last analysis was written from (rewritten only on change)
@@ -741,6 +744,122 @@ def _failure(e: Exception) -> str:
     return str(e) if isinstance(e, CapReached) else f"overview could not be written ({type(e).__name__}: {str(e)[:120]})"
 
 
+def _records_file():
+    d = os.getenv("AI_STATE_DIR", "")
+    return os.path.join(d, "ai_records.json") if d else None
+
+
+def _save_records() -> None:
+    """REQ-GHA-042 clause 9: what GlassHood has evaluated survives a restart."""
+    import tempfile
+    path = _records_file()
+    if not path:
+        _records_problem[0] = "no folder is set up to keep the AI evaluations (AI_STATE_DIR)"
+        return
+    with _records_lock:
+        with _lock:
+            snap = {"system": _system, "own": _own, "outside": _outside, "parts": _parts, "outside_sig": _outside_sig,
+                    "state_sig": _state_sig, "last_round": _last_round[0]}
+            text = json.dumps(snap, default=str)
+        try:
+            fd, tmp = tempfile.mkstemp(prefix=".ai_records.", dir=os.path.dirname(path))
+            with os.fdopen(fd, "w") as f:
+                f.write(text)
+            os.replace(tmp, path)
+            _records_problem[0] = None
+        except Exception as e:
+            _records_problem[0] = f"the AI evaluations could not be saved ({type(e).__name__})"
+            logger.warning(_records_problem[0])
+
+
+CHECKPOINT_S = 5
+_last_checkpoint = [0.0]
+_flush_timer = [None]
+
+
+def _flush_checkpoint() -> None:
+    with _lock:
+        _flush_timer[0] = None
+        _last_checkpoint[0] = time.monotonic()
+    _save_records()
+
+
+def _checkpoint() -> None:
+    """A long batch saves as it goes. A save skipped to space them out is scheduled, so a finished
+    analysis reaches the disk within a few seconds even if nothing else finishes."""
+    now = time.monotonic()
+    timer = None
+    with _lock:
+        if now - _last_checkpoint[0] >= CHECKPOINT_S:
+            _last_checkpoint[0] = now
+        else:
+            if _flush_timer[0] is None:
+                timer = _flush_timer[0] = threading.Timer(CHECKPOINT_S, _flush_checkpoint)
+                timer.daemon = True
+            else:
+                return
+    if timer:
+        timer.start()
+    else:
+        _save_records()
+
+
+def _load_records() -> float:
+    """Bring back what was evaluated before a restart. Returns the time the schedule counts from: the
+    last finished round, or the newest evaluation if no round finished yet (0 if nothing was evaluated)."""
+    global _system
+    path = _records_file()
+    if not path or not os.path.exists(path):
+        return 0.0
+    try:
+        with open(path) as f:
+            data = json.load(f)
+        with _lock:
+            _system = data.get("system") or {}
+            _own.update(data.get("own") or {})
+            _outside.update(data.get("outside") or {})
+            _parts.update(data.get("parts") or {})
+            _outside_sig.update(data.get("outside_sig") or {})
+            _state_sig.update(data.get("state_sig") or {})
+            _last_round[0] = float(data.get("last_round") or 0.0)
+            times = [e["analyzed_at"] for e in [_system, *_own.values(), *_outside.values(), *_parts.values()]
+                     if e.get("summary") and e.get("analyzed_at")]
+        return _last_round[0] or max(times, default=0.0)
+    except Exception as e:
+        _records_problem[0] = f"the saved AI evaluations could not be read ({type(e).__name__})"
+        logger.warning(_records_problem[0])
+        return 0.0
+
+
+def _fill_missing(topology: dict) -> None:
+    """REQ-GHA-042 clause 10: after a restart only what has no saved evaluation is evaluated at once."""
+    from src.api.routes.manifests import _load_manifests
+    refresh_durable_spend()
+    with _lock:
+        have_system = bool(_system.get("summary"))
+        known_parts = {k for k, v in _parts.items() if v.get("summary")}
+        known_outside = {k for k, v in _outside.items() if v.get("summary")}
+    if not have_system:
+        run_system(topology)
+    edges = topology.get("edges", [])
+    with ThreadPoolExecutor(max_workers=4, thread_name_prefix="overview") as ex:
+        list(ex.map(lambda r: _run_part(r[0], r[1], edges),
+                    [(rec, flt) for rec, flt in _walk_parts(topology) if rec["id"] not in known_parts]))
+    missing = {m.get("product") for m in _load_manifests() if m.get("kind") == "outside_view"} - known_outside
+    run_outside(topology=topology, overviews=missing)
+    _save_records()
+
+
+def ai_offline():
+    """REQ-GHA-042: {since, alert} while no AI provider can be called, else None."""
+    if PROVIDER != "openai" or not any(a["group"] == "budget:all" for a in ai_budget.alarms()):
+        return None
+    from src.models.alert import alarm_number
+    return {"since": ai_budget.offline_since() or datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "alert": alarm_number("budget:all", ai_budget.ALARM_PART),
+            "group": "budget:all", "node_id": ai_budget.ALARM_PART}   # the number is for reading, this opens it
+
+
 def _system_nodes(topology: dict, product: str) -> list:
     """Every box of one system, including the ones drawn inside another."""
     def walk(nodes):
@@ -849,6 +968,7 @@ def run_own_systems(topology: dict, only_pending: bool = False) -> None:
                 _own[product] = record
                 _state_sig[product] = sig
                 _own_jobs[product] = {"status": "complete", "attempts": attempts}
+            _save_records()
         except Exception as e:
             why = _failure(e)
             logger.warning(f"overview of {product} failed: {why}")
@@ -877,10 +997,15 @@ def system_cards() -> dict:
         jobs = {k: dict(v) for k, v in _own_jobs.items()}
         for product in jobs:
             both.setdefault(product, {})
-    notice = next((a["title"] for a in ai_budget.alarms()), None) if PROVIDER == "openai" else None
+    off = ai_offline()
+    notice = next((a["title"] for a in ai_budget.alarms()), None) if PROVIDER == "openai" and not off else None
     if notice:
         both.setdefault(ai_budget.GROUP, {})
-    return {k: {"critical_notice": notice if k == ai_budget.GROUP else None,
+    if off:
+        from src.api.routes.manifests import _load_manifests
+        for m in _load_manifests():
+            both.setdefault(m.get("product"), {})
+    return {k: {"ai_offline": off, "critical_notice": notice if k == ai_budget.GROUP else None,
                 "summary": v.get("summary"), "score": v.get("score"), "analyzed_at": v.get("analyzed_at"),
                 "error": v.get("error"), "stale": _with_staleness(v).get("stale"),
                 "condition": v.get("condition"), "alerts": v.get("alerts"),
@@ -897,6 +1022,7 @@ def _run_part(rec: dict, log_filter: str, edges: list) -> None:
         result = _generate(PART_PROMPT, json.dumps(payload, default=str))
         with _lock:
             _parts[pid] = _now_entry(result)
+        _checkpoint()
     except Exception as e:
         why = _failure(e)
         logger.warning(f"part overview failed for {pid}: {why}")
@@ -923,6 +1049,8 @@ def run_all(topology: dict) -> None:
     except Exception as e:
         written = 0
         logger.error(f"outside overviews failed: {e}")
+    _last_round[0] = time.time()
+    _save_records()
     logger.info(f"AI overviews written: system + {len(futures) - failed} parts + {written} external parts; "
                 f"spend today {get_spend()}")
 
@@ -977,6 +1105,7 @@ def _run_outside_part(box: str, rec: dict, sig) -> None:
         with _lock:
             _parts[box] = _now_entry(result)
             _outside_sig[box] = sig
+        _checkpoint()
     except Exception as e:
         why = _failure(e)
         logger.warning(f"outside part analysis failed for {box}: {why}")
@@ -984,7 +1113,7 @@ def _run_outside_part(box: str, rec: dict, sig) -> None:
             _parts[box] = _keep_last_good(_parts.get(box), why)
 
 
-def run_outside(parts: bool = True, topology: dict = None, only: set = None) -> int:
+def run_outside(parts: bool = True, topology: dict = None, only: set = None, overviews: set = None) -> int:
     """REQ-GHA-036 clause 7: an overview of each external system every round, and an analysis
     of each of its parts written only when what the provider publishes about it changed.
     Returns the number of part analyses written."""
@@ -1012,9 +1141,11 @@ def run_outside(parts: bool = True, topology: dict = None, only: set = None) -> 
                        "latest_update": ((e.get("incident_updates") or [{}])[0].get("body") or "")[:800],
                    } for e in p["events"]]}
         with _lock:     # one run per system: old work can never overwrite a newer record
-            claimed = product not in _outside_running
-            _outside_running.add(product)
-            if not claimed and only is not None:
+            wanted = overviews is None or product in overviews
+            claimed = wanted and product not in _outside_running
+            if claimed:
+                _outside_running.add(product)
+            if wanted and not claimed and only is not None:
                 _triggered_sig.pop(product, None)   # skipped, so this change is still due
         try:
             if claimed:
@@ -1045,6 +1176,7 @@ def run_outside(parts: bool = True, topology: dict = None, only: set = None) -> 
                 f.result()
             except Exception as e:
                 logger.error(f"outside part worker failed: {e}")
+    _save_records()
     return len(jobs)
 
 
@@ -1079,6 +1211,7 @@ def manual_refresh(topology: dict) -> None:
         run_outside(parts=False, topology=topology)
     except Exception as e:
         logger.error(f"outside overviews on refresh failed: {e}")
+    _save_records()
 
 
 def _pending_scan_once(get_topology_fn) -> None:
@@ -1096,7 +1229,11 @@ def _sync_budget_alarms() -> None:
     if PROVIDER == "openai":
         from src.rules.engine import track_ai_budget
         ai_budget.monitor()
-        track_ai_budget(ai_budget.alarms(), ai_budget.ALARM_PART)
+        saving = [{"group": "budget:saving", "title": "GlassHood could not save its AI evaluations",
+                   "explanation": {"what": f"{_records_problem[0]}. A restart would lose the latest evaluations.", "suspicion": "",
+                                   "directions": ["GlassHood administrator: check that the state storage share is mounted and writable."]}}
+                  ] if _records_problem[0] else []
+        track_ai_budget(ai_budget.alarms() + saving, ai_budget.ALARM_PART)
 
 
 def _change_scan_once(get_topology_fn) -> None:
@@ -1150,8 +1287,15 @@ def overview_loop(get_topology_fn, ready_fn=None):
         if ready_fn is None or ready_fn():
             break
         stop.wait(5)
+    last_round = _load_records()
     threading.Thread(target=_pending_loop, args=(get_topology_fn, stop), daemon=True,
                      name="assessment-scan").start()
+    if last_round:      # REQ-GHA-042 clause 10: a restart does not start a new round
+        try:
+            _fill_missing(get_topology_fn())
+        except Exception as e:
+            logger.error(f"filling in missing evaluations failed: {type(e).__name__}")
+        stop.wait(max(0, last_round + INTERVAL_S - time.time()))
     while True:
         try:
             run_all(get_topology_fn())

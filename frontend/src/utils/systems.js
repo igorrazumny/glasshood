@@ -117,9 +117,23 @@ const FROM_CONDITION = { normal: 'healthy', attention: 'degraded', failing: 'err
 const OWN_WORDS = { normal: 'Running normally', attention: 'Running, with something that needs attention', failing: 'Not working properly' }
 const PROVIDER_WORDS = { normal: 'Running normally, as reported by the provider', attention: 'The provider reports problems', failing: 'The provider reports outages' }
 
+// REQ-GHA-042: when AI went offline, in the reader's zone
+export function offlineWhen(offline) {
+  const at = new Date(offline.since)
+  return at.toDateString() === new Date().toDateString() ? clock(at.getTime()) : dateTime(at.getTime())
+}
+
+export function offlineLine(offline) {
+  return `AI evaluation offline since ${offlineWhen(offline)}. See alert ${offline.alert} for details.`
+}
+
 export function withRecords(cards, records) {
   return (cards || []).map(c => {
     const record = records?.[c.product]
+    if (record?.ai_offline) {
+      return { ...c, offline: record.ai_offline, notice: null, state: 'not checked', critical: 0, warning: 0, notes: 0,
+        line: offlineLine(record.ai_offline) }
+    }
     const notice = record?.critical_notice || null   // REQ-GHA-041 clause 7: no AI call behind it
     if (!record?.condition) {
       return { ...c, notice, state: 'not checked', critical: 0, warning: 0, notes: 0,
@@ -186,6 +200,7 @@ export function listAssessments(cards, descriptions, nowMs, loadError = null) {
   return (cards || []).map(c => {
     const about = descriptions?.[c.product] || null
     const line = assessmentLine(about, nowMs)
+    if (about?.ai_offline) return { id: c.id, label: c.label, waiting: false, offline: about.ai_offline, last: about.summary ? line : null, job: null, problem: null, when: null, text: '' }
     if (!about && loadError) return { id: c.id, label: c.label, waiting: false, ...line, text: loadFailed('The assessment', loadError) }
     if (loadError) return { id: c.id, label: c.label, waiting: false, ...line, problem: line.problem || loadFailed('A newer assessment', loadError) }
     return { id: c.id, label: c.label, waiting: line.busy && !line.job, ...line }
@@ -198,6 +213,8 @@ const SYSTEM_WORDS = { healthy: 'operating normally', degraded: 'needs attention
   'not checked': 'status not available' }
 
 export function headerLine(cards, activeProject) {
+  const off = cards.find(c => c.offline)
+  if (off) return { text: off.line, state: 'unknown', offline: off.offline }
   const one = cards.find(c => c.id === activeProject)
   if (one) return { text: `${one.label}: ${SYSTEM_WORDS[one.state] || 'status not available'}`, state: one.state }
   const groups = groupedCards(cardsInGroup(cards, isGroupId(activeProject) ? activeProject : null))

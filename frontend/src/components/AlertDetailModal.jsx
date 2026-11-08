@@ -86,6 +86,7 @@ export default function AlertDetailModal({ alert, onClose, currentUser = '' }) {
             <span className={`text-xs font-bold uppercase px-2 py-0.5 rounded ${style.bg} ${style.color}`}>
               {alert.severity}
             </span>
+            {alert.number && <span className="text-xs text-gray-500 dark:text-purple-300">Alert {alert.number}</span>}
             {/* REQ-009 round-6 fix: `purple` in tailwind.config is renamed
                 to ColdVault's blue scale, so the original `bg-purple-100`
                 read as light-blue and collapsed visual distinction from
