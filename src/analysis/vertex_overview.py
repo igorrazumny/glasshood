@@ -414,6 +414,7 @@ def _call_openai(system_prompt: str, user_text: str, max_tokens: int, search: bo
             "max_output_tokens": max(2000, max_tokens * 3), "reasoning": {"effort": "low"}}
     if search:
         body["tools"] = [{"type": "web_search"}]
+        body["max_tool_calls"] = SEARCH_CALLS_ALLOWANCE    # the reservation's bound holds for the request
     else:
         body["text"] = {"format": {"type": "json_object"}}
     held = _reserve(ai_budget.MAIN, model, system_prompt + user_text, body["max_output_tokens"], search)

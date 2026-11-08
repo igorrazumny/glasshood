@@ -281,3 +281,14 @@ def test_documented_account_codes_are_blocks(code):
 def test_a_number_of_investigations_blocks_nothing():
     from src.analysis import ai_investigate
     assert not hasattr(ai_investigate, "DAILY_CAP")
+
+
+def test_a_web_search_request_is_held_to_the_reserved_number_of_searches(world):
+    seen = {}
+
+    def post(url, json=None, **k):
+        seen.update(json)
+        return ok()
+    with patch("httpx.post", side_effect=post):
+        ov.call_model("s", "{}", search=True, deep=True)
+    assert seen["max_tool_calls"] == ov.SEARCH_CALLS_ALLOWANCE
