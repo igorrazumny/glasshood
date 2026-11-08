@@ -9,7 +9,7 @@ import { apiFetch } from '../utils/api'
 import { statsSummary } from '../utils/canvasParts.js'
 import { overviewStamp, spendLine } from '../utils/overview.js'
 import AiOfflineLine from './AiOfflineLine'
-import { assessmentLine, attentionItems, loadFailed } from '../utils/systems.js'
+import { assessmentLine, attentionItems, changeLines, loadFailed } from '../utils/systems.js'
 
 function ScoreBadge({ score }) {
   if (score === null || score === undefined) return null
@@ -64,7 +64,19 @@ function TopologyStats({ topology, canvas }) {
 
 // REQ-GHA-037 clauses 7 and 9: the title names what the overview covers; on the home view or
 // a group it lists each system's own short assessment; box counts only for one system
-function SystemsList({ onOpenAlert, cards, descriptions, loadError, systemsError }) {
+function Changes({ diff }) {
+  const { none, lines, more } = changeLines(diff)
+  return (
+    <div className="mt-3">
+      <h3 className="text-xs font-semibold text-gray-500 dark:text-purple-300 mb-1">Changed since the last check</h3>
+      {none && <p className="text-sm text-gray-600 dark:text-purple-200">{none}</p>}
+      {lines.length > 0 && <ul className="list-disc ml-4 text-sm text-gray-600 dark:text-purple-200">{lines.map(l => <li key={l}>{l}</li>)}</ul>}
+      {more > 0 && <p className="text-xs text-gray-500 dark:text-purple-300">and {more} more</p>}
+    </div>
+  )
+}
+
+function SystemsList({ onOpenAlert, cards, descriptions, loadError, systemsError, diff }) {
   if (!cards.length && systemsError) {
     return <p className="text-sm text-yellow-700 dark:text-yellow-300">{loadFailed('Your systems', systemsError)}</p>
   }
@@ -78,17 +90,25 @@ function SystemsList({ onOpenAlert, cards, descriptions, loadError, systemsError
   const off = cards.find(c => c.offline)
   if (off) return <AiOfflineLine offline={off.offline} onOpenAlert={onOpenAlert} />
   const items = attentionItems(cards, descriptions)
+  // a failed reload is said first: saved cards alone cannot promise that all is well now
+  const failed = loadError ? <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-1">{loadFailed('A newer assessment', loadError)}</p> : null
   if (!items.length) {
     return (
-      <div className="flex items-center gap-2 text-green-700 dark:text-green-400 text-sm">
-        <CheckCircle size={12} /><span>Nothing needs attention</span>
+      <div>
+        {failed}
+        {!loadError && (
+          <div className="flex items-center gap-2 text-green-700 dark:text-green-400 text-sm">
+            <CheckCircle size={12} /><span>Nothing needs attention</span>
+          </div>
+        )}
+        <Changes diff={diff} />
       </div>
     )
   }
   return (
     <div>
       <h3 className="text-xs font-semibold text-gray-500 dark:text-purple-300 mb-1">Needs attention</h3>
-      {loadError && <p className="text-xs text-yellow-700 dark:text-yellow-300">{loadFailed('A newer assessment', loadError)}</p>}
+      {failed}
       <ul className="space-y-3">
         {items.map(a => (
           <li key={a.id}>
@@ -99,13 +119,14 @@ function SystemsList({ onOpenAlert, cards, descriptions, loadError, systemsError
           </li>
         ))}
       </ul>
+      <Changes diff={diff} />
     </div>
   )
 }
 
 export default function AnalysisPanel({ data, topology, canvas, scopeLabel = 'All monitored systems', listCards = null,
                                         descriptions = null, showStats = true, loading = false, onOpenAlert = null,
-                                        fetchError = null, descriptionsError = null, systemsError = null }) {
+                                        fetchError = null, descriptionsError = null, systemsError = null, diff = null }) {
   const [refreshing, setRefreshing] = useState(false)
   const [refreshNote, setRefreshNote] = useState('')
   const [open, setOpen] = useState(true)   // REQ-GHA-045 clause 7: the reader can fold it away
@@ -165,7 +186,7 @@ export default function AnalysisPanel({ data, topology, canvas, scopeLabel = 'Al
       {refreshNote && <p className="text-xs text-gray-500 dark:text-purple-300">{refreshNote}</p>}
 
       {listCards ? (
-        <SystemsList onOpenAlert={onOpenAlert} cards={listCards} descriptions={descriptions} loadError={descriptionsError} systemsError={systemsError} />
+        <SystemsList onOpenAlert={onOpenAlert} cards={listCards} descriptions={descriptions} loadError={descriptionsError} systemsError={systemsError} diff={diff} />
       ) : analysis.ai_offline ? (
         <div className="flex flex-col gap-2">
           <AiOfflineLine offline={analysis.ai_offline} onOpenAlert={onOpenAlert} />

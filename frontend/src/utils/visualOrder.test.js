@@ -12,3 +12,9 @@ assert.deepEqual(attentionItems(cards, { b: { summary: 'same text as the card', 
   [{ id: 'b', label: 'B', word: 'Needs attention', reason: '1 configuration note', issues: ['x'] }])
 assert.equal(headerLine(cards, 'b').text, 'B: Needs attention')
 assert.equal(alarmAgo({ first_seen: new Date(900000).toISOString() }, 1800000), '15 min ago')
+
+import { changeLines } from './systems.js'
+assert.equal(changeLines({ first_run: true }).none, 'Nothing to compare yet')
+assert.equal(changeLines({ added: [], removed: [], changed: [] }).none, 'No changes')
+assert.deepEqual(changeLines({ added: ['b'], removed: [], changed: [{ id: 'a', before: { label: 'A', status: 'healthy' }, after: { label: 'A', status: 'error' } }] }).lines, ['A: healthy to error', 'b: new'])
+assert.equal(changeLines({ added: ['a', 'b', 'c'], removed: [], changed: [] }, 2).more, 1)

@@ -17,6 +17,8 @@ export const GROUPS = [
 export const TREE_LEFT = { groupChevron: 22, system: 60 }
 
 // REQ-GHA-037: the designers' own logos, for our own systems only
+// REQ-GHA-045 clause 2: the domain each of our own systems is reached at
+const DOMAINS = { glasshood: 'glasshood.ai', coldvault: 'coldvault.ai', testrobin: 'testrobin.ai' }
 const LOGOS = { glasshood: '/glasshood-logo-full.png', coldvault: '/logos/coldvault.png', testrobin: '/logos/testrobin.png' }
 
 export const isGroupId = id => GROUPS.some(g => g.id === id)
@@ -96,7 +98,7 @@ export function systemCards(manifests, nodes, alerts) {
     const outside = m.kind === 'outside_view'
     cards.push({
       id, product: m.product, label: m.solution || m.display_name || m.product || 'System',
-      subtitle: m.display_name && m.display_name !== m.solution ? m.display_name : '',
+      subtitle: DOMAINS[m.product] || (m.display_name && m.display_name !== m.solution ? m.display_name : ''),
       source: outside && m.source ? String(m.source).replace(/^https?:\/\//, '').replace(/\/$/, '') : '',
       sourceUrl: outside && /^https?:\/\//.test(String(m.source || '')) ? String(m.source) : null,
       notes,
@@ -255,4 +257,17 @@ export function attentionItems(cards, descriptions) {
     id: c.id, label: c.label, word: statusWord(c.state), reason: statusReason(c),
     issues: descriptions?.[c.product]?.issues || [],
   }))
+}
+
+// REQ-GHA-045 clause 4: what the last monitoring cycle changed, from the existing comparison
+export function changeLines(diff, max = 5) {
+  if (!diff || diff.first_run) return { none: 'Nothing to compare yet', lines: [], more: 0 }
+  const name = c => c.after?.label || c.before?.label || c.id
+  const all = [
+    ...(diff.changed || []).map(c => (c.before?.status !== c.after?.status
+      ? `${name(c)}: ${c.before?.status} to ${c.after?.status}` : `${name(c)}: details changed`)),
+    ...(diff.added || []).map(id => `${id}: new`),
+    ...(diff.removed || []).map(id => `${id}: removed`),
+  ]
+  return { none: all.length ? null : 'No changes', lines: all.slice(0, max), more: Math.max(0, all.length - max) }
 }

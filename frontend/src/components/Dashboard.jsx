@@ -263,6 +263,7 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
             loading={!analysis.data}
             scopeLabel={selectedCard ? selectedCard.label : groupSelected ? (GROUPS.find(g => g.id === activeProject)?.label || 'All monitored systems') : 'All monitored systems'}
             onOpenAlert={openAlert}
+            diff={topology.data?.topology_diff}
             listCards={!isDemo && !selectedCard && (cards.length > 1 || !topology.data)
               ? groupedCards(homeCards).flatMap(g => g.cards) : null}
             descriptions={systemDescriptions.data || {}}
