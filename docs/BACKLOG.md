@@ -643,3 +643,26 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Who builds:** Neo.
 - **Amended 2026-11-08 (owner):** Clause 4: the time on the record reads "evaluated", not "written", wherever an AI evaluation is timed. The time of an "Investigate deeper" report, which is a written report, stays "written".
 - **Status:** confirmed by the owner 2026-11-08 (full text).
+
+## REQ-GHA-041: Each AI provider has a monthly spending limit; a blocked main provider moves GlassHood to its backup and raises a critical alarm
+
+- **Goal:** Normal use and heavy days of work never stop GlassHood's AI. Real overspending moves it to the backup provider, and the administrator is told clearly what happened and what to do.
+- **Why:** Owner, 2026-11-08: the daily limit of 5,000 calls blocked all AI evaluations after a day of deployments, at a cost of well under a dollar. A block on the main provider means the solution is running on its backup, which needs the administrator's attention.
+- **Target state:**
+  1. Each AI provider has its own limit in US dollars per calendar month (UTC): $20 for OpenAI and $20 for Anthropic. The limits are set in configuration, and the owner may change them without a code change.
+  2. There is no daily limit on AI calls, and the number of calls does not block anything.
+  3. OpenAI is the main provider and Anthropic the backup. Every paid AI call counts toward its own provider's month, with its cost estimated from the tokens used and the model's list price, including web searches.
+  4. Each provider's monthly total survives restarts and starts counting when this is deployed. If a total cannot be read or saved, no paid call is made to that provider, and it is treated as blocked.
+  5. When the main provider reaches its limit, it receives no further paid calls until the next month or until its limit is raised. AI evaluations continue on the backup provider.
+  6. If the main provider itself refuses GlassHood's calls because of credit, quota, billing or its key, evaluations also continue on the backup, and the reason the provider gave is treated as the block.
+  7. While GlassHood runs on the backup because the main provider is blocked, it shows a critical alarm on its own landscape, in the alarm list and on its own system's card. It says in plain words that the main provider is blocked, why, the amount spent, the limit, and that the administrator must act.
+  8. Every block and every move to the backup is written to GlassHood's log in plain words, naming the provider and the reason. GlassHood's AI log review reads those lines and gives the administrator its explanation of what is happening and a recommendation for resolving it.
+  9. If both providers are blocked, no paid AI call is made. The last real evaluations stay on screen, and a critical alarm says AI evaluations have stopped, why, the amounts, and when they will resume.
+  10. The alarms in clauses 7 and 9 do not depend on any AI call. Each ends by itself when its condition no longer holds.
+  11. "Investigate deeper" uses web search, which only the main provider offers here. While the main provider is blocked, it says so plainly instead of running without search.
+  12. A signed-in operator can see each provider's spending this month and its limit.
+  13. This replaces the daily call cap in REQ-GHA-024 clause 6 and in REQ-GHA-036 clause 7.
+- **Priority:** P1
+- **Testable:** Yes (API + UI)
+- **Who builds:** Neo.
+- **Status:** confirmed by the owner 2026-11-08 (full text).
