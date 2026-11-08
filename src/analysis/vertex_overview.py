@@ -28,12 +28,15 @@ OPENAI_MODEL_DEEP = os.getenv("OPENAI_MODEL_DEEP", "gpt-5.4-mini")  # AI log rev
 OPENAI_PRICES = {  # USD per million tokens (input, output, cached input), list prices 2026-11
     "gpt-5.4-nano": (0.20, 1.25, 0.02), "gpt-5.4-mini": (0.75, 4.50, 0.075),
 }
+CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-haiku-5-5")        # answers when OpenAI fails
+CLAUDE_PRICES = {"claude-haiku-5-5": (0.10, 0.50, 0.10)}            # USD per million tokens, list prices 2026-11
 OPENAI_SEARCH_PRICE = float(os.getenv("OPENAI_SEARCH_PRICE", "0.01"))  # USD per web search call
 MODEL = OPENAI_MODEL if PROVIDER == "openai" else os.getenv("OVERVIEW_MODEL", "gemini-3.1-flash-lite")
 LOCATION = os.getenv("OVERVIEW_LOCATION", "global")
 PROJECT = os.getenv("OVERVIEW_PROJECT", GCP_PROJECT_ID)
 INTERVAL_S = int(os.getenv("OVERVIEW_INTERVAL_S", str(3 * 3600)))
 MANUAL_COOLDOWN_S = 600
+PENDING_SCAN_S = 15
 DAILY_CALL_CAP = int(os.getenv("OVERVIEW_DAILY_CALL_CAP", "1200"))  # about $2/day at list price
 PRICE_IN_PER_M = float(os.getenv("OVERVIEW_PRICE_IN_PER_M", "0.25"))
 PRICE_OUT_PER_M = float(os.getenv("OVERVIEW_PRICE_OUT_PER_M", "1.50"))
@@ -83,6 +86,7 @@ _lock = threading.Lock()
 _system: dict = {}
 _outside: dict = {}        # product -> overview of that external system
 _own: dict = {}            # product -> overview of one of our own systems (REQ-GHA-037)
+_own_jobs: dict = {}       # product -> actual assessment execution state
 _outside_sig: dict = {}    # box id -> what its last analysis was written from (rewritten only on change)
 _parts: dict = {}          # part id -> overview
 _spend: dict = {}  # today's accounting, see refresh_durable_spend
@@ -306,7 +310,7 @@ def _record_openai(model: str, usage: dict, searches: int = 0) -> None:
     """Tokens and cost of one answer: cached input at its own price, plus web search calls."""
     tin, tout = int(usage.get("input_tokens") or 0), int(usage.get("output_tokens") or 0)
     cached = min(tin, int((usage.get("input_tokens_details") or {}).get("cached_tokens") or 0))
-    pin, pout, pcached = OPENAI_PRICES.get(model, (PRICE_IN_PER_M, PRICE_OUT_PER_M, PRICE_IN_PER_M))
+    pin, pout, pcached = {**OPENAI_PRICES, **CLAUDE_PRICES}.get(model, (PRICE_IN_PER_M, PRICE_OUT_PER_M, PRICE_IN_PER_M))
     cost = (tin - cached) / 1e6 * pin + cached / 1e6 * pcached + tout / 1e6 * pout + searches * OPENAI_SEARCH_PRICE
     with _lock:
         _spend["local_in"] += tin
@@ -378,21 +382,58 @@ def _call_openai(system_prompt: str, user_text: str, max_tokens: int, search: bo
     return text, sources
 
 
+def _call_claude(system_prompt: str, user_text: str, max_tokens: int) -> str:
+    """One Claude call, used only after OpenAI failed. The SDK's own retries are off: every
+    attempt must be a call counted against today's cap."""
+    import anthropic
+    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""), timeout=90, max_retries=0)
+    try:
+        response = client.messages.create(
+            model=CLAUDE_MODEL, max_tokens=max(2000, max_tokens * 3), system=system_prompt,
+            output_config={"effort": "low"},
+            messages=[{"role": "user", "content": "Data (answer in JSON as instructed):\n" + user_text}])
+    except anthropic.APIStatusError as e:
+        raise RuntimeError(f"Claude HTTP {e.status_code}") from None
+    except anthropic.APIConnectionError as e:
+        raise RuntimeError(f"Claude could not be reached ({type(e).__name__})") from None
+    usage = {"input_tokens": response.usage.input_tokens, "output_tokens": response.usage.output_tokens}
+    _record_openai(CLAUDE_MODEL, usage)
+    if response.stop_reason == "refusal":
+        raise RuntimeError("Claude declined to answer")
+    return "".join(b.text for b in response.content if b.type == "text")
+
+
+def _reserve_and_save() -> None:
+    """Count one call and put it on disk before it goes out; if either fails, no call is made."""
+    refused = _reserve_call()
+    if refused:
+        raise CapReached(refused)
+    try:
+        _save_spend_file()
+    except SpendNotSaved as e:
+        raise CapReached(str(e))
+
+
 def call_model(system_prompt: str, user_text: str, max_tokens: int = 600,
                search: bool = False, deep: bool = False) -> tuple[str, list]:
     """One model call within today's cap (OpenAI, or Gemini on Vertex). Returns the answer's
     text and, when a web search was allowed and used, the pages it drew on ([{title, uri}])."""
-    refused = _reserve_call()
-    if refused:
-        raise CapReached(refused)
     if PROVIDER == "openai":
         # the reserved call is on disk before the request goes out, so a crash mid-call
         # still counts it; if it cannot be saved, the call is not made
+        _reserve_and_save()
         try:
-            _save_spend_file()
-        except SpendNotSaved as e:
-            raise CapReached(str(e))
-        return _call_openai(system_prompt, user_text, max_tokens, search, deep)
+            return _call_openai(system_prompt, user_text, max_tokens, search, deep)
+        except (RuntimeError, httpx.HTTPError) as e:
+            # a web-search answer has no equivalent here: fail plainly rather than drop the search
+            if search or not os.getenv("ANTHROPIC_API_KEY"):
+                raise
+            logger.warning(f"OpenAI failed ({str(e) if isinstance(e, RuntimeError) else type(e).__name__}); trying Claude")
+        _reserve_and_save()
+        return _call_claude(system_prompt, user_text, max_tokens), []
+    refused = _reserve_call()
+    if refused:
+        raise CapReached(refused)
     host = "aiplatform.googleapis.com" if LOCATION == "global" else f"{LOCATION}-aiplatform.googleapis.com"
     url = (f"https://{host}/v1/projects/{PROJECT}/locations/{LOCATION}"
            f"/publishers/google/models/{MODEL}:generateContent")
@@ -617,7 +658,26 @@ def run_system(topology: dict) -> None:
             _system = _keep_last_good(_system, why)
 
 
-def run_own_systems(topology: dict) -> None:
+OWN_ATTEMPTS = 3
+
+
+def _worth_retrying(e: Exception) -> bool:
+    """A refused budget, missing configuration or a rejected request fails the same way again."""
+    if isinstance(e, CapReached) or "not configured" in str(e):
+        return False
+    status = re.search(r"HTTP (\d{3})", str(e))
+    return not status or not (400 <= int(status.group(1)) < 500) or int(status.group(1)) in (408, 429)
+
+
+def _assessment_due(product: str) -> bool:
+    """Call with _lock held: does this system still need a first or a retried assessment?"""
+    job, current = _own_jobs.get(product, {}), _own.get(product) or {}
+    if job.get("status") in ("running", "failed") or (current.get("summary") and not current.get("error")):
+        return False
+    return job.get("attempts", 0) < OWN_ATTEMPTS and time.time() >= job.get("retry_at", 0)
+
+
+def run_own_systems(topology: dict, only_pending: bool = False) -> None:
     """REQ-GHA-037: an overview of each of our own systems on its own, for its card and its
     view. A system's recent log lines are included when they live in the project read here."""
     by_product: dict = {}
@@ -632,6 +692,14 @@ def run_own_systems(topology: dict) -> None:
     for product, nodes in by_product.items():
         if product not in projects:
             continue  # external systems have their own overview (run_outside)
+        with _lock:
+            job = _own_jobs.get(product, {})
+            # one run per system: a manual refresh, the round and the scan never compete
+            if job.get("status") == "running" or (only_pending and not _assessment_due(product)):
+                continue
+            attempts = job.get("attempts", 0) + 1 if only_pending else 1
+            _own_jobs[product] = {"status": "running", "attempts": attempts,
+                                  "started_at": time.time()}
         try:
             walked = list(_walk_parts({"nodes": nodes}))
             parts = [rec for rec, _ in walked]
@@ -645,25 +713,38 @@ def run_own_systems(topology: dict) -> None:
             result = _generate(SYSTEM_PROMPT, json.dumps(payload, default=str))
             with _lock:
                 _own[product] = _now_entry(result)
+                _own_jobs[product] = {"status": "complete", "attempts": attempts}
         except Exception as e:
             why = _failure(e)
             logger.warning(f"overview of {product} failed: {why}")
             with _lock:
                 _own[product] = _keep_last_good(_own.get(product), why)
+                if _worth_retrying(e) and attempts < OWN_ATTEMPTS:
+                    _own_jobs[product] = {"status": "retrying", "attempts": attempts,
+                                          "retry_at": time.time() + 60 * attempts}
+                else:
+                    _own_jobs[product] = {"status": "failed", "attempts": attempts}
 
 
 def get_own(product: str):
     with _lock:
         entry = _own.get(product)
-    return _with_staleness(entry) if entry else None
+        job = dict(_own_jobs.get(product) or {"status": "not_started"})
+    if not entry and job["status"] == "not_started":
+        return None
+    return {**_with_staleness(entry), "job": job}
 
 
 def system_cards() -> dict:
     """{product: short overview} for every system that has one, for the home view's cards."""
     with _lock:
         both = {**{k: dict(v) for k, v in _own.items()}, **{k: dict(v) for k, v in _outside.items()}}
+        jobs = {k: dict(v) for k, v in _own_jobs.items()}
+        for product in jobs:
+            both.setdefault(product, {})
     return {k: {"summary": v.get("summary"), "score": v.get("score"), "analyzed_at": v.get("analyzed_at"),
-                "error": v.get("error"), "stale": _with_staleness(v).get("stale")} for k, v in both.items()}
+                "error": v.get("error"), "stale": _with_staleness(v).get("stale"),
+                "job": jobs.get(k) or {"status": "complete"}} for k, v in both.items()}
 
 
 def _run_part(rec: dict, log_filter: str, edges: list) -> None:
@@ -844,6 +925,25 @@ def manual_refresh(topology: dict) -> None:
         logger.error(f"outside overviews on refresh failed: {e}")
 
 
+def _pending_scan_once(get_topology_fn) -> None:
+    from src.api.routes.manifests import _load_manifests
+    own = {m.get("product") for m in _load_manifests() if m.get("kind") != "outside_view"}
+    with _lock:
+        due = any(_assessment_due(p) for p in own)
+    if due:
+        refresh_durable_spend()
+        run_own_systems(get_topology_fn(), only_pending=True)
+
+
+def _pending_loop(get_topology_fn, stop) -> None:
+    """A new system gets its first assessment without waiting for a round, however long that takes."""
+    while not stop.wait(PENDING_SCAN_S):
+        try:
+            _pending_scan_once(get_topology_fn)
+        except Exception as e:
+            logger.error(f"new-system assessment scan failed: {type(e).__name__}")
+
+
 def overview_loop(get_topology_fn, ready_fn=None):
     """Clause 4: first overviews as soon as the parts are known, then every INTERVAL_S."""
     stop = threading.Event()
@@ -851,6 +951,8 @@ def overview_loop(get_topology_fn, ready_fn=None):
         if ready_fn is None or ready_fn():
             break
         stop.wait(5)
+    threading.Thread(target=_pending_loop, args=(get_topology_fn, stop), daemon=True,
+                     name="assessment-scan").start()
     while True:
         try:
             run_all(get_topology_fn())

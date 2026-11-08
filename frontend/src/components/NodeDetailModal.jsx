@@ -278,12 +278,10 @@ export default function NodeDetailModal({ node, onClose, isDemo, hideCosts }) {
               <span className="text-xs text-gray-500 dark:text-purple-300">{overviewStamp(nodeAnalysis, now)}{readError ? ` · ${readError}` : ''}</span>
             </div>
 
-            {/* Stale/refreshing banner */}
-            {(overviewStale && nodeAnalysis?.analyzed_at) && (
+            {/* REQ-GHA-024 clause 7: the last real overview stays; only a failed update is said */}
+            {(nodeAnalysis?.error && nodeAnalysis?.analyzed_at) && (
               <div className="text-sm text-gray-600 dark:text-purple-200 bg-surface/50 dark:bg-purple-900/40 rounded px-2 py-1 mb-2">
-                {nodeAnalysis?.error
-                  ? `${nodeAnalysis.error} — showing the last overview.`
-                  : 'This overview is older than its 3-hour schedule.'}
+                {`${nodeAnalysis.error} — showing the last overview.`}
               </div>
             )}
 

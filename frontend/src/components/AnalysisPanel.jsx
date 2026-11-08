@@ -8,7 +8,7 @@ import { Brain, RefreshCw, AlertTriangle, CheckCircle, Server, Shield, Loader2 }
 import { apiFetch } from '../utils/api'
 import { statsSummary } from '../utils/canvasParts.js'
 import { overviewStamp, spendLine } from '../utils/overview.js'
-import { listAssessments, loadFailed } from '../utils/systems.js'
+import { assessmentLine, listAssessments, loadFailed } from '../utils/systems.js'
 
 function ScoreBadge({ score }) {
   if (score === null || score === undefined) return null
@@ -81,8 +81,8 @@ function SystemsList({ cards, descriptions, loadError, systemsError }) {
           <div className="text-sm font-semibold text-gray-800 dark:text-purple-100">
             {a.label}{a.when && <span className="font-normal text-xs text-gray-500 dark:text-purple-300"> · {a.when}</span>}
           </div>
-          {a.old && <div className="text-xs text-yellow-700 dark:text-yellow-400">{a.old}</div>}
           {a.problem && <div className="text-xs text-red-700 dark:text-red-400">{a.problem}</div>}
+          {a.job && <div className="text-xs text-gray-500 dark:text-purple-300">{a.job}</div>}
           <p className="text-sm text-gray-600 dark:text-purple-200 leading-relaxed flex items-start gap-2">
             {a.waiting && <Loader2 size={13} className="animate-spin mt-0.5 flex-shrink-0" />}
             <span>{a.text}</span>
@@ -113,6 +113,8 @@ export default function AnalysisPanel({ data, topology, canvas, scopeLabel = 'Al
 
   const analysis = data || {}
   const hasData = !!analysis.summary
+  // REQ-GHA-024: a system's own job says what is happening now
+  const life = analysis.job ? assessmentLine(analysis, Date.now()) : null
   // REQ-GHA-024: only an operator gets spend and the refresh control; a viewer only reads.
   const spend = analysis.spend
 
@@ -123,9 +125,6 @@ export default function AnalysisPanel({ data, topology, canvas, scopeLabel = 'Al
         <div className="flex items-center gap-2">
           <Brain size={16} className="text-accent-500 dark:text-accent-300" />
           <span className="text-base font-semibold text-gray-900 dark:text-white">AI overview · {scopeLabel}</span>
-          {analysis.stale && hasData && (
-            <span className="text-xs bg-yellow-100 dark:bg-yellow-400/10 text-yellow-700 dark:text-yellow-400 px-1.5 py-0.5 rounded">stale</span>
-          )}
         </div>
         {spend && (
           <button
@@ -144,6 +143,7 @@ export default function AnalysisPanel({ data, topology, canvas, scopeLabel = 'Al
       {!listCards && analysis.error && (
         <p className="text-xs text-yellow-700 dark:text-yellow-300">{analysis.error}{hasData ? ' — showing the last overview.' : ''}</p>
       )}
+      {!listCards && life?.job && <p className="text-xs text-gray-500 dark:text-purple-300">{life.job}</p>}
       {!listCards && fetchError && (
         <p className="text-xs text-yellow-700 dark:text-yellow-300">
           {hasData ? `${loadFailed('A newer overview', fetchError)} Showing the last one.` : loadFailed('The AI overview', fetchError)}
@@ -155,8 +155,8 @@ export default function AnalysisPanel({ data, topology, canvas, scopeLabel = 'Al
         <SystemsList cards={listCards} descriptions={descriptions} loadError={descriptionsError} systemsError={systemsError} />
       ) : !hasData ? (
         fetchError ? null : <p className="text-gray-500 dark:text-purple-300 text-sm flex items-center gap-2">
-          {!analysis.error && <Loader2 size={14} className="animate-spin" />}
-          {analysis.error ? 'No overview yet.' : (loading || !data ? 'Loading the AI overview…' : 'AI overview being written…')}
+          {(life ? life.busy : !analysis.error) && <Loader2 size={14} className="animate-spin" />}
+          {life ? life.text : analysis.error ? 'No overview yet.' : (loading || !data ? 'Loading the AI overview…' : 'AI overview being written…')}
         </p>
       ) : (
         <>

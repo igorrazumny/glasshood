@@ -41,6 +41,8 @@ class Alert:
     report: Optional[dict] = None
     # REQ-GHA-031: the AI review's plain explanation {what, suspicion, directions}
     explanation: Optional[dict] = None
+    # REQ-GHA-031 (amended): what a status check observed {result, probe_type, status}
+    check: Optional[dict] = None
 
     @classmethod
     def from_dict(cls, d: dict) -> "Alert":
@@ -72,4 +74,5 @@ class Alert:
             "evidence": list(self.evidence),
             "report": self.report,
             "explanation": self.explanation,
+            "check": self.check,
         }
