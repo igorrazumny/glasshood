@@ -3,7 +3,6 @@
 // with its state in one plain line and its open alarms; a click opens that system.
 
 import { AlertOctagon, AlertTriangle, Eye, Loader2 } from 'lucide-react'
-import { clock } from '../utils/time'
 import { assessmentLine, loadFailed } from '../utils/systems'
 import { groupedCards, portfolioLine } from '../utils/systems'
 
@@ -88,8 +87,7 @@ function SystemCard({ card: c, about, loadError, onOpen }) {
           <span>{a.text}</span>
         </p>
       </div>
-      <div className="mt-4 flex items-center justify-between text-xs text-gray-500 dark:text-purple-300">
-        <span>{c.checkedAt ? `Checked ${clock(c.checkedAt * 1000)}` : 'Not checked yet'}</span>
+      <div className="mt-4 flex items-center justify-end text-xs text-gray-500 dark:text-purple-300">
         <span className="text-sm font-medium text-accent-600 dark:text-accent-300 group-hover:translate-x-0.5 transition">See details →</span>
       </div>
     </button>

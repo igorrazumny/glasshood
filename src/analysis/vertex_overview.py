@@ -37,6 +37,8 @@ PROJECT = os.getenv("OVERVIEW_PROJECT", GCP_PROJECT_ID)
 INTERVAL_S = int(os.getenv("OVERVIEW_INTERVAL_S", str(3 * 3600)))
 MANUAL_COOLDOWN_S = 600
 PENDING_SCAN_S = 15
+CHANGE_SCAN_S = 120
+CONDITIONS = ("normal", "attention", "failing")
 DAILY_CALL_CAP = int(os.getenv("OVERVIEW_DAILY_CALL_CAP", "1200"))  # about $2/day at list price
 PRICE_IN_PER_M = float(os.getenv("OVERVIEW_PRICE_IN_PER_M", "0.25"))
 PRICE_OUT_PER_M = float(os.getenv("OVERVIEW_PRICE_OUT_PER_M", "1.50"))
@@ -48,8 +50,9 @@ SYSTEM_PROMPT = """You write a short health overview of a running cloud system f
 You get every part with its status, its check result and metrics, plus recent log lines.
 Statuses: healthy; degraded; error; "not checked" means an outside service the monitor cannot check
 (never call it a problem for that reason alone). Findings in the alerts are configuration notes. Refer to parts by their label, never by their id.
+"condition" is "normal" when nothing needs attention, "attention" when the system works but something needs attention, "failing" when an essential function is not working. It must agree with your summary.
 Answer in JSON only:
-{"score": 1-10, "summary": "one or two plain sentences on the overall state",
+{"score": 1-10, "condition": "normal, attention or failing", "summary": "one or two plain sentences on the overall state",
  "issues": ["what needs attention, plain words, empty if nothing"],
  "recommendations": ["at most three short next steps, empty if none"]}"""
 
@@ -68,8 +71,9 @@ each component's state and last update, and open incidents and maintenance with 
 Say what the current state means for people who use this service, what the provider has said, and what
 cannot be known from outside. Never invent an internal cause or internal parts; quote or paraphrase the
 provider for causes. Refer to components by their published names.
+"condition" is "normal" when nothing needs attention, "attention" when the system works but something needs attention, "failing" when an essential function is not working. It must agree with your summary.
 Answer in JSON only:
-{"score": 1-10, "summary": "one or two plain sentences on the service as a whole",
+{"score": 1-10, "condition": "normal, attention or failing", "summary": "one or two plain sentences on the service as a whole",
  "issues": ["what a user of this service should know now, empty if nothing"],
  "recommendations": ["at most three short next steps for a team that depends on it, empty if none"]}"""
 
@@ -87,6 +91,10 @@ _system: dict = {}
 _outside: dict = {}        # product -> overview of that external system
 _own: dict = {}            # product -> overview of one of our own systems (REQ-GHA-037)
 _own_jobs: dict = {}       # product -> actual assessment execution state
+_state_sig: dict = {}      # product -> the part states its saved record was written from (REQ-GHA-040)
+_triggered_sig: dict = {}  # product -> the part states that last triggered a new record
+_outside_running: set = set()  # external systems with a record being written right now
+_changed: set = set()      # own systems whose parts changed state and await a new record
 _outside_sig: dict = {}    # box id -> what its last analysis was written from (rewritten only on change)
 _parts: dict = {}          # part id -> overview
 _spend: dict = {}  # today's accounting, see refresh_durable_spend
@@ -487,6 +495,7 @@ def _parse(text: str) -> dict:
     return {
         "score": score if isinstance(score, (int, float)) and 1 <= score <= 10 else None,
         "summary": str(obj.get("summary", ""))[:600],
+        "condition": obj.get("condition") if obj.get("condition") in CONDITIONS else None,
         "issues": strings(obj.get("issues"), 5),
         "recommendations": strings(obj.get("recommendations"), 3),
     }
@@ -642,6 +651,35 @@ def _failure(e: Exception) -> str:
     return str(e) if isinstance(e, CapReached) else f"overview could not be written ({type(e).__name__}: {str(e)[:120]})"
 
 
+def _system_nodes(topology: dict, product: str) -> list:
+    """Every box of one system, including the ones drawn inside another."""
+    def walk(nodes):
+        for n in nodes or []:
+            yield n
+            yield from walk(n.get("children"))
+    return list(walk([n for n in topology.get("nodes", []) if n.get("project") == product]))
+
+
+def _signature(nodes: list) -> str:
+    return json.dumps(sorted((str(n.get("id")), str(n.get("status"))) for n in nodes))
+
+
+def _open_alerts(nodes: list) -> list:
+    """REQ-GHA-040: the system's open alarms as they stand when its record is written."""
+    from src.rules.engine import get_alerts
+    ids = {n.get("id") for n in nodes}
+    skip = ("evidence", "report", "reasons", "explanation", "anomaly_classification", "check")
+    return [{k: v for k, v in a.items() if k not in skip}
+            for a in get_alerts() if a.get("node_id") in ids and a.get("kind") != "example"]
+
+
+def _system_record(result: dict, alerts: list) -> dict:
+    """REQ-GHA-040: condition, text, alarms and time, written as one record."""
+    if not result.get("condition"):
+        raise ValueError("the model's answer had no condition")
+    return {**_now_entry(result), "alerts": alerts}
+
+
 def run_system(topology: dict) -> None:
     global _system
     try:
@@ -672,6 +710,8 @@ def _worth_retrying(e: Exception) -> bool:
 def _assessment_due(product: str) -> bool:
     """Call with _lock held: does this system still need a first or a retried assessment?"""
     job, current = _own_jobs.get(product, {}), _own.get(product) or {}
+    if product in _changed:
+        return job.get("status") != "running"
     if job.get("status") in ("running", "failed") or (current.get("summary") and not current.get("error")):
         return False
     return job.get("attempts", 0) < OWN_ATTEMPTS and time.time() >= job.get("retry_at", 0)
@@ -698,6 +738,7 @@ def run_own_systems(topology: dict, only_pending: bool = False) -> None:
             if job.get("status") == "running" or (only_pending and not _assessment_due(product)):
                 continue
             attempts = job.get("attempts", 0) + 1 if only_pending else 1
+            _changed.discard(product)
             _own_jobs[product] = {"status": "running", "attempts": attempts,
                                   "started_at": time.time()}
         try:
@@ -708,11 +749,15 @@ def run_own_systems(topology: dict, only_pending: bool = False) -> None:
             locations = {json.dumps(f, sort_keys=True): f for _, f in walked if isinstance(f, dict)}
             for location in locations.values():
                 logs += _log_lines(location, SYSTEM_WARN_LINES, SYSTEM_SAMPLE_LINES)
+            full = _system_nodes({"nodes": nodes}, product)
+            sig, alerts = _signature(full), _open_alerts(full)
             payload = sanitize({"system": product, "parts": parts, "recent_logs": logs,
+                                "open_alerts": [{"severity": a.get("severity"), "title": a.get("title")} for a in alerts],
                                 "states": {s: statuses.count(s) for s in set(statuses)}})
-            result = _generate(SYSTEM_PROMPT, json.dumps(payload, default=str))
+            record = _system_record(_generate(SYSTEM_PROMPT, json.dumps(payload, default=str)), alerts)
             with _lock:
-                _own[product] = _now_entry(result)
+                _own[product] = record
+                _state_sig[product] = sig
                 _own_jobs[product] = {"status": "complete", "attempts": attempts}
         except Exception as e:
             why = _failure(e)
@@ -744,6 +789,7 @@ def system_cards() -> dict:
             both.setdefault(product, {})
     return {k: {"summary": v.get("summary"), "score": v.get("score"), "analyzed_at": v.get("analyzed_at"),
                 "error": v.get("error"), "stale": _with_staleness(v).get("stale"),
+                "condition": v.get("condition"), "alerts": v.get("alerts"),
                 "job": jobs.get(k) or {"status": "complete"}} for k, v in both.items()}
 
 
@@ -779,7 +825,7 @@ def run_all(topology: dict) -> None:
                 failed += 1
                 logger.error(f"part overview worker failed: {e}")
     try:
-        written = run_outside()
+        written = run_outside(topology=topology)
     except Exception as e:
         written = 0
         logger.error(f"outside overviews failed: {e}")
@@ -844,7 +890,7 @@ def _run_outside_part(box: str, rec: dict, sig) -> None:
             _parts[box] = _keep_last_good(_parts.get(box), why)
 
 
-def run_outside(parts: bool = True) -> int:
+def run_outside(parts: bool = True, topology: dict = None, only: set = None) -> int:
     """REQ-GHA-036 clause 7: an overview of each external system every round, and an analysis
     of each of its parts written only when what the provider publishes about it changed.
     Returns the number of part analyses written."""
@@ -852,6 +898,8 @@ def run_outside(parts: bool = True) -> int:
     jobs = []
     for p in statuspage.published():
         product = p.get("product")
+        if only is not None and product not in only:
+            continue
         if not p["read"]:
             with _lock:
                 _outside[product] = _keep_last_good(_outside.get(product), f"the provider's status could not be read: {p['error']}")
@@ -869,15 +917,29 @@ def run_outside(parts: bool = True) -> int:
                        "components": [x.get("name") for x in e.get("components") or []][:30],
                        "latest_update": ((e.get("incident_updates") or [{}])[0].get("body") or "")[:800],
                    } for e in p["events"]]}
+        with _lock:     # one run per system: old work can never overwrite a newer record
+            claimed = product not in _outside_running
+            _outside_running.add(product)
+            if not claimed and only is not None:
+                _triggered_sig.pop(product, None)   # skipped, so this change is still due
         try:
-            result = _generate(OUTSIDE_SYSTEM_PROMPT, json.dumps(sanitize(payload), default=str))
-            with _lock:
-                _outside[product] = _now_entry(result)
+            if claimed:
+                # what the record says is fixed before the model is asked
+                nodes = _system_nodes(topology or {}, product)
+                sig, alerts = _signature(nodes), _open_alerts(nodes)
+                record = _system_record(_generate(OUTSIDE_SYSTEM_PROMPT, json.dumps(sanitize(payload), default=str)), alerts)
+                with _lock:
+                    _outside[product] = record
+                    _state_sig[product] = sig
         except Exception as e:
             why = _failure(e)
             logger.warning(f"outside overview failed for {p['name']}: {why}")
             with _lock:
                 _outside[product] = _keep_last_good(_outside.get(product), why)
+        finally:
+            if claimed:
+                with _lock:
+                    _outside_running.discard(product)
         if not parts:
             continue
         with _lock:
@@ -920,7 +982,7 @@ def manual_refresh(topology: dict) -> None:
     run_system(topology)
     run_own_systems(topology)
     try:
-        run_outside(parts=False)
+        run_outside(parts=False, topology=topology)
     except Exception as e:
         logger.error(f"outside overviews on refresh failed: {e}")
 
@@ -935,11 +997,45 @@ def _pending_scan_once(get_topology_fn) -> None:
         run_own_systems(get_topology_fn(), only_pending=True)
 
 
+def _change_scan_once(get_topology_fn) -> None:
+    """REQ-GHA-040 clause 7: a system whose parts changed state gets a new record soon."""
+    from src.api.routes.manifests import _load_manifests
+    kinds = {m.get("product"): m.get("kind") for m in _load_manifests()}
+    topology = get_topology_fn()
+    own, outside = set(), set()
+    for product, kind in kinds.items():
+        sig = _signature(_system_nodes(topology, product))
+        with _lock:
+            known = _state_sig.get(product)
+            if sig == known:
+                _triggered_sig.pop(product, None)   # back where it was: the next change counts again
+            if known is None or sig in (known, _triggered_sig.get(product)):
+                continue
+            _triggered_sig[product] = sig
+            if kind == "outside_view":
+                outside.add(product)
+            else:
+                own.add(product)
+                _changed.add(product)
+                if _own_jobs.get(product, {}).get("status") != "running":
+                    _own_jobs[product] = {"status": "queued", "attempts": 0}
+    if own or outside:
+        refresh_durable_spend()
+    if own:
+        run_own_systems(topology, only_pending=True)
+    if outside:
+        run_outside(parts=False, topology=topology, only=outside)
+
+
 def _pending_loop(get_topology_fn, stop) -> None:
     """A new system gets its first assessment without waiting for a round, however long that takes."""
+    next_change_scan = time.monotonic() + CHANGE_SCAN_S
     while not stop.wait(PENDING_SCAN_S):
         try:
             _pending_scan_once(get_topology_fn)
+            if time.monotonic() >= next_change_scan:
+                next_change_scan = time.monotonic() + CHANGE_SCAN_S
+                _change_scan_once(get_topology_fn)
         except Exception as e:
             logger.error(f"new-system assessment scan failed: {type(e).__name__}")
 

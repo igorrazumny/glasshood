@@ -27,7 +27,7 @@ def _reset():
 def _run(published, calls):
     def gen(prompt, text):
         calls.append((prompt, json.loads(text)))
-        return {"score": 8, "summary": "ok", "issues": [], "recommendations": []}
+        return {"score": 8, "condition": "normal", "summary": "ok", "issues": [], "recommendations": []}
     with patch("src.collectors.statuspage.published", return_value=published), \
          patch.object(ov, "_generate", side_effect=gen):
         return ov.run_outside()
@@ -130,7 +130,7 @@ def test_each_own_system_gets_its_own_overview_and_card_description():
     def gen(prompt, text):
         payload = json.loads(text)
         calls.append(payload)
-        return {"score": 9, "summary": f"{payload['system']} is running normally.", "issues": [], "recommendations": []}
+        return {"score": 9, "condition": "normal", "summary": f"{payload['system']} is running normally.", "issues": [], "recommendations": []}
     topology = {"nodes": [{"id": "cv-a", "label": "App", "project": "coldvault", "status": "healthy", "metrics": {}},
                           {"id": "gls-a", "label": "Backend", "project": "glasshood", "status": "healthy", "metrics": {}},
                           {"id": "cf-a", "label": "AMS", "project": "cloudflare", "status": "healthy", "metrics": {}}]}
@@ -155,7 +155,7 @@ def test_a_manual_refresh_renews_each_systems_own_overview():
          patch.object(ov, "run_own_systems") as own, patch.object(ov, "run_outside") as out:
         ov.manual_refresh({"nodes": []})
     sys_.assert_called_once(); own.assert_called_once()
-    out.assert_called_once_with(parts=False)
+    out.assert_called_once_with(parts=False, topology={"nodes": []})
 
 
 def test_outside_overview_without_parts_writes_no_part_analysis():
@@ -163,7 +163,7 @@ def test_outside_overview_without_parts_writes_no_part_analysis():
     calls = []
     def gen(prompt, text):
         calls.append(prompt)
-        return {"score": 8, "summary": "ok", "issues": [], "recommendations": []}
+        return {"score": 8, "condition": "normal", "summary": "ok", "issues": [], "recommendations": []}
     with patch("src.collectors.statuspage.published", return_value=_published()), \
          patch.object(ov, "_generate", side_effect=gen):
         assert ov.run_outside(parts=False) == 0

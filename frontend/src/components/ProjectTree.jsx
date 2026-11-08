@@ -99,7 +99,8 @@ export default function ProjectTree({ projects, systems, activeProject, onSelect
 
   const tree = buildTree(projects)
   const totalNodes = projects.reduce((sum, p) => sum + (p.metrics?.node_count || 0), 0)
-  const overallStatus = worstStatus(projects.map(p => p.status || 'unknown'))
+  // REQ-GHA-040: with system records, All systems says what they say
+  const overallStatus = worstStatus(systems?.length ? systems.map(c => c.state === 'not checked' ? 'unknown' : c.state) : projects.map(p => p.status || 'unknown'))
 
   // a group is open unless folded (false); one click folds, the next opens
   const toggleGroup = (id) => setExpanded(prev => ({ ...prev, [id]: prev[id] === false }))

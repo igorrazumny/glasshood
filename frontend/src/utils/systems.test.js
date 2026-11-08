@@ -3,7 +3,7 @@
 // Run: node frontend/src/utils/systems.test.js
 
 import assert from 'node:assert/strict'
-import { TREE_LEFT, headerLine, systemCards, systemOfNodes, portfolioLine, systemId, groupedCards, cardsInGroup, assessmentLine, listAssessments, loadFailed, staleDataLine } from './systems.js'
+import { TREE_LEFT, headerLine, withRecords, systemCards, systemOfNodes, portfolioLine, systemId, groupedCards, cardsInGroup, assessmentLine, listAssessments, loadFailed, staleDataLine } from './systems.js'
 
 let failed = 0
 function test(name, fn) {
@@ -39,7 +39,7 @@ test('a card says the state in one plain line and counts its own alarms', () => 
   assert.equal(cv.label, 'ColdVault')
   assert.equal(cv.state, 'degraded')
   assert.equal(cv.line, 'Running, with problems in 1 part')
-  assert.deepEqual([cv.critical, cv.warning, cv.parts, cv.checkedAt], [1, 0, 3, 200])
+  assert.deepEqual([cv.critical, cv.warning, cv.parts], [1, 0, 3])
   assert.equal(cf.outside, true)
   assert.equal(cf.line, 'The provider reports outages in 1 part')
   assert.deepEqual([cf.critical, cf.warning], [0, 1])
@@ -192,6 +192,26 @@ test('only our own systems carry a logo', () => {
   assert.equal(cv.logo, '/logos/coldvault.png')
   assert.equal(cf.logo, null)
   assert.equal(systemCards([{ product: 'other', environment: 'x' }], [], [])[0].logo, null)
+})
+
+test('a card says only what its saved record says', () => {
+  const base = [{ id: 'a', product: 'a', outside: false, state: 'healthy', line: 'live', critical: 9, warning: 9, notes: 9 }]
+  const [c] = withRecords(base, { a: { condition: 'attention', summary: 'One part needs attention', alerts: [{ severity: 'warning', kind: 'alarm' }] } })
+  assert.deepEqual([c.state, c.line, c.critical, c.warning], ['degraded', 'Running, with something that needs attention', 0, 1])
+})
+
+test('a system with no record is never shown as working', () => {
+  const base = [{ id: 'a', product: 'a', state: 'healthy', line: 'Running normally', critical: 1 }]
+  assert.equal(withRecords(base, {})[0].state, 'not checked')
+  assert.equal(withRecords(base, {})[0].line, 'Not assessed yet')
+  assert.equal(withRecords(base, { a: { error: 'x' } })[0].state, 'not checked')
+  assert.equal(withRecords(base, null)[0].line, 'Status not available yet')
+})
+
+test('one system with no record does not read as operational', () => {
+  const [c] = withRecords([{ id: 'a', product: 'a', label: 'A', outside: false, state: 'healthy' }], {})
+  assert.equal(headerLine([c], null).text, 'Our systems: status not available')
+  assert.notEqual(headerLine([c], null).state, 'healthy')
 })
 
 if (failed) { console.error(`${failed} failed`); process.exit(1) }

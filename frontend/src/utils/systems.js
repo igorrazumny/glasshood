@@ -93,7 +93,6 @@ export function systemCards(manifests, nodes, alerts) {
     // the same levels as the alarm lists (REQ-GHA-038): Information is a note, the rest are alerts
     const open = mineAll.filter(a => alarmLevel(a) !== 'info')
     const notes = mineAll.filter(a => alarmLevel(a) === 'info').length
-    const polls = mine.map(n => n.metrics?._last_poll).filter(Number.isFinite)
     const outside = m.kind === 'outside_view'
     cards.push({
       id, product: m.product, label: m.solution || m.display_name || m.product || 'System',
@@ -107,10 +106,32 @@ export function systemCards(manifests, nodes, alerts) {
       parts: mine.length,
       critical: open.filter(a => a.severity === 'critical').length,
       warning: open.filter(a => a.severity === 'warning').length,
-      checkedAt: polls.length ? Math.max(...polls) : null,
     })
   }
   return cards
+}
+
+// REQ-GHA-040: what a summary says about a system comes only from its saved record: condition,
+// mark, alert counts and written time were saved together and cannot disagree with the AI text
+const FROM_CONDITION = { normal: 'healthy', attention: 'degraded', failing: 'error' }
+const OWN_WORDS = { normal: 'Running normally', attention: 'Running, with something that needs attention', failing: 'Not working properly' }
+const PROVIDER_WORDS = { normal: 'Running normally, as reported by the provider', attention: 'The provider reports problems', failing: 'The provider reports outages' }
+
+export function withRecords(cards, records) {
+  return (cards || []).map(c => {
+    const record = records?.[c.product]
+    if (!record?.condition) {
+      return { ...c, state: 'not checked', critical: 0, warning: 0, notes: 0,
+        line: records ? 'Not assessed yet' : 'Status not available yet' }
+    }
+    const alerts = record.alerts || []
+    const open = alerts.filter(a => alarmLevel(a) !== 'info')
+    return { ...c, state: FROM_CONDITION[record.condition],
+      line: (c.outside ? PROVIDER_WORDS : OWN_WORDS)[record.condition],
+      critical: open.filter(a => a.severity === 'critical').length,
+      warning: open.filter(a => a.severity === 'warning').length,
+      notes: alerts.length - open.length }
+  })
 }
 
 // The portfolio line above the cards
