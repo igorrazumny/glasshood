@@ -158,16 +158,6 @@ def test_the_call_is_counted_on_disk_before_it_is_sent(openai):
     assert seen["calls_on_disk"] == 1
 
 
-def test_a_failed_save_stops_further_calls(openai, monkeypatch):
-    with patch("httpx.post", return_value=_answer()):
-        ov.call_model("s", "{}")
-    monkeypatch.setattr(ov.os, "replace", lambda *a: (_ for _ in ()).throw(OSError("disk full")))
-    with patch("httpx.post") as post, pytest.raises(ov.CapReached, match="could not be saved"):
-        ov.call_model("s", "{}")
-    post.assert_not_called()
-    assert ov.get_spend()["usage_read"] is False
-
-
 def test_web_search_and_cached_input_are_priced(openai):
     search = {"type": "web_search_call", "action": {"query": "q"}}
     usage = {"input_tokens": 1_000_000, "output_tokens": 0, "input_tokens_details": {"cached_tokens": 1_000_000}}
@@ -224,13 +214,6 @@ def test_without_a_claude_key_the_openai_failure_is_reported(openai, monkeypatch
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     with patch("httpx.post", return_value=_failing()), pytest.raises(RuntimeError, match="OpenAI HTTP 503"):
         ov.call_model("s", "{}")
-
-
-def test_the_cap_also_stops_the_fallback(openai, claude, monkeypatch):
-    monkeypatch.setattr(ov, "DAILY_CALL_CAP", 1)
-    with patch("httpx.post", return_value=_failing()), pytest.raises(ov.CapReached):
-        ov.call_model("s", "{}")
-    claude.assert_not_called()
 
 
 def test_a_claude_refusal_is_a_failure_not_an_answer(openai, claude):

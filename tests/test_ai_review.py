@@ -29,7 +29,6 @@ PARTS = [({"id": "cv-mig", "label": "Confidential VM (MIG)", "status": "healthy"
 def _reset(monkeypatch):
     for s in (eng._active, eng._resolved, eng._rule_checked_at, eng._rule_names, eng._audit_log):
         s.clear()
-    ai_investigate._count.update(day="", n=0)
     monkeypatch.setattr(ai_review, "STATE_DIR", "")
     monkeypatch.setattr(ai_review, "_saving", {"durable": False, "problem": None})
     monkeypatch.setattr(ov, "_walk_parts", lambda topology: iter(PARTS))
@@ -209,10 +208,6 @@ class TestInvestigateDeeper:
         _, alarm, _ = _investigate(answer={"findings": []})
         assert alarm["report"]["status"] == "failed" and "executive summary" in alarm["report"]["error"]
 
-    def test_the_daily_cap_stops_further_investigations(self, monkeypatch):
-        monkeypatch.setattr(ai_investigate, "DAILY_CAP", 0)
-        why, alarm, calls = _investigate()
-        assert "daily cap" in why and calls == [] and alarm["report"] is None
 
     def test_one_running_investigation_per_alarm(self):
         _review(_problem("critical"))

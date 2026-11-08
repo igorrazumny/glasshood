@@ -3,8 +3,8 @@
 # alarm. It reads further back in the part's logs and in its connected parts' logs, may search
 # the web for the error, and writes a report that opens with an executive summary. The report
 # is saved with the alarm; a later follow-up adds what happened since. Nothing is prepared in
-# advance. The model's text is plain data. Investigations and follow-ups have a daily cap on
-# top of the overview's daily call cap.
+# advance. The model's text is plain data. Investigations and follow-ups count toward
+# the AI providers' monthly limits (REQ-GHA-041).
 
 import json
 import logging
@@ -19,13 +19,11 @@ from src.rules import engine
 
 logger = logging.getLogger(__name__)
 
-DAILY_CAP = int(os.getenv("INVESTIGATION_DAILY_CAP", "30"))
 LOOKBACK_S = 24 * 3600
 PART_WARN_LINES, PART_SAMPLE_LINES = 150, 20
 RELATED_PARTS, RELATED_WARN_LINES = 4, 30
 FOLLOWUP_MAX_S = 7 * 24 * 3600
 _lock = threading.Lock()
-_count = {"day": "", "n": 0}
 
 REPORT_PROMPT = """You investigate ONE problem in a running cloud system and write a report for a business reader.
 You get the alarm, the part's log lines from the last 24 hours (warnings and errors first) and the
@@ -48,21 +46,6 @@ You get the earlier report's summary and evidence, and the part's log lines writ
 Say plainly whether the problem happened again, how often, and whether anything changed, for example
 "This happened once and has not happened again." Do not invent anything the lines do not show.
 Answer in JSON only: {"summary": "one to three plain sentences", "happened_again": true | false}"""
-
-
-def _today() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
-
-
-def _take_slot():
-    """Count one investigation or follow-up against today's cap; None when taken."""
-    with _lock:
-        if _count["day"] != _today():
-            _count.update(day=_today(), n=0)
-        if _count["n"] >= DAILY_CAP:
-            return f"daily cap of {DAILY_CAP} investigations reached"
-        _count["n"] += 1
-        return None
 
 
 def _iso(ts: float) -> str:
@@ -170,9 +153,6 @@ def start(group: str, part, user: str, topology: dict, run_async: bool = True):
         return "alarm not found"
     if (alarm.get("report") or {}).get("status") == "running":
         return "an investigation of this alarm is already running"
-    refused = _take_slot()
-    if refused:
-        return refused
     engine.set_report(group, part, {"status": "running", "requested_by": user,
                                     "started_at": _iso(time.time())})
     if run_async:
@@ -192,9 +172,6 @@ def followup(group: str, part, user: str, topology: dict):
     filters, _ = _part_filters(topology)
     if part not in filters:
         return None, "this part has no log location in its landscape file"
-    refused = _take_slot()
-    if refused:
-        return None, refused
     try:
         last = (report.get("followups") or [{}])[-1].get("at") or report["written_at"]
         since_s = min(FOLLOWUP_MAX_S, max(60, int(time.time() - datetime.fromisoformat(last).timestamp())))

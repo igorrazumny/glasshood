@@ -214,4 +214,10 @@ test('one system with no record does not read as operational', () => {
   assert.notEqual(headerLine([c], null).state, 'healthy')
 })
 
+test('a blocked AI provider is on the card even with no record', () => {
+  const [c] = withRecords([{ id: 'g', product: 'g' }], { g: { critical_notice: 'OpenAI is blocked' } })
+  assert.equal(c.notice, 'OpenAI is blocked')
+  assert.equal(c.state, 'not checked')
+})
+
 if (failed) { console.error(`${failed} failed`); process.exit(1) }

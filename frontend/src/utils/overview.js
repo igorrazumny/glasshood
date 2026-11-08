@@ -18,6 +18,12 @@ export function overviewStamp(o, now = Date.now()) {
 }
 
 export function spendLine(sp) {
+  // REQ-GHA-041 clause 12: each provider's month against its limit
+  if (sp.providers) {
+    const names = { openai: 'OpenAI', anthropic: 'Anthropic' }
+    return 'This month: ' + Object.entries(sp.providers).map(([k, v]) =>
+      `${names[k] || k} $${Number(v.spent).toFixed(2)} of $${Number(v.limit).toFixed(2)}${v.blocked ? ' (blocked)' : ''}`).join(' · ')
+  }
   const base = `Today: ${sp.calls} model calls, about $${Number(sp.cost_usd || 0).toFixed(2)} (cap ${sp.daily_call_cap} calls)`
   if (sp.usage_read === false && sp.read_error) return `${base} — ${sp.read_error}; no new overviews until it can be read`
   return sp.capped ? `${base} — daily cap reached, no more overviews today` : base

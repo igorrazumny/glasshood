@@ -116,6 +116,10 @@ def run(topology: dict) -> None:
             parts.append({"id": rec["id"], "label": labels[rec["id"]], "status": rec["status"]})
             if log_filter:
                 lines_by_part[rec["id"]] = ov._log_lines(log_filter, WARN_LINES_PER_PART, SAMPLE_LINES_PER_PART)
+        # REQ-GHA-041 clause 8: GlassHood's own lines about a blocked AI provider
+        from src.analysis.ai_budget import ALARM_PART, recent_lines
+        if recent_lines() and ALARM_PART in labels:
+            lines_by_part[ALARM_PART] = lines_by_part.get(ALARM_PART, []) + recent_lines()
         if not lines_by_part:
             _status.update(reviewed_at=time.time(), error="no part has a log location", problems=0, parts=0)
             return
