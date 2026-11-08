@@ -255,3 +255,34 @@ def test_an_external_record_keeps_the_alerts_seen_before_the_model_was_asked():
          patch("src.rules.engine.get_alerts", side_effect=lambda: list(live)):
         ov.run_outside(parts=False, topology=topology)
     assert ov.get_outside("ext")["alerts"] == []
+
+
+def test_a_change_during_a_running_external_assessment_is_not_lost():
+    _reset_ext()
+    a = {"nodes": [{"id": "e", "project": "ext", "status": "healthy"}]}
+    b = {"nodes": [{"id": "e", "project": "ext", "status": "error"}]}
+    manifests = [{"product": "ext", "kind": "outside_view"}]
+    started, release = threading.Event(), threading.Event()
+    calls = []
+
+    def slow(*_):
+        calls.append(1)
+        if len(calls) == 2:          # the run that was already going when the change came
+            started.set()
+            release.wait(5)
+        return GOOD
+    with patch("src.api.routes.manifests._load_manifests", return_value=manifests), \
+         patch("src.collectors.statuspage.published", return_value=[_provider()]), \
+         patch.object(ov, "refresh_durable_spend"), patch.object(ov, "_generate", side_effect=slow):
+        ov.run_outside(parts=False, topology=a)
+        running = threading.Thread(target=ov.run_outside, kwargs={"parts": False, "topology": a})
+        running.start()
+        assert started.wait(5)
+        ov._change_scan_once(lambda: b)
+        release.set()
+        running.join(5)
+        assert len(calls) == 2
+        ov._change_scan_once(lambda: b)
+        assert len(calls) == 3
+        ov._change_scan_once(lambda: b)
+        assert len(calls) == 3

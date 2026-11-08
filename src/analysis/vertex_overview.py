@@ -920,6 +920,8 @@ def run_outside(parts: bool = True, topology: dict = None, only: set = None) -> 
         with _lock:     # one run per system: old work can never overwrite a newer record
             claimed = product not in _outside_running
             _outside_running.add(product)
+            if not claimed and only is not None:
+                _triggered_sig.pop(product, None)   # skipped, so this change is still due
         try:
             if claimed:
                 # what the record says is fixed before the model is asked
