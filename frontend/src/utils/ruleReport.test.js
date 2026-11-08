@@ -32,4 +32,19 @@ assert.match(numeric.impact, /does not show that the service is unavailable/)
 assert.equal(numeric.signal, 'cpu: 95 (threshold 90).')
 
 assert.deepEqual(ruleReport({ part_label: 'x', metric_name: 'status' }).causes, [])
+const capped = ruleReport(alarm('glasshood_self', 'error', 'AI log review failed: daily cap of 5000 model calls reached'))
+assert.match(capped.action, /raise the limit/)
+assert.match(capped.impact, /Checks and alarms keep running/)
+assert.doesNotMatch(capped.action, /no more specific/)
+
+assert.match(ruleReport(alarm('glasshood_self', 'error', 'Alarms are not saved: x')).action, /storage share/)
+assert.match(ruleReport(alarm('glasshood_self', 'error', "ColdVault's figures were not read: y")).action, /identity/)
+assert.match(ruleReport(alarm('glasshood_self', 'degraded', 'Reading the public status pages is late: z')).action, /restart the app/)
+assert.match(ruleReport(alarm('glasshood_self', 'error', 'The AI log review has stopped: last ran')).action, /AI provider/)
+
+for (const t of ['gcp_compute', 'gcp_asset', 'gcp_backend_health', 'gcp_sql_backup', 'gcp_secret_count', 'coldvault_models', 'azure_resource', 'http']) {
+  assert.doesNotMatch(ruleReport(alarm(t, 'error', 'r')).action, /what the check found above/, t)
+}
+assert.match(ruleReport({ part_label: 'x', metric_name: 'status' }).action, /what the check found above/)
+
 console.log('ruleReport tests passed')
