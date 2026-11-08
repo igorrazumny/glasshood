@@ -409,6 +409,7 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Testable:** Yes (API + UI)
 - **Who builds:** Neo.
 - **Status:** confirmed by Igor 2026-11-06 (full text). Implemented and live 2026-11-06: PR #60 (merged 7e8f463 before review on Igor's instruction) plus review fix PR #61 (C3 failed query is not a recovery; neo-shadow1 PROCEED for c7bf62f). Map file v9 (sha d296107a…) live on the config share. Signed-in acceptance still open.
+- **Amended 2026-11-08 (Igor: "newer alerts should be on top"):** within the same severity, and after real alarms before examples and observations (REQ-GHA-028), the newest alarm is listed first.
 
 ## REQ-GHA-028: Each system's alarms are defined in GlassHood, in its landscape file; start with alarms we are sure of
 
