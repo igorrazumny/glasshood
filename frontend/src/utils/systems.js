@@ -16,6 +16,9 @@ export const GROUPS = [
 // REQ-GHA-037: left edges in the projects tree, so All systems -> group -> system step equally
 export const TREE_LEFT = { groupChevron: 22, system: 60 }
 
+// REQ-GHA-037: the designers' own logos, for our own systems only
+const LOGOS = { glasshood: '/glasshood-logo-full.png', coldvault: '/logos/coldvault.png', testrobin: '/logos/testrobin.png' }
+
 export const isGroupId = id => GROUPS.some(g => g.id === id)
 
 // The cards of one group (or all cards when no group is given)
@@ -98,6 +101,7 @@ export function systemCards(manifests, nodes, alerts) {
       source: outside && m.source ? `Source: ${String(m.source).replace(/^https?:\/\//, '').replace(/\/$/, '')}` : '',
       notes,
       outside,
+      logo: outside ? null : LOGOS[m.product] || null,
       state: worstStatus(statuses.filter(s => s && !NOT_READ.has(s) && s !== 'idle')) || 'not checked',
       line: plainLine(statuses, outside),
       parts: mine.length,
