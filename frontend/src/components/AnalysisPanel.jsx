@@ -87,6 +87,7 @@ function SystemsList({ onOpenAlert, cards, descriptions, loadError, systemsError
             <details><summary className="text-xs font-semibold text-gray-500 dark:text-purple-300 cursor-pointer">Last evaluation, {a.last.when?.replace(/^evaluated /, '')}</summary>
               <p className="text-sm text-gray-600 dark:text-purple-200 leading-relaxed mt-1">{a.last.text}</p></details>
           )}
+          {a.offline && !a.last && <div className="text-sm text-gray-500 dark:text-purple-300">Not evaluated yet.</div>}
           {a.problem && <div className="text-xs text-red-700 dark:text-red-400">{a.problem}</div>}
           {a.job && <div className="text-xs text-gray-500 dark:text-purple-300">{a.job}</div>}
           <p className="text-sm text-gray-600 dark:text-purple-200 leading-relaxed flex items-start gap-2">

@@ -174,3 +174,18 @@ def test_the_offline_alert_is_opened_by_identity():
     b.charge("openai", 20); b.charge("anthropic", 20); b.monitor()
     off = ov.ai_offline()
     assert (off["group"], off["node_id"]) == ("budget:all", b.ALARM_PART)
+
+
+def test_a_finished_analysis_is_saved_before_the_batch_ends(monkeypatch):
+    monkeypatch.setattr(ov, "CHECKPOINT_S", 0)
+    with patch.object(ov, "_generate", return_value={"score": 8, "summary": "done", "issues": [], "recommendations": []}):
+        ov._run_part({"id": "p"}, "", [])
+    assert json.load(open(ov._records_file()))["parts"]["p"]["summary"] == "done"
+
+
+def test_checkpoints_are_spaced_out(monkeypatch):
+    monkeypatch.setattr(ov, "CHECKPOINT_S", 3600)
+    ov._last_checkpoint[0] = 0.0
+    with patch.object(ov, "_save_records") as save, patch.object(ov.time, "monotonic", side_effect=[7200.0, 7201.0]):
+        ov._checkpoint(); ov._checkpoint()
+    assert save.call_count == 1

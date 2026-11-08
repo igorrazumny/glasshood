@@ -28,7 +28,7 @@ export default function SystemsHome({ cards, line, onOpen, onOpenAlert, descript
         <section key={group.id} className="mb-6">
           <div className="flex items-baseline gap-3 mb-2">
             <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-600 dark:text-purple-200">{group.label}</h3>
-            {!off && <span className="text-xs text-gray-500 dark:text-purple-300">{portfolioLine(groupCards)}</span>}
+            {off ? <AiOfflineLine offline={off.offline} onOpenAlert={onOpenAlert} /> : <span className="text-xs text-gray-500 dark:text-purple-300">{portfolioLine(groupCards)}</span>}
           </div>
           {/* only the cards a group really has take space: they grow into spare width up to a
               comfortable maximum, then narrow, then stack */}

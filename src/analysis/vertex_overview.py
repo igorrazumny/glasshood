@@ -772,6 +772,20 @@ def _save_records() -> None:
             logger.warning(_records_problem[0])
 
 
+CHECKPOINT_S = 5
+_last_checkpoint = [0.0]
+
+
+def _checkpoint() -> None:
+    """A long batch saves as it goes: a finished analysis waits at most a few seconds for the disk."""
+    now = time.monotonic()
+    with _lock:
+        if now - _last_checkpoint[0] < CHECKPOINT_S:
+            return
+        _last_checkpoint[0] = now
+    _save_records()
+
+
 def _load_records() -> float:
     """Bring back what was evaluated before a restart. Returns the time the schedule counts from: the
     last finished round, or the newest evaluation if no round finished yet (0 if nothing was evaluated)."""
@@ -990,6 +1004,7 @@ def _run_part(rec: dict, log_filter: str, edges: list) -> None:
         result = _generate(PART_PROMPT, json.dumps(payload, default=str))
         with _lock:
             _parts[pid] = _now_entry(result)
+        _checkpoint()
     except Exception as e:
         why = _failure(e)
         logger.warning(f"part overview failed for {pid}: {why}")
@@ -1072,6 +1087,7 @@ def _run_outside_part(box: str, rec: dict, sig) -> None:
         with _lock:
             _parts[box] = _now_entry(result)
             _outside_sig[box] = sig
+        _checkpoint()
     except Exception as e:
         why = _failure(e)
         logger.warning(f"outside part analysis failed for {box}: {why}")
