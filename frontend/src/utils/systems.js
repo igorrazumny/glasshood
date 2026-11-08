@@ -4,6 +4,7 @@
 
 import { worstStatus } from './canvasParts.js'
 import { alarmLevel } from './alarms.js'
+import { clock, dateTime } from './time.js'
 
 const NOT_READ = new Set(['not checked', 'not monitored', 'unknown', 'stale'])
 
@@ -122,9 +123,8 @@ export function assessmentLine(about, nowMs, maxAgeS = 3 * 3600) {
   const at = about.analyzed_at ? about.analyzed_at * 1000 : null
   const ageS = at ? (nowMs - at) / 1000 : null
   const sameDay = at && new Date(at).toDateString() === new Date(nowMs).toDateString()
-  const fmtTime = ms => new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(ms)
-  const fmtDate = ms => new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(ms)
-  const when = at ? (sameDay ? `written ${fmtTime(at)}` : `written ${fmtDate(at)}`) : null
+  // REQ-GHA-030: every time carries its zone
+  const when = at ? (sameDay ? `written ${clock(at)}` : `written ${dateTime(at)}`) : null
   const hours = ageS ? Math.round(ageS / 3600) : 0
   const old = at && (about.stale || ageS > maxAgeS)
     ? `This assessment is ${hours >= 1 ? `${hours} h` : `${Math.round(ageS / 60)} min`} old; the system may have changed since.` : null
