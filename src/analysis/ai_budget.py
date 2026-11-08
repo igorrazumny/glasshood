@@ -81,29 +81,48 @@ def _write(data: dict) -> None:
     os.replace(tmp, path)
 
 
-_unsaved: dict = {}              # provider -> why its total could not be saved
-_pending: dict = {}              # provider -> charges not yet on disk; never dropped
+class Blocked(RuntimeError):
+    """A paid call may not go out; the message says why in words."""
 
 
-def _flush(provider: str, answered: bool = False) -> None:
-    """Call with _lock held: put what is owed on disk; a failure keeps it owed and blocks."""
-    try:
-        data = _read()
-        data[provider]["cost"] = round(data[provider]["cost"] + _pending.get(provider, 0.0), 6)
-        if answered:
-            data[provider]["refused"] = None
-        _write(data)
-        _pending.pop(provider, None)
-        _unsaved.pop(provider, None)
-    except Exception as e:
-        _unsaved[provider] = f"its monthly total could not be saved ({type(e).__name__})"
-
-
-def charge(provider: str, usd: float, answered: bool = True) -> None:
-    """Add one call's cost. A call that answered also ends any refusal by that provider."""
+def reserve(provider: str, usd: float) -> tuple:
+    """Put a call's most possible cost on disk before it goes out. If that cannot be done, the
+    call is not made. What is reserved survives a crash; settle() corrects it to the real cost."""
     with _lock:
-        _pending[provider] = _pending.get(provider, 0.0) + usd
-        _flush(provider, answered)
+        try:
+            data = _read()
+            data[provider]["cost"] = round(data[provider]["cost"] + usd, 6)
+            _write(data)
+            return provider, usd, data["month"]
+        except Exception as e:
+            raise Blocked(f"its monthly total could not be saved ({type(e).__name__})") from None
+
+
+def settle(reservation: tuple, actual: float, answered: bool = True) -> None:
+    """Replace a reservation by the real cost in the month it was made. If this cannot be
+    written, the higher reserved amount simply stays."""
+    provider, usd, month = reservation
+    with _lock:
+        try:
+            data = _read()
+            if data["month"] != month:
+                return
+            data[provider]["cost"] = round(max(0.0, data[provider]["cost"] - usd + actual), 6)
+            if answered:
+                data[provider]["refused"] = None
+            _write(data)
+        except Exception as e:
+            logger.warning(f"an AI cost could not be corrected; the reserved amount stands ({type(e).__name__})")
+
+
+def release(reservation: tuple) -> None:
+    """The provider did not take the request, so it costs nothing."""
+    settle(reservation, 0.0, answered=False)
+
+
+def charge(provider: str, usd: float) -> None:
+    """Add a known cost directly."""
+    settle(reserve(provider, usd), usd)
 
 
 def refused(provider: str, reason: str) -> None:
@@ -121,14 +140,15 @@ def refused(provider: str, reason: str) -> None:
 def gate(provider: str):
     """Why no paid call may go to this provider, or None."""
     with _lock:
-        if _pending.get(provider):
-            _flush(provider)
-        if provider in _unsaved:
-            return _unsaved[provider]
         try:
-            spent = _read()[provider]["cost"]
+            data = _read()
         except Exception as e:
             return str(e) if isinstance(e, OSError) else f"its monthly total could not be read ({type(e).__name__})"
+        try:
+            _write(data)     # it must also be possible to save the next call's cost
+        except Exception as e:
+            return f"its monthly total could not be saved ({type(e).__name__})"
+        spent = data[provider]["cost"]
     if spent >= limit(provider):
         return f"its monthly limit of ${limit(provider):.2f} is reached (${spent:.2f} spent this month)"
     return None
@@ -147,7 +167,7 @@ def status() -> dict:
         why = gate(p) or entry.get("refused")
         if p == BACKUP and not os.getenv("ANTHROPIC_API_KEY") and not why:
             why = "no key is configured"
-        out[p] = {"spent": round(entry.get("cost", 0.0) + _pending.get(p, 0.0), 4), "limit": limit(p), "blocked": why}
+        out[p] = {"spent": round(entry.get("cost", 0.0), 4), "limit": limit(p), "blocked": why}
     return out
 
 
@@ -175,6 +195,9 @@ def monitor() -> None:
         note("GlassHood is using its backup AI provider, Anthropic, because OpenAI is blocked.")
     for p in _was_blocked - blocked:
         note(f"AI provider {NAMES[p]} is no longer blocked.")
+    if _was_blocked - blocked:
+        with _lock:
+            _logged.clear()     # a block that returns is a new episode and is said again
     _was_blocked.clear()
     _was_blocked.update(blocked)
 

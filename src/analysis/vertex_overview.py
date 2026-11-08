@@ -32,6 +32,7 @@ OPENAI_PRICES = {  # USD per million tokens (input, output, cached input), list 
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-haiku-5-5")        # answers when OpenAI fails
 CLAUDE_PRICES = {"claude-haiku-5-5": (0.10, 0.50, 0.10), "claude-sonnet-5-5": (2.00, 10.00, 0.20),
                  "claude-opus-5-5": (4.00, 20.00, 0.20)}            # USD per million tokens, list prices 2026-11
+SEARCH_CALLS_ALLOWANCE, SEARCH_INPUT_ALLOWANCE = 20, 200_000  # most a web-searching call is held at
 OPENAI_SEARCH_PRICE = float(os.getenv("OPENAI_SEARCH_PRICE", "0.01"))  # USD per web search call
 MODEL = OPENAI_MODEL if PROVIDER == "openai" else os.getenv("OVERVIEW_MODEL", "gemini-3.1-flash-lite")
 LOCATION = os.getenv("OVERVIEW_LOCATION", "global")
@@ -325,13 +326,16 @@ def _price(model: str) -> tuple:
     return prices[model]
 
 
-def _charge_unanswered(provider: str, model: str, text: str, max_out: int) -> None:
-    """The request went out and no answer came back, so it may be billed: count its most."""
+def _reserve(provider: str, model: str, text: str, max_out: int, search: bool = False) -> tuple:
+    """REQ-GHA-041: the most this call can cost, saved before it goes out: at most one token per
+    byte of input plus framing, the whole output allowance, and an allowance for web searches."""
     pin, pout, _ = _price(model)
-    ai_budget.charge(provider, len(text) / 3 / 1e6 * pin + max_out / 1e6 * pout, answered=False)
+    tokens_in = len(text.encode("utf-8")) + 1000 + (SEARCH_INPUT_ALLOWANCE if search else 0)
+    return ai_budget.reserve(provider, tokens_in / 1e6 * pin + max_out / 1e6 * pout
+                             + (SEARCH_CALLS_ALLOWANCE * OPENAI_SEARCH_PRICE if search else 0))
 
 
-def _record_openai(model: str, usage: dict, searches: int = 0, provider: str = ai_budget.MAIN) -> None:
+def _record_openai(model: str, usage: dict, searches: int = 0, reservation: tuple = None) -> None:
     """Tokens and cost of one answer: cached input at its own price, plus web search calls."""
     tin, tout = int(usage.get("input_tokens") or 0), int(usage.get("output_tokens") or 0)
     cached = min(tin, int((usage.get("input_tokens_details") or {}).get("cached_tokens") or 0))
@@ -341,7 +345,10 @@ def _record_openai(model: str, usage: dict, searches: int = 0, provider: str = a
         _spend["local_in"] += tin
         _spend["local_out"] += tout
         _spend["local_cost"] = _spend.get("local_cost", 0.0) + cost
-    ai_budget.charge(provider, cost)
+    if reservation:
+        ai_budget.settle(reservation, cost)
+    else:
+        ai_budget.charge(ai_budget.MAIN, cost)
     try:
         _save_spend_file()
     except SpendNotSaved:
@@ -409,14 +416,16 @@ def _call_openai(system_prompt: str, user_text: str, max_tokens: int, search: bo
         body["tools"] = [{"type": "web_search"}]
     else:
         body["text"] = {"format": {"type": "json_object"}}
-    _price(model)
+    held = _reserve(ai_budget.MAIN, model, system_prompt + user_text, body["max_output_tokens"], search)
     try:
         r = httpx.post("https://api.openai.com/v1/responses", json=body,
                        headers={"Authorization": f"Bearer {key}"}, timeout=180 if search else 90)
-    except httpx.HTTPError:
-        _charge_unanswered(ai_budget.MAIN, model, system_prompt + user_text, body["max_output_tokens"])
+    except (httpx.ConnectError, httpx.ConnectTimeout):
+        ai_budget.release(held)     # never reached the provider
         raise
+    # any other failure on the way may have been billed: the reservation stands
     if r.status_code != 200:
+        ai_budget.release(held)     # an error reply is not billed
         try:
             err = r.json().get("error") or {}
         except Exception:
@@ -427,7 +436,7 @@ def _call_openai(system_prompt: str, user_text: str, max_tokens: int, search: bo
         raise RuntimeError(f"OpenAI HTTP {r.status_code}")
     data = r.json()
     searches = sum(1 for item in data.get("output") or [] if item.get("type") == "web_search_call")
-    _record_openai(model, data.get("usage") or {}, searches)
+    _record_openai(model, data.get("usage") or {}, searches, held)
     text, sources = "", []
     for item in data.get("output") or []:
         if item.get("type") == "web_search_call":
@@ -449,7 +458,7 @@ def _call_claude(system_prompt: str, user_text: str, max_tokens: int) -> str:
     """One Claude call, used only after OpenAI failed. The SDK's own retries are off: every
     attempt must be a call counted against today's cap."""
     import anthropic
-    _price(CLAUDE_MODEL)
+    held = _reserve(ai_budget.BACKUP, CLAUDE_MODEL, system_prompt + user_text, max(2000, max_tokens * 3))
     client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""), timeout=90, max_retries=0)
     try:
         response = client.messages.create(
@@ -457,15 +466,15 @@ def _call_claude(system_prompt: str, user_text: str, max_tokens: int) -> str:
             output_config={"effort": "low"},
             messages=[{"role": "user", "content": "Data (answer in JSON as instructed):\n" + user_text}])
     except anthropic.APIStatusError as e:
+        ai_budget.release(held)
         why = _refusal(e.status_code, "", str(e.message))
         if why:
             ai_budget.refused(ai_budget.BACKUP, why)
         raise RuntimeError(f"Claude HTTP {e.status_code}") from None
     except anthropic.APIConnectionError as e:
-        _charge_unanswered(ai_budget.BACKUP, CLAUDE_MODEL, system_prompt + user_text, max(2000, max_tokens * 3))
         raise RuntimeError(f"Claude could not be reached ({type(e).__name__})") from None
     usage = {"input_tokens": response.usage.input_tokens, "output_tokens": response.usage.output_tokens}
-    _record_openai(CLAUDE_MODEL, usage, provider=ai_budget.BACKUP)
+    _record_openai(CLAUDE_MODEL, usage, reservation=held)
     if response.stop_reason == "refusal":
         raise RuntimeError("Claude declined to answer")
     return "".join(b.text for b in response.content if b.type == "text")
@@ -494,6 +503,8 @@ def call_model(system_prompt: str, user_text: str, max_tokens: int = 600,
             _count_call()
             try:
                 return _call_openai(system_prompt, user_text, max_tokens, search, deep)
+            except ai_budget.Blocked as e:
+                blocked = str(e)
             except ProviderRefused as e:
                 blocked = e.reason
                 ai_budget.refused(ai_budget.MAIN, e.reason)
@@ -513,7 +524,10 @@ def call_model(system_prompt: str, user_text: str, max_tokens: int = 600,
         if blocked:
             ai_budget.note("GlassHood is using its backup AI provider, Anthropic, because OpenAI is blocked.")
         _count_call()
-        return _call_claude(system_prompt, user_text, max_tokens), []
+        try:
+            return _call_claude(system_prompt, user_text, max_tokens), []
+        except ai_budget.Blocked as e:
+            raise CapReached(f"Anthropic is blocked: {e}")
     refused = _reserve_call()
     if refused:
         raise CapReached(refused)

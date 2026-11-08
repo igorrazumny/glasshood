@@ -31,7 +31,7 @@ def world(tmp_path, monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "k")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
     monkeypatch.setenv("AI_STATE_DIR", str(tmp_path))
-    b._unsaved.clear(); b._pending.clear(); b._was_blocked.clear(); b._logged.clear(); b._lines.clear()
+    b._was_blocked.clear(); b._logged.clear(); b._lines.clear()
     with ov._lock:
         ov._spend.clear(); ov._spend.update(ov._new_day())
     ov.refresh_durable_spend()
@@ -144,13 +144,48 @@ def test_a_block_is_logged_in_words_once_an_hour_and_reaches_the_log_review(worl
     assert seen["logs"][b.ALARM_PART] == lines
 
 
-def test_a_charge_that_could_not_be_saved_is_kept_and_blocks(world):
-    b.charge("openai", 1)
-    with patch.object(b, "_write", side_effect=OSError):
-        b.charge("openai", 2)
+def test_no_call_goes_out_unless_its_cost_was_saved_first(world):
+    with patch.object(b, "_write", side_effect=OSError), patch("httpx.post") as post:
         assert "could not be saved" in b.gate("openai")
-    assert b.gate("openai") is None                       # storage is back
-    assert b.status()["openai"]["spent"] == 3
+        with pytest.raises(ov.CapReached):
+            ov.call_model("s", "{}")
+    post.assert_not_called()
+    assert b.gate("openai") is None                       # storage is back, no latch
+
+
+def test_a_crash_after_sending_leaves_the_call_counted(world):
+    def crash(*a, **k):
+        assert b.status()["openai"]["spent"] > 0          # on disk before the request went out
+        raise KeyboardInterrupt
+    with patch("httpx.post", side_effect=crash), pytest.raises(KeyboardInterrupt):
+        ov.call_model("s", "{}")
+    assert json.loads((world.path / "ai_budget.json").read_text())["openai"]["cost"] > 0
+
+
+def test_the_reservation_becomes_the_real_cost(world):
+    with patch("httpx.post", return_value=ok()):
+        ov.call_model("s", "{}")
+    assert b.status()["openai"]["spent"] == pytest.approx(1000 / 1e6 * 0.20 + 100 / 1e6 * 1.25, abs=1e-4)
+
+
+def test_a_failed_correction_leaves_the_higher_reserved_amount(world):
+    held = b.reserve("openai", 2)
+    with patch.object(b, "_write", side_effect=OSError):
+        b.settle(held, 1)
+    assert b.status()["openai"]["spent"] == 2
+
+
+def test_a_correction_stays_in_the_month_of_its_call(world):
+    held = b.reserve("openai", 2)
+    with patch.object(b, "_month", return_value="2099-01"):
+        b.settle(held, 1)
+    assert b.status()["openai"]["spent"] == 2
+
+
+def test_an_answer_ends_a_refusal_and_the_status_is_one_view(world):
+    b.refused("openai", "the provider rejected the API key")
+    b.settle(b.reserve("openai", 1), 1)
+    assert b.status()["openai"]["blocked"] is None and b.status()["openai"]["spent"] == 1
 
 
 def test_a_stored_total_that_is_not_an_amount_blocks(world):
@@ -172,11 +207,24 @@ def test_a_broken_daily_figure_does_not_stop_the_ai(world):
     assert b.status()["openai"]["spent"] > 0
 
 
-def test_an_unanswered_call_is_counted_at_its_most(world):
+def test_a_call_with_no_reply_stays_at_its_most_and_covers_search(world):
     import httpx
-    with patch("httpx.post", side_effect=httpx.ReadTimeout("t")):
-        ov.call_model("s", "{}")
-    assert b.status()["openai"]["spent"] > 0
+    with patch("httpx.post", side_effect=httpx.ReadTimeout("t")), pytest.raises(httpx.ReadTimeout):
+        ov.call_model("s", "x" * 4000, search=True, deep=True)
+    assert b.status()["openai"]["spent"] > 20 * ov.OPENAI_SEARCH_PRICE
+
+
+def test_a_call_that_never_connected_costs_nothing(world):
+    import httpx
+    with patch("httpx.post", side_effect=httpx.ConnectError("c")), pytest.raises(httpx.ConnectError):
+        ov.call_model("s", "{}", search=True)
+    assert b.status()["openai"]["spent"] == 0
+
+
+def test_an_error_reply_costs_nothing(world):
+    with patch("httpx.post", return_value=fail(503)), pytest.raises(RuntimeError):
+        ov.call_model("s", "{}", search=True)
+    assert b.status()["openai"]["spent"] == 0
 
 
 def test_the_answering_provider_is_charged_whatever_the_model(world, monkeypatch):
@@ -215,6 +263,13 @@ def test_a_key_problem_does_not_promise_next_month(world):
     b.refused("anthropic", "the provider rejected the API key")
     [alarm] = b.alarms()
     assert "administrator resolves" in alarm["explanation"]["what"]
+
+
+def test_a_block_that_returns_is_said_again(world):
+    b.refused("openai", "out of quota"); ov._sync_budget_alarms()
+    b.settle(b.reserve("openai", 0), 0); ov._sync_budget_alarms()
+    b.refused("openai", "out of quota"); ov._sync_budget_alarms()
+    assert "blocked: out of quota" in " ".join(b.recent_lines()[-2:])
 
 
 @pytest.mark.parametrize("code", ["credit_balance_exhausted", "organization_spend_limit_exceeded",
