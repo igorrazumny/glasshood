@@ -120,24 +120,21 @@ def test_the_scan_assesses_a_new_system_and_reads_nothing_when_none_is_due():
 
 
 def test_the_scan_does_not_wait_for_a_long_round():
-    started, finish = threading.Event(), threading.Event()
-    scans = []
+    class EndOfTest(BaseException):
+        pass
+    order = []
+
+    def thread(target=None, **_):
+        order.append(target)
+        return type("T", (), {"start": lambda self: None})()
 
     def long_round(_):
-        started.set()
-        finish.wait(5)
-
-    def scan(_):
-        scans.append(1)
-        finish.set()
-    with patch.object(ov, "run_all", side_effect=long_round), patch.object(ov, "_pending_scan_once", side_effect=scan), \
-         patch.object(ov, "PENDING_SCAN_S", 0.01), patch("src.analysis.ai_review.run"), patch.object(ov, "INTERVAL_S", 3600):
-        threading.Thread(target=ov.overview_loop, args=(lambda: TOPOLOGY,), daemon=True).start()
-        assert started.wait(5)
-        deadline = time.monotonic() + 5
-        while not scans and time.monotonic() < deadline:
-            time.sleep(0.01)
-    assert scans
+        order.append("round")
+        raise EndOfTest
+    with patch.object(ov.threading, "Thread", side_effect=thread), patch.object(ov, "run_all", side_effect=long_round), \
+         pytest.raises(EndOfTest):
+        ov.overview_loop(lambda: TOPOLOGY)
+    assert order == [ov._pending_loop, "round"]
 
 
 def test_a_failure_on_the_first_try_records_one_attempt():
