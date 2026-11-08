@@ -17,7 +17,7 @@ def _rec(cond="normal", at=1.0, alerts=()):
 @pytest.fixture(autouse=True)
 def clean(tmp_path, monkeypatch):
     monkeypatch.setenv("AI_STATE_DIR", str(tmp_path))
-    sr._reviews.clear(); sr._seen.clear(); sr._failed_at.clear(); sr._loaded[0] = False
+    sr._reviews.clear(); sr._seen.clear(); sr._failed_at.clear(); sr._loaded[0] = False; sr._unsaved[0] = False; sr.problem[0] = None
     monkeypatch.setattr(ov, "ai_offline", lambda: None)
     monkeypatch.setattr(ov, "_outside_products", lambda: {"gh"})
 
@@ -83,6 +83,45 @@ def test_boundary_is_per_account_and_refused_for_the_demo_role():
     other = _user("operator", "b@x")
     with patch("src.api.routes.preferences.verify_token", side_effect=other):
         assert c.get("/api/preferences/right-panel").json()["split"] is None
-    demo = _user("viewer", "demo")
+    reader = _user("viewer", "reader@x")
+    with patch("src.api.routes.auth.verify_token", side_effect=reader), patch("src.api.routes.preferences.verify_token", side_effect=reader):
+        assert c.put("/api/preferences/right-panel", json={"split": 0.4}).status_code == 200
+    demo = _user("viewer", "demo@glasshood.example.com")
     with patch("src.api.routes.auth.verify_token", side_effect=demo), patch("src.api.routes.preferences.verify_token", side_effect=demo):
         assert c.put("/api/preferences/right-panel", json={"split": 0.3}).status_code == 403
+
+
+def test_a_review_of_older_records_says_so():
+    cards = {"a": _rec()}
+    _run(cards, "Fine.", 0); _run(cards, "Fine.", 100)
+    newer = {"a": _rec("failing", at=2.0)}
+    with patch.object(ov, "system_cards", return_value=newer):
+        got = sr.get_reviews()["all"]
+    assert got["summary"] == "Fine." and got["current"] is False and got["update_failed"] is False
+    _run(newer, "- x", 200); _run(newer, "- x", 300)
+    with patch.object(ov, "system_cards", return_value=newer):
+        assert sr.get_reviews()["all"]["update_failed"] is True
+
+
+def test_a_list_in_json_is_refused():
+    cards = {"a": _rec()}
+    with patch.object(ov, "system_cards", return_value=cards), \
+         patch.object(ov, "call_model", return_value=('{"summary": ["one", "two"]}', {})):
+        sr.refresh_due(0); sr.refresh_due(100)
+    assert "all" not in {k for k, v in _reviews_with_text().items()}
+
+
+def _reviews_with_text():
+    return {k: v for k, v in sr._reviews.items() if v.get("summary")}
+
+
+def test_failed_save_is_reported_and_retried_without_a_new_call():
+    cards = {"a": _rec()}
+    with patch("src.analysis.selection_review.os.replace", side_effect=OSError):
+        _run(cards, "Fine.", 0); _run(cards, "Fine.", 100)
+    assert sr.problem[0]
+    assert _run(cards, "Other.", 200).call_count == 0
+    assert sr.problem[0] is None
+    sr._reviews.clear(); sr._loaded[0] = False
+    with patch.object(ov, "system_cards", return_value=cards):
+        assert sr.get_reviews()["all"]["summary"] == "Fine."

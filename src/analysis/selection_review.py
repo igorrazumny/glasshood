@@ -34,6 +34,8 @@ _reviews: dict = {}     # scope -> {summary, analyzed_at, sig}
 _seen: dict = {}        # scope -> (sig, since when)
 _failed_at: dict = {}   # scope -> (sig, when)
 _loaded = [False]
+_unsaved = [False]      # a written review has not reached storage yet: retried without a new AI call
+problem = [None]        # why the reviews could not be read or saved, in words (raises the saving alarm)
 
 
 def _file():
@@ -52,12 +54,14 @@ def _load() -> None:
                 with open(path) as f:
                     _reviews.update(json.load(f))
         except Exception as e:
-            logger.warning(f"saved selection reviews could not be read ({type(e).__name__})")
+            problem[0] = f"the saved AI reviews could not be read ({type(e).__name__})"
+            logger.warning(problem[0])
 
 
 def _save() -> None:
     path = _file()
     if not path:
+        problem[0] = "no folder is set up to keep the AI reviews (AI_STATE_DIR)"
         return
     with _lock:
         text = json.dumps(_reviews)
@@ -66,8 +70,11 @@ def _save() -> None:
         with os.fdopen(fd, "w") as f:
             f.write(text)
         os.replace(tmp, path)
+        _unsaved[0] = False
+        problem[0] = None
     except Exception as e:
-        logger.warning(f"selection reviews could not be saved ({type(e).__name__})")
+        problem[0] = f"the AI reviews could not be saved ({type(e).__name__})"
+        logger.warning(problem[0])
 
 
 def _in_scope(scope: str, product: str, outside: set) -> bool:
@@ -92,24 +99,31 @@ def _write(records: dict) -> str:
     payload = ov.sanitize([{"system": p, "condition": r.get("condition"), "assessment": r.get("summary"),
                             "alerts": _real_alerts(r)} for p, r in sorted(records.items())])
     text, _ = ov.call_model(PROMPT, json.dumps(payload, default=str))
-    summary = str((ov.parse_json(text) or {}).get("summary") or "").strip()
-    if not summary or _LIST_LINE.search(summary):
-        raise ValueError("the model's answer was empty or a list")
-    return summary
+    summary = (ov.parse_json(text) or {}).get("summary")
+    if not isinstance(summary, str) or not summary.strip() or _LIST_LINE.search(summary):
+        raise ValueError("the model's answer was not prose")
+    return summary.strip()
+
+
+def _by_scope() -> dict:
+    """scope -> the saved records of that selection that have an evaluation."""
+    from src.analysis import vertex_overview as ov
+    outside = ov._outside_products()
+    cards = {p: r for p, r in ov.system_cards().items() if r.get("summary") and r.get("condition")}
+    return {s: {p: r for p, r in cards.items() if _in_scope(s, p, outside)} for s in SCOPES}
 
 
 def refresh_due(now: float = None) -> None:
     """Clause 11: a selection is rewritten only after one of its records changed and things settled."""
     from src.analysis import vertex_overview as ov
     _load()
+    if _unsaved[0]:
+        _save()
     if ov.ai_offline():
         return
     now = time.time() if now is None else now
-    outside = ov._outside_products()
-    cards = {p: r for p, r in ov.system_cards().items() if r.get("summary") and r.get("condition")}
     changed = False
-    for scope in SCOPES:
-        records = {p: r for p, r in cards.items() if _in_scope(scope, p, outside)}
+    for scope, records in _by_scope().items():
         if not records:
             continue
         sig = _signature(records)
@@ -132,10 +146,20 @@ def refresh_due(now: float = None) -> None:
             _reviews[scope] = {"summary": summary, "analyzed_at": now, "sig": sig}
         changed = True
     if changed:
+        _unsaved[0] = True
         _save()
 
 
 def get_reviews() -> dict:
+    """Clause 7: a review written from older records says so; its text and time are kept."""
     _load()
-    with _lock:
-        return {k: {"summary": v.get("summary"), "analyzed_at": v.get("analyzed_at")} for k, v in _reviews.items()}
+    out = {}
+    for scope, records in _by_scope().items():
+        with _lock:
+            v = dict(_reviews.get(scope) or {})
+        if not records and not v:
+            continue
+        sig = _signature(records)
+        out[scope] = {"summary": v.get("summary"), "analyzed_at": v.get("analyzed_at"), "current": v.get("sig") == sig,
+                      "update_failed": (_failed_at.get(scope) or (None,))[0] == sig}
+    return out

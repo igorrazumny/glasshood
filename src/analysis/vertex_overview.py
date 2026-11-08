@@ -1230,10 +1230,12 @@ def _sync_budget_alarms() -> None:
     if PROVIDER == "openai":
         from src.rules.engine import track_ai_budget
         ai_budget.monitor()
+        from src.analysis import selection_review
+        unsaved = _records_problem[0] or selection_review.problem[0]
         saving = [{"group": "budget:saving", "title": "GlassHood could not save its AI evaluations",
-                   "explanation": {"what": f"{_records_problem[0]}. A restart would lose the latest evaluations.", "suspicion": "",
+                   "explanation": {"what": f"{unsaved}. A restart would lose the latest evaluations.", "suspicion": "",
                                    "directions": ["GlassHood administrator: check that the state storage share is mounted and writable."]}}
-                  ] if _records_problem[0] else []
+                  ] if unsaved else []
         track_ai_budget(ai_budget.alarms() + saving, ai_budget.ALARM_PART)
 
 

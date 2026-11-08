@@ -753,7 +753,7 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Why:** Owner, 2026-11-09. On all systems the panel lists only some systems and copies individual findings into the top-level view, including a minor firewall observation. The intent is a brief answer for a person responsible for several systems: are things fine, and what deserves a call-out. The panel's fixed half-height split also does not suit every reader.
 - **Target state:**
   AI review of several systems
-  1. The panel's title reads "AI review - " followed by exactly the name selected on the left: All systems, Proprietary systems, External systems, or the system's name. The heading of the middle area uses the same name for a selection of several systems. "All monitored systems" no longer appears as a name for that selection.
+  1. The panel's title reads "AI review · " followed by exactly the name selected on the left: All systems, Proprietary systems, External systems, or the system's name. The heading of the middle area uses the same name for a selection of several systems. "All monitored systems" no longer appears as a name for that selection.
   2. When all systems or a group are selected, the review is short and crisp prose about the selection as a whole: whether things are generally fine, and what, if anything, deserves a call-out.
   3. It is about the whole situation. It need not name every system, and it names a system only to call something out.
   4. It contains no list, no bullet points, no "Needs attention" section and no enumeration of incidents, locations, components, findings or alert numbers.
