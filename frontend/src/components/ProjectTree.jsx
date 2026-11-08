@@ -6,7 +6,7 @@ import { useState, useRef, useEffect } from 'react'
 import { ChevronRight, ChevronDown, Pin, PinOff, PanelLeftClose, PanelLeft } from 'lucide-react'
 import PanelEdge from './PanelEdge'
 import { PANEL_TOP } from '../utils/panels'
-import { groupedCards } from '../utils/systems'
+import { groupedCards, TREE_LEFT } from '../utils/systems'
 
 const STATUS_DOT = {
   healthy: 'bg-green-400',
@@ -53,7 +53,7 @@ function buildTree(projectNodes) {
     .sort((a, b) => a.displayName.localeCompare(b.displayName))
 }
 
-function TreeItem({ label, status, active, onClick, indent = 0, count, bold }) {
+function TreeItem({ label, status, active, onClick, indent = 0, count, bold, left }) {
   // REQ-009 round-7 sweep: light + dark: pairs. Active state uses
   // accent-500 (ColdVault medium blue brand accent) for the selected-item
   // tint and border. Inactive uses dark slate text on light bg, purple-100
@@ -68,7 +68,7 @@ function TreeItem({ label, status, active, onClick, indent = 0, count, bold }) {
           ? 'bg-accent-500/15 text-accent-600 dark:text-accent-300 border-l-2 border-accent-500'
           : 'text-gray-700 dark:text-purple-200 hover:text-gray-900 dark:hover:text-purple-100 hover:bg-surface/50 dark:hover:bg-purple-700/30 border-l-2 border-transparent'
       } ${bold ? 'font-medium' : ''}`}
-      style={{ paddingLeft: `${12 + indent * 14}px` }}
+      style={{ paddingLeft: `${left ?? 12 + indent * 14}px` }}
     >
       <span className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_DOT[status] || STATUS_DOT.unknown}`} />
       <span className="truncate flex-1">{label}</span>
@@ -200,7 +200,8 @@ export default function ProjectTree({ projects, systems, activeProject, onSelect
               <div key={group.id}>
                 <div className="flex items-center">
                   <button onClick={() => toggleGroup(group.id)} title={folded ? 'Show its systems' : 'Hide its systems'}
-                    className="pl-4 pr-0.5 py-2 text-gray-500 hover:text-gray-800 dark:text-purple-300 dark:hover:text-purple-100">
+                    style={{ paddingLeft: TREE_LEFT.groupChevron }}
+                    className="pr-0.5 py-2 text-gray-500 hover:text-gray-800 dark:text-purple-300 dark:hover:text-purple-100">
                     {folded ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
                   </button>
                   <TreeItem label={group.label} status={worst} active={activeProject === group.id}
@@ -208,7 +209,7 @@ export default function ProjectTree({ projects, systems, activeProject, onSelect
                 </div>
                 {!folded && cards.map(c => (
                   <TreeItem key={c.id} label={c.label} status={c.state} active={activeProject === c.id}
-                    onClick={() => onSelect(c.id)} indent={3} />
+                    onClick={() => onSelect(c.id)} left={TREE_LEFT.system} />
                 ))}
               </div>
             )
