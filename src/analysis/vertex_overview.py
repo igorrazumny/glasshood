@@ -774,16 +774,34 @@ def _save_records() -> None:
 
 CHECKPOINT_S = 5
 _last_checkpoint = [0.0]
+_flush_timer = [None]
+
+
+def _flush_checkpoint() -> None:
+    with _lock:
+        _flush_timer[0] = None
+        _last_checkpoint[0] = time.monotonic()
+    _save_records()
 
 
 def _checkpoint() -> None:
-    """A long batch saves as it goes: a finished analysis waits at most a few seconds for the disk."""
+    """A long batch saves as it goes. A save skipped to space them out is scheduled, so a finished
+    analysis reaches the disk within a few seconds even if nothing else finishes."""
     now = time.monotonic()
+    timer = None
     with _lock:
-        if now - _last_checkpoint[0] < CHECKPOINT_S:
-            return
-        _last_checkpoint[0] = now
-    _save_records()
+        if now - _last_checkpoint[0] >= CHECKPOINT_S:
+            _last_checkpoint[0] = now
+        else:
+            if _flush_timer[0] is None:
+                timer = _flush_timer[0] = threading.Timer(CHECKPOINT_S, _flush_checkpoint)
+                timer.daemon = True
+            else:
+                return
+    if timer:
+        timer.start()
+    else:
+        _save_records()
 
 
 def _load_records() -> float:

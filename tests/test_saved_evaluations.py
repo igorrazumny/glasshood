@@ -183,9 +183,29 @@ def test_a_finished_analysis_is_saved_before_the_batch_ends(monkeypatch):
     assert json.load(open(ov._records_file()))["parts"]["p"]["summary"] == "done"
 
 
-def test_checkpoints_are_spaced_out(monkeypatch):
-    monkeypatch.setattr(ov, "CHECKPOINT_S", 3600)
+def _part(name):
+    with patch.object(ov, "_generate", return_value={"score": 8, "summary": name, "issues": [], "recommendations": []}):
+        ov._run_part({"id": name}, "", [])
+
+
+def test_a_skipped_save_still_reaches_the_disk_with_other_work_in_flight(monkeypatch):
+    monkeypatch.setattr(ov, "CHECKPOINT_S", 0.05)
     ov._last_checkpoint[0] = 0.0
-    with patch.object(ov, "_save_records") as save, patch.object(ov.time, "monotonic", side_effect=[7200.0, 7201.0]):
+    ov._flush_timer[0] = None
+    _part("first")
+    _part("second")                      # inside the interval, and nothing finishes after it
+    assert "second" not in json.load(open(ov._records_file()))["parts"]
+    deadline = time.time() + 3
+    while time.time() < deadline and "second" not in json.load(open(ov._records_file()))["parts"]:
+        time.sleep(0.01)
+    assert set(json.load(open(ov._records_file()))["parts"]) == {"first", "second"}
+
+
+def test_only_one_save_is_scheduled_at_a_time(monkeypatch):
+    monkeypatch.setattr(ov, "CHECKPOINT_S", 3600)
+    ov._last_checkpoint[0] = time.monotonic()
+    ov._flush_timer[0] = None
+    with patch.object(ov.threading, "Timer") as timer:
         ov._checkpoint(); ov._checkpoint()
-    assert save.call_count == 1
+    assert timer.call_count == 1
+    ov._flush_timer[0] = None
