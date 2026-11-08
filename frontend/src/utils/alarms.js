@@ -80,8 +80,7 @@ export const LEVELS = [
 export function alarmLevel(alert) {
   if (alert?.kind === 'example') return 'example'
   if (alert?.kind === 'observation') return 'info'
-  const g = String(alert?.group || '')
-  if (g.startsWith('provider:') && /\(maintenance/i.test(String(alert?.title || '')) && alert?.severity !== 'critical') return 'info'
+  // a provider's maintenance arrives as info only when its own data shows no disruption
   if (alert?.severity === 'critical') return 'critical'
   if (alert?.severity === 'high') return 'high'
   if (alert?.severity === 'warning') return 'medium'
@@ -89,10 +88,13 @@ export function alarmLevel(alert) {
   return 'info'
 }
 
-// {level: [alerts newest first]} for the levels that have alarms
+// {level: [alerts newest first]} for the levels that have alarms; each list is ordered by
+// time alone, so an alarm's original severity or kind does not reorder its list
+const seen = a => String(a.first_seen || a.triggered_at || '')
 export function alarmsByLevel(alerts) {
   const out = {}
-  for (const a of sortAlarms(alerts)) (out[alarmLevel(a)] ||= []).push(a)
+  for (const a of alerts || []) (out[alarmLevel(a)] ||= []).push(a)
+  for (const list of Object.values(out)) list.sort((a, b) => seen(b).localeCompare(seen(a)))
   return out
 }
 

@@ -3,7 +3,7 @@
 // Run: node frontend/src/utils/systems.test.js
 
 import assert from 'node:assert/strict'
-import { headerLine, systemCards, systemOfNodes, portfolioLine, systemId, groupedCards, cardsInGroup, assessmentLine } from './systems.js'
+import { headerLine, systemCards, systemOfNodes, portfolioLine, systemId, groupedCards, cardsInGroup, assessmentLine, listAssessments } from './systems.js'
 
 let failed = 0
 function test(name, fn) {
@@ -121,6 +121,28 @@ test('configuration notes are counted apart from alerts to review', () => {
 test('external trouble alone makes the header amber, not red', () => {
   const cards = systemCards(manifests, nodes.filter(n => n.id !== 'cv-b'), [])
   assert.equal(headerLine(cards, null).state, 'degraded')
+})
+
+test('the home list says each assessment\'s age and a failed update, as the card does', () => {
+  // shadow C1 on #123: a day-old summary with a failed refresh must not read as current
+  const now = Date.parse('2026-11-08T12:00:00Z')
+  const cards = [{ id: 'a', label: 'One', product: 'one' }, { id: 'b', label: 'Two', product: 'two' }, { id: 'c', label: 'Three', product: 'three' }]
+  const [one, two, three] = listAssessments(cards, {
+    one: { summary: 'Old healthy assessment', analyzed_at: (now - 24 * 3600e3) / 1000, stale: true, error: 'daily cap reached' },
+    two: { summary: 'Fine', analyzed_at: (now - 600e3) / 1000 },
+  }, now)
+  assert.equal(one.text, 'Old healthy assessment')
+  assert.match(one.when, /^written /); assert.match(one.old, /24 h old/)
+  assert.equal(one.problem, 'Latest update failed: daily cap reached')
+  assert.equal(two.old, null); assert.equal(two.problem, null); assert.equal(two.waiting, false)
+  assert.equal(three.waiting, true); assert.equal(three.when, null)
+})
+
+test('a group with an unassessed system never claims it operates normally', () => {
+  // shadow P1 on #123
+  const cards = [{ id: 'x', label: 'A', state: 'healthy' }, { id: 'y', label: 'B', state: 'not checked' }]
+  const line = headerLine(cards.map(c => ({ ...c, outside: false, critical: 0 })), null).text
+  assert.equal(line, 'Our systems: 1 operating normally, 1 status unavailable')
 })
 
 if (failed) { console.error(`${failed} failed`); process.exit(1) }
