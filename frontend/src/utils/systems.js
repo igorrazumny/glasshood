@@ -10,9 +10,12 @@ const NOT_READ = new Set(['not checked', 'not monitored', 'unknown', 'stale'])
 
 // REQ-GHA-035 clause 9: systems monitored from inside vs public systems seen from outside
 export const GROUPS = [
-  { id: 'group-internal', label: '9Robots systems', outside: false },
+  { id: 'group-internal', label: 'Proprietary systems', outside: false },
   { id: 'group-external', label: 'External systems', outside: true },
 ]
+// REQ-GHA-037: left edges in the projects tree, so All systems -> group -> system step equally
+export const TREE_LEFT = { groupChevron: 22, system: 60 }
+
 export const isGroupId = id => GROUPS.some(g => g.id === id)
 
 // The cards of one group (or all cards when no group is given)
