@@ -689,3 +689,20 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Testable:** Yes (API + UI)
 - **Who builds:** Neo.
 - **Status:** confirmed by the owner 2026-11-08 (full text).
+
+## REQ-GHA-043: A demo visitor can change nothing
+
+- **Goal:** Nobody using the public demo can affect what anyone else sees or start any work in GlassHood.
+- **Why:** Owner, 2026-11-08: one visitor must never see or be affected by what another does. A check found that the read-only demo role can still call some actions that change or start things.
+- **Target state:**
+  1. The Live demo role is read-only. Every action that changes something or starts work is refused for it, with the same refusal in every case.
+  2. This covers changing a security finding's status, starting discovery, verifying or resetting verification of landscapes, agent heartbeats, starting a ServiceNow sync, and every other action of that kind, including any added later.
+  3. Each of those actions needs a signed-in operator or a registered agent acting under its own identity.
+  4. The name recorded in an audit trail is always the signed-in user. A name sent in the request is never used.
+  5. A demo visitor sees the same live monitoring as today, and saves nothing on the server. Preferences such as panel width and theme stay in that visitor's own browser.
+  6. A test goes through every action that changes something and fails if the demo role can use it, so that a new action cannot be left open by mistake.
+  7. The crash report that a browser sends when the page fails stays open to all, carries only technical text, and changes nothing that other visitors see.
+- **Priority:** P1
+- **Testable:** Yes (API)
+- **Who builds:** Neo.
+- **Status:** confirmed by the owner 2026-11-08 (full text).
