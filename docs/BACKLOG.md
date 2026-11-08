@@ -548,7 +548,7 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Priority:** P2
 - **Testable:** Yes (UI + API)
 - **Who builds:** Neo. Granting read access in TestRobin's AWS account and on GlassHood's own Azure resources is an infrastructure change and needs the owner's yes.
-- **Status:** confirmed 2026-11-07, not started.
+- **Status:** implemented 2026-11-08 except TestRobin (AWS role glasshood-readonly exists; collectors not written): home view and groups, per-system overviews, GlassHood monitors itself (Azure Reader + Log Analytics Reader). Not yet verified.
 
 ## REQ-GHA-036: GlassHood also watches public systems it does not control, from what they publish
 
@@ -565,7 +565,7 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Priority:** P2
 - **Testable:** Yes (API + UI: a provider incident shows as an alarm on the right box with the provider's link and ends when the provider resolves it)
 - **Who builds:** Neo, after the home view from REQ-GHA-035 exists.
-- **Status:** confirmed 2026-11-07, not started.
+- **Status:** implemented 2026-11-08: GitHub and Cloudflare outside views from their public status APIs, provider incidents as alarms, AI overview per external system and change-gated part analyses; no public integration pipeline found yet. Not yet verified.
 
 ## REQ-GHA-037: The home view speaks to a business system owner
 
@@ -584,7 +584,7 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Priority:** P1
 - **Testable:** Yes (UI)
 - **Who builds:** Neo.
-- **Status:** confirmed 2026-11-08, not started.
+- **Status:** implemented 2026-11-08 except clause 4 (TestRobin): cards with AI assessment and age, business wording, scoped header and panel, loading spinners, projects tree. Not yet verified.
 
 ## REQ-GHA-038: Alarms are grouped by severity in collapsible lists
 
@@ -598,4 +598,4 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Priority:** P1
 - **Testable:** Yes (UI)
 - **Who builds:** Neo.
-- **Status:** confirmed 2026-11-08 (Igor: "38 yes"), not started.
+- **Status:** implemented 2026-11-08: severity lists (PR #123, under review by neo-shadow1). Not yet verified.
