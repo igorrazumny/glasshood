@@ -53,3 +53,20 @@ All deployment-specific values — project identifiers, identities, endpoints, t
 
 ---
 *A multi-cloud, key-less monitoring deployment, built as a reference architecture.*
+
+## AWS systems
+
+An AWS landscape can use `aws_ecs_service` (`cluster`, `service`),
+`aws_load_balancer` / `aws_target_group` (`arn`) or `aws_log_group`
+(`log_group`) probes. Each probe includes `role_arn`, `region` and `audience`.
+The Azure managed identity token for that audience is exchanged with AWS STS;
+only short-lived credentials are held in memory. Missing federation fails closed,
+without falling back to environment keys or local AWS profiles.
+
+For application logs, set `monitoring.logs` to a location with `source: aws`,
+`log_group`, the same federation fields and optionally `stream_prefix`.
+The location comes from the landscape, not a request parameter. Logs are read
+backwards across the group's streams, with the usual seven-day quiet fallback.
+The same location supplies the system/part AI overview, review and investigation.
+Production landscapes remain outside this repository. Activating a new landscape
+requires the configured role's read access and verification in the running workload.

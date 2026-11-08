@@ -1,0 +1,18 @@
+requirement: REQ-GHA-035
+scenarios:
+  - id: TC-REQ-GHA-035-AWS-01
+    preconditions: A landscape specifies an AWS resource and the approved read-only role.
+    steps: [Read service task counts and load balancer target health.]
+    expected: Healthy requires a readable active service and healthy targets; failed reads are not checked.
+  - id: TC-REQ-GHA-035-AWS-02
+    preconditions: Azure managed identity is missing or federation fails.
+    steps: [Poll an AWS resource.]
+    expected: No local AWS credential fallback; the resource says it could not be read.
+  - id: TC-REQ-GHA-035-AWS-03
+    preconditions: A node declares an AWS log group in its landscape.
+    steps: [Open its logs, attempt to supply a different log location in the request.]
+    expected: Only the landscape location is used; quiet logs fall back to seven days; failures say why.
+  - id: TC-REQ-GHA-035-AWS-04
+    preconditions: TestRobin is selected and an AI overview is due.
+    steps: [Build the system and part overview inputs.]
+    expected: TestRobin receives its own status and AWS log samples, never another cloud's logs.

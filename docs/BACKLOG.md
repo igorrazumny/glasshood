@@ -549,6 +549,7 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Testable:** Yes (UI + API)
 - **Who builds:** Neo. Granting read access in TestRobin's AWS account and on GlassHood's own Azure resources is an infrastructure change and needs the owner's yes.
 - **Status:** implemented 2026-11-08 except TestRobin (AWS role glasshood-readonly exists; collectors not written): home view and groups, per-system overviews, GlassHood monitors itself (Azure Reader + Log Analytics Reader). Not yet verified.
+- **TestRobin implementation, 2026-11-08:** AWS workload-identity resource probes and CloudWatch log reads added; landscape activation and runtime federation verification remain pending. Boto3 was approved by the owner before implementation.
 
 ## REQ-GHA-036: GlassHood also watches public systems it does not control, from what they publish
 
