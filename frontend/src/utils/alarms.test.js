@@ -99,7 +99,9 @@ test('alarms map onto the five severity levels', () => {
   assert.equal(alarmLevel({ severity: 'warning', kind: 'alarm' }), 'medium')
   assert.equal(alarmLevel({ severity: 'warning', kind: 'observation' }), 'info')
   assert.equal(alarmLevel({ severity: 'critical', kind: 'example' }), 'example')
-  assert.equal(alarmLevel({ severity: 'warning', group: 'provider:Cloudflare:m1', title: 'MSP (maintenance, reported by Cloudflare)' }), 'info')
+  assert.equal(alarmLevel({ severity: 'info', group: 'provider:Cloudflare:m1', title: 'MSP (maintenance, reported by Cloudflare)' }), 'info')
+  // shadow P1 on #123: a disruptive maintenance keeps its level; the title alone decides nothing
+  assert.equal(alarmLevel({ severity: 'warning', group: 'provider:Cloudflare:m2', title: 'Network (maintenance, reported by Cloudflare)' }), 'medium')
   assert.equal(alarmLevel({ severity: 'warning', group: 'provider:Cloudflare:i1', title: 'Spectrum (incident, reported by Cloudflare)' }), 'medium')
 })
 
@@ -108,6 +110,15 @@ test('critical and high open first; medium only when nothing is more urgent', ()
   assert.deepEqual(Object.keys(by).sort(), ['critical', 'info', 'medium'])
   assert.deepEqual(defaultOpen(by), { critical: true, high: true, medium: false, low: false, info: false, example: false })
   assert.equal(defaultOpen(alarmsByLevel([{ severity: 'warning' }])).medium, true)
+})
+
+test('each severity list is newest first, whatever an alarm\'s original severity or kind', () => {
+  // shadow P2 on #123: an old observation must not sit above a new information alarm
+  const by = alarmsByLevel([
+    { severity: 'warning', kind: 'observation', first_seen: '2026-11-01T10:00:00Z', title: 'old note' },
+    { severity: 'info', kind: 'alarm', first_seen: '2026-11-08T10:00:00Z', title: 'new info' },
+  ])
+  assert.deepEqual(by.info.map(a => a.title), ['new info', 'old note'])
 })
 
 if (failed) { console.error(`${failed} failed`); process.exit(1) }

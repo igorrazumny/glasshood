@@ -133,6 +133,16 @@ export function assessmentLine(about, nowMs, maxAgeS = 3 * 3600) {
   return { when, text, old, problem }
 }
 
+// REQ-GHA-037 clause 9 with REQ-GHA-024: the list of per-system assessments on the home view
+// or a group says, for each system, when it was written, whether it is old and whether the
+// latest update failed, exactly as that system's card does
+export function listAssessments(cards, descriptions, nowMs) {
+  return (cards || []).map(c => {
+    const about = descriptions?.[c.product] || null
+    return { id: c.id, label: c.label, waiting: !about?.summary && !about?.error, ...assessmentLine(about, nowMs) }
+  })
+}
+
 // REQ-GHA-037 clause 7: the header says what it covers — per group on the home view,
 // the selected system's own state when one is chosen
 const SYSTEM_WORDS = { healthy: 'operating normally', degraded: 'needs attention', error: 'not working properly',
@@ -147,7 +157,12 @@ export function headerLine(cards, activeProject) {
     const name = group.outside ? 'External services' : 'Our systems'
     if (gc.every(c => c.state === 'not checked')) return `${name}: status not available`
     const n = gc.filter(c => c.state === 'error' || c.state === 'degraded' || c.critical).length
-    return `${name}: ${n ? `${n} need${n === 1 ? 's' : ''} attention` : 'operating normally'}`
+    const u = gc.filter(c => c.state === 'not checked' && !c.critical).length
+    // a system not yet assessed is named, never folded into "operating normally"
+    if (!u) return `${name}: ${n ? `${n} need${n === 1 ? 's' : ''} attention` : 'operating normally'}`
+    const ok = gc.length - n - u
+    const bits = [n && `${n} need${n === 1 ? 's' : ''} attention`, ok && `${ok} operating normally`, `${u} status unavailable`]
+    return `${name}: ${bits.filter(Boolean).join(', ')}`
   })
   // red only for our own systems; an external service's trouble alone shows amber
   const own = groups.filter(g => !g.group.outside).flatMap(g => g.cards)

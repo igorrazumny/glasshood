@@ -132,6 +132,21 @@ def test_maintenance_stays_open_while_the_provider_verifies_it(monkeypatch):
     engine._active.clear()
 
 
+def test_maintenance_is_information_only_when_the_provider_shows_no_disruption(monkeypatch):
+    # shadow P1 on #123: a disruptive maintenance must not drop to Information
+    monkeypatch.setattr(sp, "outside_systems", lambda: [("Example", URL, {"c-ams": "ex-ams", "c-fra": "ex-fra"})])
+    maint = {"id": "m1", "name": "Planned work", "status": "in_progress", "impact": "maintenance",
+             "components": [{"id": "c-ams", "name": "Amsterdam"}], "incident_updates": []}
+    cases = [(maint, "info"),
+             ({**maint, "impact": "major"}, "warning"),                                  # disruptive by impact
+             ({**maint, "components": [{"id": "c-fra", "name": "Frankfurt"}]}, "warning")]  # part in major outage
+    for m, severity in cases:
+        _fresh()
+        data = {**SUMMARY, "incidents": [], "scheduled_maintenances": [m]}
+        [e] = sp.incidents(fetch=lambda u: data)[0]
+        assert e["severity"] == severity, m
+
+
 def test_concurrent_first_reads_share_one_fetch():
     # shadow W1
     import threading

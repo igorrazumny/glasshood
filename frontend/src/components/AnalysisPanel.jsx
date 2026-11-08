@@ -8,6 +8,7 @@ import { Brain, RefreshCw, AlertTriangle, CheckCircle, Server, Shield, Loader2 }
 import { apiFetch } from '../utils/api'
 import { statsNodes } from '../utils/canvasParts.js'
 import { overviewStamp, spendLine } from '../utils/overview.js'
+import { listAssessments } from '../utils/systems.js'
 
 function ScoreBadge({ score }) {
   if (score === null || score === undefined) return null
@@ -78,18 +79,19 @@ function SystemsList({ cards, descriptions }) {
   }
   return (
     <ul className="space-y-3">
-      {cards.map(c => {
-        const d = descriptions?.[c.product]
-        return (
-          <li key={c.id}>
-            <div className="text-sm font-semibold text-gray-800 dark:text-purple-100">{c.label}</div>
-            <p className="text-sm text-gray-600 dark:text-purple-200 leading-relaxed flex items-start gap-2">
-              {!d?.summary && !d?.error && <Loader2 size={13} className="animate-spin mt-0.5 flex-shrink-0" />}
-              <span>{d?.summary || (d?.error ? `Not available: ${d.error}` : 'Being written…')}</span>
-            </p>
-          </li>
-        )
-      })}
+      {listAssessments(cards, descriptions, Date.now()).map(a => (
+        <li key={a.id}>
+          <div className="text-sm font-semibold text-gray-800 dark:text-purple-100">
+            {a.label}{a.when && <span className="font-normal text-xs text-gray-500 dark:text-purple-300"> · {a.when}</span>}
+          </div>
+          {a.old && <div className="text-xs text-yellow-700 dark:text-yellow-400">{a.old}</div>}
+          {a.problem && <div className="text-xs text-red-700 dark:text-red-400">{a.problem}</div>}
+          <p className="text-sm text-gray-600 dark:text-purple-200 leading-relaxed flex items-start gap-2">
+            {a.waiting && <Loader2 size={13} className="animate-spin mt-0.5 flex-shrink-0" />}
+            <span>{a.text}</span>
+          </p>
+        </li>
+      ))}
     </ul>
   )
 }
