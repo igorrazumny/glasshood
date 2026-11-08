@@ -94,6 +94,12 @@ class TestPollNode:
         assert result["node_id"] == "test-node"
         assert result["status"] == "not monitored"
 
+    def test_logs_only_is_not_green(self):
+        """REQ-GHA-044 clause 2: configured logs alone never show healthy."""
+        result = _poll_node({"id": "n", "monitoring": {"logs": [{"source": "aws"}]}})
+        assert result["status"] == "not checked"
+        assert result["check_description"]
+
     def test_empty_metrics_list(self):
         node = {"id": "test-node", "monitoring": {"metrics": []}}
         result = _poll_node(node)
@@ -597,3 +603,26 @@ class TestVmCacheIsolation:
         finally:
             _vm_cache.clear()
             _vm_cache_times.clear()
+
+
+class TestNoGreenWithoutCheck:
+    """REQ-GHA-044 clauses 2, 4 and 6."""
+
+    @staticmethod
+    def _node(**kw):
+        from src.models.topology import Node
+        return Node(id="n", label="n", type="lb", **kw)
+
+    def test_inventory_listing_is_not_green(self):
+        from src.api.routes.topology import _no_green_without_check
+        n = self._node(status="healthy", source="discovered", metrics={})
+        _no_green_without_check([n])
+        assert n.status == "not checked" and n.metrics["_check_description"]
+
+    def test_checked_and_failed_boxes_keep_their_state(self):
+        from src.api.routes.topology import _no_green_without_check
+        a = self._node(status="healthy", source="discovered", metrics={"cpu": 1})
+        b = self._node(status="error", source="discovered", metrics={})
+        c = self._node(status="healthy", source="manifest", metrics={})
+        _no_green_without_check([a, b, c])
+        assert (a.status, b.status, c.status) == ("healthy", "error", "healthy")

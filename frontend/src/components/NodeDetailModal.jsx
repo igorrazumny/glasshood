@@ -7,6 +7,7 @@ import { apiFetch } from '../utils/api'
 import { canRecheck, describeRecheck, recheckError, PARTNER_NOTE, WAKE_NOTE } from '../utils/mcpRecheck'
 import { overviewStamp, isStale } from '../utils/overview.js'
 import { clock } from '../utils/time'
+import { boxBasis } from '../utils/boxBasis'
 import LogViewerModal from './LogViewerModal'
 
 const STATUS_COLORS = {
@@ -173,7 +174,9 @@ export default function NodeDetailModal({ node, onClose, isDemo, hideCosts }) {
             Light: faint slate panel + dark slate text. Dark: ColdVault purple-700/50
             with purple-200 text. Both pass readable contrast against their respective
             modal backgrounds. */}
-        {node.source === 'manifest' && !_hasLiveMetrics(node) && (
+        <p className="mb-4 text-sm text-gray-700 dark:text-purple-200">Based on: {boxBasis(node)}</p>
+
+        {node.source === 'manifest' && !_hasLiveMetrics(node) && !node.metrics?._check_description && (
           <div className="mb-4 bg-gray-100 dark:bg-purple-700/50 border border-gray-200 dark:border-purple-600 rounded-lg p-3 text-sm text-gray-700 dark:text-purple-200">
             This node is defined in the infrastructure manifest but not yet connected to live monitoring.
             {node.metrics?.note && <div className="mt-1 text-gray-500 dark:text-purple-300">{node.metrics.note}</div>}

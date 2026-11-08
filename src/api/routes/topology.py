@@ -290,6 +290,8 @@ def _build_topology() -> dict:
     # so a stopped loop shows as stopped
     _refresh_self(nodes)
 
+    _no_green_without_check(nodes)
+
     # REQ-GHA-035: every box names the system (landscape file) it belongs to
     _tag_systems(nodes)
 
@@ -403,6 +405,16 @@ def _build_topology() -> dict:
     _apply_anomaly_classification(result, anomaly_list)
 
     return result
+
+
+def _no_green_without_check(nodes: list) -> None:
+    """REQ-GHA-044 clauses 2 and 4: being listed in a cloud inventory is not a health check."""
+    for node in nodes:
+        m = node.metrics or {}
+        if node.source == "discovered" and node.status == "healthy" and not m.get("_check_description") \
+                and not any(not k.startswith("_") for k in m):
+            node.status = "not checked"
+            node.metrics = {**m, "_check_description": "Found in the cloud inventory; no check confirms it is working"}
 
 
 def _refresh_self(nodes: list) -> None:
