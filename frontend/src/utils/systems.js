@@ -156,12 +156,12 @@ export function assessmentLine(about, nowMs) {
   const state = about.job?.status
   const tries = about.job?.attempts
   const busy = state === 'running' || state === 'retrying'
-  const pending = state === 'running' ? 'Assessment is being written.'
+  const pending = state === 'running' ? 'AI evaluation in progress.'
     : state === 'retrying' ? 'The assessment failed; another attempt is scheduled.'
       : state === 'failed' ? (tries > 1 ? `The assessment failed after ${tries} attempts.` : 'The assessment failed.')
         : 'Assessment has not started yet.'
   // beside a kept text, the job's state is its own line
-  const job = !about.summary ? null : state === 'running' ? 'A new assessment is being written.'
+  const job = !about.summary ? null : state === 'running' ? 'A new AI evaluation is in progress.'
     : state === 'retrying' ? 'Another attempt at updating this is scheduled.'
       : state === 'failed' ? 'It will be tried again at the next scheduled round.' : null
   return { when, text: about.summary || pending, problem, busy, job }

@@ -103,7 +103,7 @@ test('an old assessment keeps its text without an age warning; a failed refresh 
   assert.equal(fresh.problem, null); assert.match(fresh.when, /^written \d\d:\d\d \S+$/)
   assert.equal(assessmentLine(null, now).text, 'Assessment has not started yet.')
   assert.equal(assessmentLine(null, now).busy, false)
-  assert.equal(assessmentLine({ job: { status: 'running' } }, now).text, 'Assessment is being written.')
+  assert.equal(assessmentLine({ job: { status: 'running' } }, now).text, 'AI evaluation in progress.')
   assert.equal(assessmentLine({ job: { status: 'retrying' } }, now).busy, true)
   assert.equal(assessmentLine({ job: { status: 'failed', attempts: 1 }, error: 'x' }, now).text, 'The assessment failed.')
   assert.equal(assessmentLine({ job: { status: 'failed', attempts: 3 }, error: 'x' }, now).text, 'The assessment failed after 3 attempts.')

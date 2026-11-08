@@ -30,7 +30,7 @@ def get_analysis_endpoint(request: Request, system: str = None):
         if system not in kinds:
             raise HTTPException(status_code=404, detail=f"Unknown system {system!r}")
         not_yet = {"score": None, "summary": "", "issues": [], "recommendations": [], "analyzed_at": None,
-                   "stale": True, "error": "The AI overview for this system has not been written yet"}
+                   "stale": True, "error": "The AI evaluation of this system has not run yet"}
         if kinds[system] == "outside_view":
             out = ov.get_outside(system) or not_yet
         else:
@@ -69,5 +69,5 @@ def get_node_analysis(node_id: str, request: Request):
     if entry is None:
         return {"score": None, "summary": "", "issues": [], "recommendations": [],
                 "analyzed_at": None, "stale": True, "model": ov.MODEL,
-                "error": "No overview for this part yet — written at start and every 3 hours"}
+                "error": "No evaluation of this part yet — it runs at start and every 3 hours"}
     return entry
