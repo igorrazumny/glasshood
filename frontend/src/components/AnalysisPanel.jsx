@@ -131,7 +131,7 @@ export default function AnalysisPanel({ data, topology, canvas, scopeLabel = 'Al
             onClick={handleRefresh}
             disabled={refreshing || analysis.refresh_in_s > 0}
             className="text-gray-500 hover:text-gray-800 dark:text-purple-300 dark:hover:text-white transition-colors disabled:opacity-30"
-            title={analysis.refresh_in_s > 0 ? `Fresh overview possible in ${Math.ceil(analysis.refresh_in_s / 60)} min` : 'Write a fresh overview now'}
+            title={analysis.refresh_in_s > 0 ? `Fresh overview possible in ${Math.ceil(analysis.refresh_in_s / 60)} min` : 'Run a fresh AI evaluation now'}
           >
             <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
           </button>
