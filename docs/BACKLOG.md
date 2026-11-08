@@ -577,7 +577,25 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
   3. The card keeps what a business owner needs: the state in one line, open alarms by severity, the AI description and when it was checked. Technical counts (number of parts, "not checked") move to the system's own view.
   4. TestRobin appears among the 9Robots systems once its monitoring is connected (REQ-GHA-035).
   5. On the entry screen both choices look clearly clickable and are equally tall; the main action stands out, the other has a visible border and readable text.
+  6. (Confirmed 2026-11-08) While the systems, an AI assessment or a panel are loading or being written, the screen shows that they are coming (a spinner and a short line such as "Loading your systems" or "AI assessment being written"), never an empty area or "no report yet" that reads as broken; a failure is said in plain words.
+  7. (Confirmed 2026-11-08) Every summary says what it covers: on the home view the header speaks per group (for example "Our systems: operating normally · External services: 1 needs attention") instead of one "All Systems Operational"; the right panel on the home view shows an assessment across all systems, titled so, or stays closed, never one system's overview as if it covered all; counts of boxes appear only inside a system's view.
+  8. (Confirmed 2026-11-08) Business words on cards and navigation: alarms are split into alerts to review and configuration notes; "All Projects" becomes "All systems"; an external system shows "Source: <provider status page>" instead of the long sentence.
+  9. (Owner, 2026-11-08) The AI overview's title names what it covers ("AI overview · All monitored systems", "AI overview · ColdVault") and changes with the selection, always only for the selected system; it shows clearly when it is still waiting for data. In the projects panel, "All systems" stays on top; the two groups sit clearly indented under it and can be collapsed; indentation stays small so the middle keeps its space; the groups show no "needs attention" text (the coloured dots say it).
 - **Priority:** P1
 - **Testable:** Yes (UI)
 - **Who builds:** Neo.
 - **Status:** confirmed 2026-11-08, not started.
+
+## REQ-GHA-038: Alarms are grouped by severity in collapsible lists
+
+- **Goal:** The alarm area shows what matters first, without being flooded by notes, and never takes over the panel.
+- **Why:** Owner, 2026-11-08: observations should not be yellow (yellow and red are warning colours); they flood the list; there should be separate lists by severity, each collapsible, a collapsed list only one thin line. Levels after neo-shadow1's comparison of ServiceNow, PagerDuty and Datadog.
+- **Target state:**
+  1. Five levels, each its own list in this order: Critical (an essential function is unavailable; red), High (serious degradation or a near failure; orange), Medium (working but degraded or less resilient; yellow), Low (a minor issue with no current impact; no colour), Information (configuration notes and context, nothing failing now; no colour). Examples (alarms shown only to illustrate) are their own neutral list and do not count in the totals. The level is always written in words; colour is only a small mark, never a coloured paragraph.
+  2. Today's alarms map so: rule and AI-review alarms critical to Critical, warning to Medium; a failing AI model with no reply Critical, with a backup's answer Medium; provider incidents keep their level, marked "reported by the provider" (maintenance with no disruption Information); GlassHood's own late work Medium; configuration notes ("observations") Information. High is used once a rule defines it.
+  3. Every list can be collapsed, Critical included; collapsed it is one thin line ("Critical · 2"). Empty lists are hidden. At first Critical and High are open; Medium is closed when Critical or High have alarms, otherwise open; Low, Information and Examples are closed. What a person opened or closed is remembered and not changed by a refresh; a new alarm still updates the line's count.
+  4. The alarm area takes at most about half of the panel's height; the open lists share it, each scrolling on its own, so one open list gets all of it. Newest alarm first within each list.
+- **Priority:** P1
+- **Testable:** Yes (UI)
+- **Who builds:** Neo.
+- **Status:** confirmed 2026-11-08 (Igor: "38 yes"), not started.
