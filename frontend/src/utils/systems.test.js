@@ -91,17 +91,27 @@ test('a group with no systems is not shown', () => {
   assert.deepEqual(groups.map(g => g.group.label), ['9Robots systems'])
 })
 
-test('an old assessment and a failed refresh are both said, the old text kept', () => {
+test('an old assessment keeps its text without an age warning; a failed refresh is said', () => {
   const now = Date.UTC(2026, 10, 8, 1, 37)
   const a = assessmentLine({ summary: 'ColdVault is running normally.', analyzed_at: (now - 24 * 3600e3) / 1000,
     stale: true, error: 'daily cap reached' }, now)
   assert.equal(a.text, 'ColdVault is running normally.')
   assert.match(a.when, /^written 7 Nov/)
-  assert.match(a.old, /24 h old/)
+  assert.equal(a.old, undefined)
   assert.equal(a.problem, 'Latest update failed: daily cap reached')
   const fresh = assessmentLine({ summary: 'ok', analyzed_at: (now - 600e3) / 1000, stale: false }, now)
-  assert.equal(fresh.old, null); assert.equal(fresh.problem, null); assert.match(fresh.when, /^written \d\d:\d\d \S+$/)
-  assert.equal(assessmentLine(null, now).text, 'Being written; it appears within a few minutes.')
+  assert.equal(fresh.problem, null); assert.match(fresh.when, /^written \d\d:\d\d \S+$/)
+  assert.equal(assessmentLine(null, now).text, 'Assessment has not started yet.')
+  assert.equal(assessmentLine(null, now).busy, false)
+  assert.equal(assessmentLine({ job: { status: 'running' } }, now).text, 'Assessment is being written.')
+  assert.equal(assessmentLine({ job: { status: 'retrying' } }, now).busy, true)
+  assert.equal(assessmentLine({ job: { status: 'failed', attempts: 1 }, error: 'x' }, now).text, 'The assessment failed.')
+  assert.equal(assessmentLine({ job: { status: 'failed', attempts: 3 }, error: 'x' }, now).text, 'The assessment failed after 3 attempts.')
+  const kept = s => assessmentLine({ summary: 'Fine', job: { status: s } }, now)
+  assert.equal(kept('running').text, 'Fine')
+  assert.notEqual(kept('running').job, kept('retrying').job)
+  assert.match(kept('failed').job, /next scheduled round/)
+  assert.equal(kept('complete').job, null)
 })
 
 test('the header says what it covers', () => {
@@ -132,10 +142,10 @@ test('the home list says each assessment\'s age and a failed update, as the card
     two: { summary: 'Fine', analyzed_at: (now - 600e3) / 1000 },
   }, now)
   assert.equal(one.text, 'Old healthy assessment')
-  assert.match(one.when, /^written /); assert.match(one.old, /24 h old/)
+  assert.match(one.when, /^written /); assert.equal(one.old, undefined)
   assert.equal(one.problem, 'Latest update failed: daily cap reached')
-  assert.equal(two.old, null); assert.equal(two.problem, null); assert.equal(two.waiting, false)
-  assert.equal(three.waiting, true); assert.equal(three.when, null)
+  assert.equal(two.problem, null); assert.equal(two.waiting, false)
+  assert.equal(three.waiting, false); assert.equal(three.when, null); assert.equal(three.text, 'Assessment has not started yet.')
 })
 
 test('a group with an unassessed system never claims it operates normally', () => {

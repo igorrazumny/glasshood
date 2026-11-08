@@ -7,6 +7,7 @@ import { apiFetch } from '../utils/api'
 import { alarmTitle, alarmWhen, alarmKindLabel, alarmTag, alarmRef } from '../utils/alarms'
 import InvestigationPanel from './InvestigationPanel'
 import { dateTime } from '../utils/time'
+import { ruleReport } from '../utils/ruleReport'
 
 // REQ-009: severity styles pair light (bg-100 + text-700 + border-300) with
 // dark (bg-500/10 + text-400 + border-500/30) so the icon + badge read on
@@ -24,23 +25,6 @@ const SEVERITY_STYLE = {
     color: 'text-blue-700 dark:text-blue-400',
     bg: 'bg-blue-100 dark:bg-blue-500/10',
     border: 'border-blue-300 dark:border-blue-500/30' },
-}
-
-function recommendAction(alert) {
-  const msg = (alert.message || '').toLowerCase()
-  const rule = (alert.rule_id || '').toLowerCase()
-  if (rule.startsWith('correlated:')) return 'Investigate data integrity — correlated operational + statistical anomaly detected'
-  if (rule.startsWith('anomaly')) return 'Statistical anomaly detected in infrastructure metrics. The system identified a significant deviation from the established baseline. Check the anomaly details in the right panel for z-score, confidence level, and baseline comparison. If the anomaly persists across multiple polling cycles, investigate the underlying infrastructure component.'
-  if (msg.includes('cpu')) return 'Scale up VM or investigate high-CPU process'
-  if (msg.includes('latency') || msg.includes('slow')) return 'Check load balancer and backend health'
-  if (msg.includes('error') || msg.includes('fail')) return 'Investigate error spike in application logs'
-  if (msg.includes('cve') || msg.includes('vulnerab')) return 'Check CVE patch status and apply updates'
-  if (msg.includes('disk')) return 'Free disk space or expand volume'
-  if (msg.includes('memory') || msg.includes('ram')) return 'Investigate memory leak or scale instance'
-  if (msg.includes('disconnected') || msg.includes('offline')) return 'Check network connectivity and service health'
-  if (alert.severity === 'critical') return 'Investigate immediately — critical severity'
-  if (alert.severity === 'warning') return 'Monitor closely and investigate if condition persists'
-  return 'Review alert details and take appropriate action'
 }
 
 export default function AlertDetailModal({ alert, onClose, currentUser = '' }) {
@@ -68,6 +52,9 @@ export default function AlertDetailModal({ alert, onClose, currentUser = '' }) {
   const Icon = style.icon
   const isCorrelated = (alert.rule_id || '').startsWith('correlated:')
   const isAnomaly = (alert.rule_id || '').startsWith('anomaly')
+  const ruleContext = ruleReport(alert)
+  // only a real rule or status alarm is a failed check: AI and provider alarms explain themselves, and notes and examples report no failure
+  const showRuleContext = (alert.kind || 'alarm') === 'alarm' && !ex && !/^(ai|provider|model):/.test(alert.group || alert.rule_id || '')
   // REQ-004: per-alert classification snapshot recorded at alert creation
   // by the rules engine. Falls back to null when missing — the standard
   // alert layout below renders without classification panels in that case.
@@ -236,6 +223,28 @@ export default function AlertDetailModal({ alert, onClose, currentUser = '' }) {
         ) : (
           /* Standard (non-anomaly) alert layout */
           <div className="space-y-3 mb-4">
+            {showRuleContext && <>
+            <div className={`rounded-lg p-3 ${style.bg} border ${style.border}`}>
+              <span className="text-xs font-semibold text-gray-500 dark:text-purple-300 uppercase">What happened</span>
+              <p className="text-sm text-gray-800 dark:text-purple-100 mt-1 leading-relaxed">{ruleContext.title}</p>
+              <p className="text-sm text-gray-700 dark:text-purple-100 mt-2 leading-relaxed">{ruleContext.impact}</p>
+              <p className="text-xs text-gray-600 dark:text-purple-200 mt-2 leading-relaxed">{ruleContext.timing}</p>
+            </div>
+
+            <div className="rounded-lg p-3 bg-surface dark:bg-purple-900/50 border border-border dark:border-purple-700">
+              <span className="text-xs font-semibold text-gray-500 dark:text-purple-300 uppercase">What GlassHood checked</span>
+              <p className="text-sm text-gray-700 dark:text-purple-100 mt-1 leading-relaxed">{ruleContext.signal}</p>
+            </div>
+            {ruleContext.causes.length > 0 && (
+              <div className="rounded-lg p-3 bg-surface dark:bg-purple-900/50 border border-border dark:border-purple-700">
+                <span className="text-xs font-semibold text-gray-500 dark:text-purple-300 uppercase">Possible causes (not confirmed)</span>
+                <ul className="list-disc ml-4 mt-1 text-sm text-gray-700 dark:text-purple-100 leading-relaxed">
+                  {ruleContext.causes.map(c => <li key={c}>{c}</li>)}
+                </ul>
+              </div>
+            )}
+            </>}
+
             {/* Metric value vs threshold */}
             {alert.metric_value != null && (
               <div className={`rounded-lg p-3 ${style.bg} border ${style.border}`}>
@@ -288,7 +297,7 @@ export default function AlertDetailModal({ alert, onClose, currentUser = '' }) {
             {alert.kind !== 'ai' && (
               <div className="rounded-lg p-3 bg-surface dark:bg-purple-900/50 border border-border dark:border-purple-700">
                 <span className="text-xs font-semibold text-gray-500 dark:text-purple-300 uppercase">Recommended Action</span>
-                <p className="text-sm text-gray-700 dark:text-purple-100 mt-1">{recommendAction(alert)}</p>
+                <p className="text-sm text-gray-700 dark:text-purple-100 mt-1 leading-relaxed">{ruleContext.action}</p>
               </div>
             )}
 

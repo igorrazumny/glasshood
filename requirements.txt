@@ -16,3 +16,4 @@ PyJWT>=2.8.0
 pytest==8.3.4
 
 boto3==1.43.126
+anthropic==2.6.0
