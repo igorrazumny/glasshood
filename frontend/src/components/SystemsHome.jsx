@@ -43,6 +43,7 @@ export default function SystemsHome({ cards, line, onOpen, descriptions = {}, lo
 function SystemCard({ card: c, about, loadError, onOpen }) {
   const a = assessmentLine(about, Date.now())
   if (!about && loadError) a.text = loadFailed('The assessment', loadError)
+  else if (loadError && !a.problem) a.problem = loadFailed('A newer assessment', loadError)
   return (
     <button onClick={() => onOpen(c.id)}
       className="group text-left flex flex-col bg-card dark:bg-purple-800 border border-border dark:border-purple-700 rounded-xl p-5

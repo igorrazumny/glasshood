@@ -44,7 +44,12 @@ export function setToken(token) {
   sessionStorage.setItem('glasshood_token', token)
 }
 
+// The last answer for each polled path, so a click shows that system's own stored view at once
+// while a fresh read runs. Cleared on logout, so one person's view never shows for the next.
+export const pollCache = new Map()
+
 export function clearToken() {
+  pollCache.clear()
   _token = null
   sessionStorage.removeItem('glasshood_token')
   sessionStorage.removeItem('glasshood_creds')
