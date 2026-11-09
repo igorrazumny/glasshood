@@ -88,6 +88,7 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
   // REQ-GHA-037: each system's short AI assessment for its card
   const systemDescriptions = usePolling(isDemo ? null : '/api/analysis/systems', 60000)
   const selections = usePolling(isDemo ? null : '/api/analysis/selections', 60000)
+  const agentCorrections = usePolling(isDemo || hideCosts ? null : '/api/agents/corrections', 60000)
   // REQ-GHA-046 clauses 13-16: the boundary starts at the default; a real account gets its own back
   const [split, setSplit] = useState(DEFAULT_SPLIT)
   const [alertsOpen, setAlertsOpen] = useState(false)
@@ -283,6 +284,7 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
             scopeLabel={selectedCard ? selectedCard.label : groupSelected ? (GROUPS.find(g => g.id === activeProject)?.label || 'All systems') : 'All systems'}
             onOpenAlert={openAlert}
             review={selections.data?.[groupSelected ? activeProject : 'all']}
+            corrections={(agentCorrections.data?.corrections || []).filter(c => !selectedCard || c.system === selectedCard.product)}
             reviewError={isDemo ? null : selections.error}
             diff={groupSelected
               ? scopeDiff(topology.data?.topology_diff, owner, new Set(groupedCards(homeCards).flatMap(g => g.cards).map(c => c.id)))

@@ -55,3 +55,29 @@ Restart the client and ask, for example: *"Using GlassHood, which part of the de
 ```
 
 The tests run against a local stand-in for GlassHood and also start the server over stdio, as a client would.
+
+## For agents: the live monitoring (REQ-GHA-049)
+
+`agents_server.py` lets an agent read GlassHood's live monitoring with its own credential. An operator creates the credential once (`POST /api/agents/keys`, shown once; `DELETE /api/agents/keys/<agent>` withdraws it). The one configuration entry:
+
+```json
+{
+  "mcpServers": {
+    "glasshood": {
+      "command": "/path/to/glasshood/mcp-server/.venv/bin/python",
+      "args": ["/path/to/glasshood/mcp-server/agents_server.py"],
+      "env": { "GLASSHOOD_AGENT_KEY": "<your credential>" }
+    }
+  }
+}
+```
+
+| Tool | Returns |
+|---|---|
+| `list_systems` | Every system with its group, status and responsible agent. |
+| `get_system(system)` | Latest AI review, score, open alerts, components. |
+| `get_component_logs(system, component)` | Recent log lines of one component. |
+| `get_changes(system?)` | New alerts, ended alerts and status changes since your last call; each once. |
+| `get_setup(system)` | Responsible agent only: the full setup, without credential values. |
+| `verify_setup(system)` | Responsible agent only: expected check against last result, and what could not be confirmed. |
+| `submit_correction(...)` | Responsible agent only: reports a difference; an operator applies it. |
