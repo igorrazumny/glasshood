@@ -13,7 +13,10 @@ import time
 logger = logging.getLogger(__name__)
 
 SCOPES = ("all", "group-internal", "group-external")
-SHAPE = 2   # the amended contract of 2026-11-09; a review saved under an older shape is not shown as current
+# The contract and instructions a review was written under. Bumped with every revision of the contract or
+# of PROMPT, so a saved review of an older version is set aside at load and written once more (one call per
+# selection): the owner's live reading (clause 12) is then of the revised instructions, not of a cached text.
+SHAPE = 3
 SETTLE_S = 90       # a round rewrites records one by one: wait until they stop changing
 RETRY_S = 600
 
