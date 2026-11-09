@@ -4,6 +4,7 @@
 import asyncio
 import logging
 import os
+import re
 import threading
 import time
 from pathlib import Path
@@ -44,6 +45,7 @@ from src.config.settings import (
 from src.discovery.gcp_assets import discovery_loop
 
 from src.api.routes.preferences import router as preferences_router
+from src.api.routes.agents import router as agents_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -58,6 +60,9 @@ _WORK_ON_READ = {"/api/compliance/report"}   # a GET that creates a report and a
 def _writes_need_operator(request: Request) -> None:
     path = request.url.path
     if path in _OPEN_WRITES or (request.method in ("GET", "HEAD", "OPTIONS") and path not in _WORK_ON_READ):
+        return
+    # REQ-GHA-049 clause 14: the one write an agent may make; its route checks the agent's credential
+    if request.method == "POST" and request.headers.get("X-Agent-Key") and re.fullmatch(r"/api/agents/systems/[^/]+/corrections", path):
         return
     from src.api.routes.auth import DEMO_LOGIN, verify_token
     from src.auth.rbac import require_role
@@ -116,6 +121,7 @@ app.include_router(storage_router)
 app.include_router(customers_router)
 app.include_router(projects_router)
 app.include_router(preferences_router)
+app.include_router(agents_router)
 app.include_router(manifests_router)
 app.include_router(mcp_recheck_router)
 

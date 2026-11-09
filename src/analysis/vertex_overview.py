@@ -1281,6 +1281,8 @@ def _pending_loop(get_topology_fn, stop) -> None:
                 _change_scan_once(get_topology_fn)
             from src.analysis import selection_review
             selection_review.refresh_due()
+            from src.api.routes import agents   # REQ-GHA-049 clause 4
+            agents.scan((get_topology_fn() or {}).get("nodes") or [])
         except Exception as e:
             logger.error(f"new-system assessment scan failed: {type(e).__name__}")
 
