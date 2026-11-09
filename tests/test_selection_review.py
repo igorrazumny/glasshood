@@ -182,6 +182,25 @@ def test_a_success_clears_an_earlier_failed_attempt():
     assert got["summary"] == "Fine." and got["update_failed"] is False and got["current"] is True
 
 
+def test_an_external_system_gives_only_its_condition_score_and_assessment():
+    cards = {"gh": {**_rec("attention"), "issues": ["Component X degraded"],
+                    "alerts": [{"kind": "alarm", "severity": "warning", "title": "Incident 1", "rule_id": "provider_incident"}]}}
+    with patch.object(ov, "system_cards", return_value=cards), \
+         patch.object(ov, "call_model", return_value=(json.dumps(_answer("GitHub is degraded.", score=5, issues=["GitHub reports degraded service."])), {})) as call:
+        sr.refresh_due(0); sr.refresh_due(100)
+    sent = json.loads(call.call_args.args[1])[0]
+    assert sent["system"] == "GitHub" and "needs_attention" not in sent and "alerts" not in sent
+
+
+def test_an_external_system_s_trouble_is_one_issue():
+    cards = {"gh": _rec("attention")}
+    answer = _answer("GitHub is degraded.", score=5, issues=["GitHub: Actions degraded.", "GitHub: Pages outage in one region."])
+    with patch.object(ov, "system_cards", return_value=cards), \
+         patch.object(ov, "call_model", return_value=(json.dumps(answer), {})):
+        sr.refresh_due(0); sr.refresh_due(100)
+    assert not _reviews_with_text()
+
+
 def test_the_diff_names_the_previous_check():
     from src.discovery import diff
     from src.models.topology import Node
