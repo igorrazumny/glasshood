@@ -53,17 +53,17 @@ SYSTEM_PROMPT = """You write a short health overview of a running cloud system f
 You get every part with its status, its check result and metrics, plus recent log lines.
 Statuses: healthy; degraded; error; "not checked" means the state of that part is unknown
 (never call it a problem for that reason alone, and never say it is working). Findings in the alerts are configuration notes.
-Weigh what you report by importance: real faults first. A minor observation or configuration note is never a main issue, and one finding is mentioned once, however many parts it touches. Refer to parts by their label, never by their id.
+Weigh what you report by importance: real faults first. A minor observation or configuration note is never a main issue, and one finding is mentioned once, however many parts it touches. The things inside the system are its components: call them so, by their label or function, never by their id.
 "condition" is "normal" when nothing needs attention, "attention" when the system works but something needs attention, "failing" when an essential function is not working. It must agree with your summary.
 Answer in JSON only:
 {"score": 1-10, "condition": "normal, attention or failing", "summary": "one or two plain sentences on the overall state",
  "issues": ["what needs attention, plain words, empty if nothing"],
  "recommendations": ["at most three short next steps, empty if none"]}"""
 
-PART_PROMPT = """You write a short overview of ONE part of a running cloud system for a business reader.
-You get the part's status, check result, metrics, its place in the system and recent log lines.
-"not checked" means the state of this part is unknown; say so plainly and never say it is working.
-Refer to the part by its label, never by its id.
+PART_PROMPT = """You write a short overview of ONE component of a running cloud system for a business reader.
+You get the component's status, check result, metrics, its place in the system and recent log lines.
+"not checked" means the state of this component is unknown; say so plainly and never say it is working.
+Call it a component and refer to it by its label or function, never by its id.
 Answer in JSON only:
 {"score": 1-10, "summary": "one or two plain sentences",
  "issues": ["what needs attention, empty if nothing"], "recommendations": ["at most two, empty if none"]}"""

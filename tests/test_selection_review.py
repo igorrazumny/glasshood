@@ -133,6 +133,8 @@ def test_the_review_has_the_single_system_shape_on_the_stronger_model():
     _answer("The services are operating normally.", score=9, recommendations=["Restart ColdVault."]),
     _answer("ColdVault has no operational fault, but it carries configuration and security follow-up items."),
     _answer("Fine; some cleanup is outstanding on ColdVault."),
+    _answer("Several components of the selection are degraded."),
+    _answer("Four of five systems are operating normally."),
 ])
 def test_notes_and_malformed_answers_are_refused(answer):
     cards = {"a": _rec()}
@@ -207,7 +209,7 @@ def test_internal_faults_through_a_shared_provider_are_not_the_provider_s_issues
     cards = {"a": _rec("attention"), "b": _rec("attention"), **({"gh": _rec("attention")} if with_provider else {})}
     issues = ["Alpha requests time out through GitHub.", "Beta login fails through GitHub."] + \
         (["GitHub reports degraded service."] if with_provider else [])
-    answer = _answer("Two systems fail through GitHub.", score=4, issues=issues)
+    answer = _answer("Alpha and Beta fail through GitHub.", score=4, issues=issues)
     with patch.object(ov, "system_cards", return_value=cards), \
          patch.object(ov, "call_model", return_value=(json.dumps(answer), {})):
         sr.refresh_due(0); sr.refresh_due(100)
@@ -243,6 +245,51 @@ def test_genuine_faults_and_actions_are_not_mistaken_for_notes():
                  "Several parts are not checked."]:
         with pytest.raises(ValueError):
             sr._prose(text, "issue")
+
+
+def test_the_model_s_own_count_of_systems_is_left_out_and_the_rest_kept():
+    """Clause 3 (amended): GlassHood states the counts itself; a count sentence of the model goes."""
+    cards = {"a": _rec(), "gh": _rec("attention")}
+    answer = _answer("Four of the five systems are operating normally. GitHub reports degraded service.", score=6,
+                     issues=["GitHub reports degraded service."])
+    with patch.object(ov, "system_cards", return_value=cards), \
+         patch.object(ov, "call_model", return_value=(json.dumps(answer), {})):
+        sr.refresh_due(0); sr.refresh_due(100)
+    with patch.object(ov, "system_cards", return_value=cards):
+        got = sr.get_reviews()["all"]
+    assert got["summary"] == "GitHub reports degraded service." and got["current"] is True
+    names = {"a": "ColdVault", "gh": "Cloudflare"}
+    assert sr._without_counts("All selected systems are operating normally.", names) == "All selected systems are operating normally."
+    assert sr._without_counts("The other systems are operating normally.", names) == "The other systems are operating normally."
+    # a count without the word "systems" is a count too
+    assert sr._without_counts("Four are healthy and one needs attention. Cloudflare reports degraded service.", names) \
+        == "Cloudflare reports degraded service."
+    # a bare number in a sentence that names a system describes that system, never the selection
+    for text in ["ColdVault has one backend down; the rest serve normally.",
+                 "ColdVault has two backends; one is down.",
+                 "ColdVault has two backends; one is down. The other systems are operating normally."]:
+        assert sr._without_counts(text, names) == text
+    for text in ["2 systems need attention.", "Three are operating normally.", "One needs attention."]:
+        with pytest.raises(ValueError):
+            sr._without_counts(text, names)
+
+
+def test_the_two_levels_have_their_own_words():
+    """Clause 19: members of a selection are systems; components are the inside of one system."""
+    assert "call them systems, never components" in sr.PROMPT and "Do not count the systems" in sr.PROMPT
+    for text in ["ColdVault and Cloudflare are components of the selection.",
+                 "Each system is a component of the selected systems.",
+                 "The two members are the components in this review.",
+                 "The component systems are operating normally."]:
+        with pytest.raises(ValueError):
+            sr._prose(text, "summary")
+    # a system's own internal component keeps its name; a provider's components are not the wrong level
+    for text in ["ColdVault's authentication component is unavailable.",
+                 "Restore ColdVault's authentication component.",
+                 "GitHub reports degraded performance in several components."]:
+        assert sr._prose(text, "issue") == text
+    assert "its components" in ov.SYSTEM_PROMPT and "ONE component" in ov.PART_PROMPT
+    assert "never by their id" in ov.SYSTEM_PROMPT and "never by its id" in ov.PART_PROMPT
 
 
 def test_a_step_for_a_left_out_item_goes_with_it(monkeypatch):

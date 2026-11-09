@@ -139,8 +139,9 @@ export function withRecords(cards, records) {
     }
     const notice = record?.critical_notice || null   // REQ-GHA-041 clause 7: no AI call behind it
     if (!record?.condition) {
+      // an unread record map says nothing about the system: that is not "no record" (REQ-GHA-046 clause 3)
       return { ...c, notice, state: 'not checked', critical: 0, warning: 0, notes: 0,
-        line: records ? 'Not assessed yet' : 'Status not available yet' }
+        recordsUnavailable: !records, line: records ? 'Not assessed yet' : 'Status not available yet' }
     }
     const alerts = record.alerts || []
     const open = alerts.filter(a => alarmLevel(a) !== 'info')
@@ -273,6 +274,32 @@ export function scopeDiff(diff, owner, cardIds) {
   const removed = diff.removed || []
   return { ...diff, added: (diff.added || []).filter(inScope), changed: (diff.changed || []).filter(c => inScope(c.id)),
     removed: removed.filter(inScope), unassigned: removed.filter(id => !owner.has(id)).length }
+}
+
+// REQ-GHA-046 clause 3 (amended 2026-11-09): the review of a selection opens with GlassHood's own
+// count of its systems by state, in the cards' status words, computed from the records and never
+// written by the model; a system without a record is counted apart as not yet assessed; while the
+// records themselves could not be read, nothing is counted (an unread map is not "no record")
+const NUMBER_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve']
+const numberWord = n => NUMBER_WORDS[n] || String(n)
+const COUNTED_STATES = [
+  { state: 'healthy', one: 'is healthy', many: 'are healthy' },
+  { state: 'degraded', one: 'needs attention', many: 'need attention' },
+  { state: 'error', one: 'is degraded', many: 'are degraded' },
+  { state: 'not checked', one: 'is not yet assessed', many: 'are not yet assessed' },
+]
+export function countsLine(cards) {
+  const total = (cards || []).length
+  if (!total || cards.some(c => c.recordsUnavailable)) return null
+  const known = new Set(COUNTED_STATES.map(s => s.state))
+  const stateOf = c => known.has(c.state) ? c.state : 'not checked'
+  const groups = COUNTED_STATES.map(s => ({ ...s, n: cards.filter(c => stateOf(c) === s.state).length })).filter(s => s.n)
+  const verb = s => s.n === 1 ? s.one : s.many
+  const [first, ...rest] = groups
+  const opening = first.n === total
+    ? (total === 1 ? `The one system ${verb(first)}` : `All ${numberWord(total)} systems ${verb(first)}`)
+    : `${numberWord(first.n)[0].toUpperCase()}${numberWord(first.n).slice(1)} of ${numberWord(total)} systems ${verb(first)}`
+  return [opening, ...rest.map(s => `${numberWord(s.n)} ${verb(s)}`)].join('; ') + '.'
 }
 
 // REQ-GHA-046 clause 7: a review written before the newest evaluations says so
