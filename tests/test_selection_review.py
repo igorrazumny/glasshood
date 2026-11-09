@@ -201,6 +201,21 @@ def test_an_external_system_s_trouble_is_one_issue():
     assert not _reviews_with_text()
 
 
+@pytest.mark.parametrize("with_provider", [False, True])
+def test_internal_faults_through_a_shared_provider_are_not_the_provider_s_issues(monkeypatch, with_provider):
+    monkeypatch.setattr(sr, "_names", lambda: {"a": "Alpha", "b": "Beta", "gh": "GitHub"})
+    cards = {"a": _rec("attention"), "b": _rec("attention"), **({"gh": _rec("attention")} if with_provider else {})}
+    issues = ["Alpha requests time out through GitHub.", "Beta login fails through GitHub."] + \
+        (["GitHub reports degraded service."] if with_provider else [])
+    answer = _answer("Two systems fail through GitHub.", score=4, issues=issues)
+    with patch.object(ov, "system_cards", return_value=cards), \
+         patch.object(ov, "call_model", return_value=(json.dumps(answer), {})):
+        sr.refresh_due(0); sr.refresh_due(100)
+    with patch.object(ov, "system_cards", return_value=cards):
+        got = sr.get_reviews()["all"]
+    assert got["issues"] == issues and got["current"] is True and got["update_failed"] is False
+
+
 def test_the_diff_names_the_previous_check():
     from src.discovery import diff
     from src.models.topology import Node

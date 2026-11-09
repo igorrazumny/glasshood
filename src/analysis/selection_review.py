@@ -169,9 +169,14 @@ def _write(records: dict) -> dict:
     issues = [_prose(x, "issue") for x in issues]
     if any(_NON_ISSUE.search(x) for x in issues):
         raise ValueError("the model listed an issue that names no fault")
-    for p in outside:
+    # one issue per external service in the selection; an internal system's fault that mentions the
+    # provider it depends on is that system's issue, not the provider's
+    mentions = lambda text, name: re.search(rf"(?i)\b{re.escape(name)}\b", text) is not None
+    internal = [names.get(p) or p for p in records if p not in outside]
+    for p in [p for p in records if p in outside]:
         name = names.get(p) or p
-        if sum(1 for x in issues if re.search(rf"(?i)\b{re.escape(name)}\b", x)) > 1:
+        own = [x for x in issues if mentions(x, name) and not any(mentions(x, n) for n in internal)]
+        if len(own) > 1:
             raise ValueError(f"the model split {name}'s trouble into several issues")
     named = lambda s: _as_named(s, names)
     return {"summary": named(_prose(answer.get("summary"), "summary")), "score": int(score),
