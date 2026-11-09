@@ -9,12 +9,16 @@
 # modal still shows real entries — never an attacker-supplied project.
 # REQ-GHA-032: a part with no lines in the last hour shows its most recent lines
 # from the last 7 days and says so; every empty answer carries a plain reason.
+# Amended 2026-11-09 (clauses 12 and 13): the window opens with several screens of
+# lines (300 by default, 500 at most) and `before=<the oldest line shown>` returns
+# the lines before it, within the 7-day limit, with a plain note when none remain.
 
 import asyncio
 import logging
+import re
 from datetime import datetime, timezone, timedelta
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 
 from src.api.routes.auth import verify_token
 from src.config.settings import GCP_PROJECT_ID
@@ -31,22 +35,42 @@ DEFAULT_FILTER = 'resource.type="gce_instance"'
 QUIET_FALLBACK = timedelta(days=7)
 QUIET_NOTE = "No log lines in the last hour. Showing the most recent lines from the last 7 days."
 EMPTY_NOTE = "No log lines for this part in the last 7 days."
+EARLIER_EMPTY_NOTE = "No earlier lines in the last 7 days."
 UNKNOWN_NOTE = "GlassHood does not know this part, so it cannot look up its logs."
+LINES_DEFAULT, LINES_MAX = 300, 500
+
+
+def _parse_before(before: str) -> datetime:
+    """The oldest line shown, in any of the forms the windows print (GCP, AWS, Azure, provider)."""
+    text = before.strip().replace(" ", "T")
+    text = re.sub(r"(\.\d{6})\d+", r"\1", text).replace("Z", "+00:00")
+    dt = datetime.fromisoformat(text)
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def _older(timestamp, before: datetime) -> bool:
+    try:
+        return _parse_before(str(timestamp)) < before
+    except ValueError:
+        return False
 
 
 def _query_logs_with_filter(project: str, log_filter: str, max_entries: int = 100,
-                            window: timedelta = timedelta(hours=1)) -> list[dict]:
+                            window: timedelta = timedelta(hours=1), before: datetime = None) -> list[dict]:
     """Query GCP Cloud Logging with an explicit filter and project.
 
     REQ-705: the manifest-supplied filter is wrapped in parentheses so an
     `OR` clause inside the manifest filter cannot cause the trailing
     `AND timestamp>=...` to bind looser than expected and return entries
-    outside the intended one-hour window.
+    outside the intended one-hour window. `before` narrows to the lines
+    older than the oldest one already shown (REQ-GHA-032 clause 13).
     """
     from google.cloud.logging_v2 import Client
 
     cutoff = datetime.now(timezone.utc) - window
     filter_str = f'({log_filter}) AND timestamp>="{cutoff.isoformat()}"'
+    if before is not None:
+        filter_str += f' AND timestamp<"{before.isoformat()}"'
 
     client = Client(project=project)
     entries = list(client.list_entries(
@@ -233,8 +257,38 @@ def _resolve_vm_child(node_id: str):
     return None
 
 
+async def _earlier(node_id: str, status: str, project, resolved_filter, lines: int, before: datetime) -> dict:
+    """REQ-GHA-032 clause 13: the lines before the oldest one shown, within the 7-day limit."""
+    loop = asyncio.get_running_loop()
+    floor = datetime.now(timezone.utc) - QUIET_FALLBACK
+    try:
+        if before <= floor:
+            entries = []
+        elif status == "aws_logs":
+            from src.collectors.aws_resources import query_logs
+            hours = (before - floor).total_seconds() / 3600
+            entries = await loop.run_in_executor(
+                None, lambda: query_logs(resolved_filter, hours, lines, end_ms=int(before.timestamp() * 1000)))
+        elif status == "azure_logs":
+            from src.collectors.azure_resources import query_logs
+            entries = await loop.run_in_executor(
+                None, lambda: query_logs(project, resolved_filter, 24 * 7, lines, before=before))
+        else:
+            entries = await loop.run_in_executor(
+                None, _query_logs_with_filter, project, resolved_filter, lines, QUIET_FALLBACK, before)
+    except ImportError:
+        return {"node_id": node_id, "entries": [], "count": 0, "earlier": True,
+                "error": "google-cloud-logging not installed"}
+    except Exception as e:
+        logger.warning(f"Earlier log query failed for {node_id}: {e}")
+        return {"node_id": node_id, "entries": [], "count": 0, "earlier": True,
+                "error": f"GlassHood could not read this part's earlier logs ({type(e).__name__})"}
+    return {"node_id": node_id, "entries": entries, "count": len(entries), "window": "7d", "earlier": True,
+            **({} if entries else {"note": EARLIER_EMPTY_NOTE})}
+
+
 @router.get("/api/logs/{node_id}")
-async def get_logs(node_id: str, request: Request, lines: int = 100,
+async def get_logs(node_id: str, request: Request, lines: int = LINES_DEFAULT, before: str = None,
                    log_filter: str = None, log_project: str = None):
     """Return recent logs for a topology node.
 
@@ -257,10 +311,21 @@ async def get_logs(node_id: str, request: Request, lines: int = 100,
             f"node_id={node_id!r} — filter+project are derived server-side"
         )
 
+    before_dt = None
+    if before:
+        try:
+            before_dt = _parse_before(before)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="before must be a time as the log lines print it")
+
     # REQ-GHA-036: a public system's box shows what its provider publishes about it
     from src.collectors import statuspage
     published = statuspage.log_entries(node_id)
     if published is not None:
+        if before_dt is not None:   # the provider's updates come whole; "earlier" is what is older than the oldest shown
+            entries = [e for e in published.get("entries") or [] if _older(e.get("timestamp"), before_dt)]
+            return {"node_id": node_id, "entries": entries, "count": len(entries), "window": "provider", "earlier": True,
+                    **({} if entries else {"note": EARLIER_EMPTY_NOTE})}
         return {"node_id": node_id, "count": len(published["entries"]), "window": "provider", **published}
 
     status, project, resolved_filter = _resolve_node(node_id)
@@ -268,9 +333,11 @@ async def get_logs(node_id: str, request: Request, lines: int = 100,
         return {"node_id": node_id, "entries": [], "count": 0,
                 "error": UNKNOWN_NOTE}
 
-    lines = max(1, min(lines, 200))
+    lines = max(1, min(lines, LINES_MAX))
     if status == "no_logs":
         return {"node_id": node_id, "entries": [], "count": 0, "note": resolved_filter}
+    if before_dt is not None:
+        return await _earlier(node_id, status, project, resolved_filter, lines, before_dt)
     if status == "aws_logs":
         from src.collectors.aws_resources import query_logs
         try:

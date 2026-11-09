@@ -87,6 +87,16 @@ def test_logs_read_backwards_across_empty_pages_and_streams():
     assert all('endTime' in call.kwargs for call in c.get_log_events.call_args_list)
 
 
+def test_earlier_logs_end_before_the_oldest_line_shown():
+    """REQ-GHA-032 clause 13: end_ms reads the lines before that moment instead of before now."""
+    c = Mock()
+    c.describe_log_streams.return_value = {'logStreams': [{'logStreamName': 'a'}]}
+    c.get_log_events.return_value = {'events': [], 'nextBackwardToken': 'end'}
+    aws.query_logs({'log_group': '/ecs/test'}, 2, 5, lambda *_: c, end_ms=7_200_000)
+    call = c.get_log_events.call_args.kwargs
+    assert call['endTime'] == 7_200_000 and call['startTime'] == 0
+
+
 def test_logs_do_not_hide_permission_failure_as_empty():
     c = Mock(); c.describe_log_streams.side_effect = RuntimeError('denied')
     with pytest.raises(RuntimeError):
@@ -114,8 +124,8 @@ def test_aws_log_route_uses_trusted_location_and_quiet_fallback(monkeypatch):
     app = FastAPI(); app.include_router(logs.router)
     result = TestClient(app).get('/api/logs/ecs?log_filter=untrusted&log_project=other').json()
     assert result['window'] == '7d' and result['count'] == 1
-    assert query.call_args_list[0].args == (config, 1, 100)
-    assert query.call_args_list[1].args == (config, 168, 100)
+    assert query.call_args_list[0].args == (config, 1, 300)     # REQ-GHA-032 clause 12: several screens
+    assert query.call_args_list[1].args == (config, 168, 300)
 
 
 def test_aws_location_reaches_part_and_system_ai_without_google_reads(monkeypatch):
