@@ -164,18 +164,23 @@ def _write(records: dict) -> dict:
     # clause 7: a score is part of the review; clause 6: next steps only where something needs attention
     if isinstance(score, bool) or not isinstance(score, (int, float)) or not 1 <= score <= 10 or score != int(score):
         raise ValueError("the model's score was missing or not a whole number from 1 to 10")
+    mentions = lambda text, name: re.search(rf"(?i)\b{re.escape(name)}\b", text) is not None
     issues = [_prose(x, "issue") for x in issues]
     # a true sentence in the wrong place ("ColdVault has no operational fault") is left out, not
-    # refused: the rest of the answer stands, and next steps go with the issues that remain
-    issues = [x for x in issues if not _NON_ISSUE.search(x)]
+    # refused: the rest of the answer stands, and a next step for a system whose item was left out
+    # goes with it (clause 6: next steps only for the listed issues)
+    dropped = [x for x in issues if _NON_ISSUE.search(x)]
+    issues = [x for x in issues if x not in dropped]
+    if dropped:
+        gone = [n for n in names.values() if any(mentions(x, n) for x in dropped)]
+        steps = [s for s in steps if isinstance(s, str) and not any(mentions(s, n) for n in gone)]
     if steps and not issues:
-        if any(answer.get("issues") or []):
+        if dropped:
             steps = []
         else:
             raise ValueError("the model gave next steps although nothing needs attention")
     # one issue per external service in the selection; an internal system's fault that mentions the
     # provider it depends on is that system's issue, not the provider's
-    mentions = lambda text, name: re.search(rf"(?i)\b{re.escape(name)}\b", text) is not None
     internal = [names.get(p) or p for p in records if p not in outside]
     for p in [p for p in records if p in outside]:
         name = names.get(p) or p

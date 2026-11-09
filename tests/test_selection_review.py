@@ -228,6 +228,21 @@ def test_an_issue_that_names_no_fault_is_left_out_and_the_review_kept():
     assert got["current"] is True and got["update_failed"] is False
 
 
+def test_a_step_for_a_left_out_item_goes_with_it(monkeypatch):
+    monkeypatch.setattr(sr, "_names", lambda: {"a": "ColdVault", "gh": "Cloudflare"})
+    cards = {"a": _rec("normal"), "gh": _rec("attention")}
+    answer = _answer("Cloudflare is degraded; ColdVault is operating normally.", score=6,
+                     issues=["ColdVault has no operational fault.", "Cloudflare reports degraded service."],
+                     recommendations=["Restart ColdVault.", "Follow Cloudflare status updates."])
+    with patch.object(ov, "system_cards", return_value=cards), \
+         patch.object(ov, "call_model", return_value=(json.dumps(answer), {})):
+        sr.refresh_due(0); sr.refresh_due(100)
+    with patch.object(ov, "system_cards", return_value=cards):
+        got = sr.get_reviews()["all"]
+    assert got["issues"] == ["Cloudflare reports degraded service."]
+    assert got["recommendations"] == ["Follow Cloudflare status updates."]
+
+
 def test_the_diff_names_the_previous_check():
     from src.discovery import diff
     from src.models.topology import Node
