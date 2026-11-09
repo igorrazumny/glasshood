@@ -16,7 +16,7 @@ SCOPES = ("all", "group-internal", "group-external")
 # The contract and instructions a review was written under. Bumped with every revision of the contract or
 # of PROMPT, so a saved review of an older version is set aside at load and written once more (one call per
 # selection): the owner's live reading (clause 12) is then of the revised instructions, not of a cached text.
-SHAPE = 3
+SHAPE = 4
 SETTLE_S = 90       # a round rewrites records one by one: wait until they stop changing
 RETRY_S = 600
 
@@ -25,7 +25,7 @@ For each system you get its name, condition, score, latest assessment, the items
 Write in the measured, factual register of an operations report. No conversational openers, no filler, no reassurance beyond the facts.
 Rules:
 - Use each system's name exactly as given.
-- The summary is one or two sentences on the selection as a whole: first the overall situation, then what deserves a call-out. Do not go through the systems one by one. Systems operating normally may be named together in one clause.
+- The summary is one or two sentences on the selection as a whole: first the overall situation, then what deserves a call-out. Do not go through the systems one by one. When more than two systems are operating normally, say so collectively ("the other systems are operating normally") rather than naming each.
 - Under issues, list only actual faults and provider-reported problems, one plain sentence each, naming the system and saying what is wrong. Never list a system without saying what is wrong with it.
 - Configuration notes, observations, leftovers, findings and parts that are not checked are outside this review: never mention them. A system whose attention comes only from such notes gets no issue and no next step; if the summary names it at all, it says the system has no operational fault.
 - Never enumerate incidents, locations, components or alert numbers. Describe the pattern and what it means for the business.
@@ -133,10 +133,21 @@ def _names() -> dict:
     return {m.get("product"): m.get("solution") or m.get("display_name") or m.get("product") for m in _load_manifests()}
 
 
+def _as_named(text: str, names: dict) -> str:
+    """A system is called by its name as the reader sees it, whatever case the inputs used."""
+    for product, name in names.items():
+        for word in {product, name}:
+            if len(word) < 4:   # a short id could be an ordinary word; only real names are normalised
+                continue
+            # a dot counts as part of a domain only when a word follows it; a full stop does not
+            text = re.sub(rf"(?i)(?<![\w.-]){re.escape(word)}(?![\w-])(?!\.\w)", name, text)
+    return text
+
+
 def _write(records: dict) -> dict:
     """Clauses 2 to 7: the single-system shape, on the stronger model (clause 12)."""
     from src.analysis import vertex_overview as ov
-    names = _names()
+    names = {p: n for p, n in _names().items() if p in records}
     payload = ov.sanitize([{"system": names.get(p) or p, "condition": r.get("condition"), "score": r.get("score"),
                             "assessment": r.get("summary"), "needs_attention": r.get("issues") or [],
                             "alerts": _real_alerts(r)}
@@ -155,9 +166,10 @@ def _write(records: dict) -> dict:
     issues = [_prose(x, "issue") for x in issues]
     if any(_NON_ISSUE.search(x) for x in issues):
         raise ValueError("the model listed an issue that names no fault")
-    return {"summary": _prose(answer.get("summary"), "summary"), "score": int(score),
-            "issues": issues,
-            "recommendations": [_prose(x, "next step") for x in steps[:3]], "shape": SHAPE}
+    named = lambda s: _as_named(s, names)
+    return {"summary": named(_prose(answer.get("summary"), "summary")), "score": int(score),
+            "issues": [named(x) for x in issues],
+            "recommendations": [named(_prose(x, "next step")) for x in steps[:3]], "shape": SHAPE}
 
 
 def _by_scope() -> dict:
@@ -201,6 +213,7 @@ def refresh_due(now: float = None) -> None:
             continue
         with _lock:
             _reviews[scope] = {**written, "analyzed_at": now, "sig": sig}
+        _failed_at.pop(scope, None)   # a success supersedes an earlier failed attempt
         changed = True
     if changed:
         _unsaved[0] = True
