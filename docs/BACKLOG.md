@@ -788,3 +788,23 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Testable:** Yes (API and UI; live reading of the text by the owner)
 - **Who builds:** Neo.
 - **Status:** confirmed by the owner 2026-11-09 (full text).
+
+## REQ-GHA-047: Every system card on the home view is the same size, and the two sections line up
+
+- **Goal:** The home view reads as one composed page: identical cards, aligned columns and no ragged edge, whatever the state of the side panels.
+- **Why:** Owner, 2026-11-09, from the design review's refinements on the cards.
+- **Target state:**
+  1. Every card on the home view has the same width and the same height as every other card on the page, across both sections, in every state of the side panels and at every window width.
+  2. A card's content keeps a fixed structure so its height is constant: the status line is one line, cut with an ellipsis when too long; the assessment shows exactly two lines, cut with an ellipsis, and takes two lines of height even when the text is shorter.
+  3. "Read assessment" still opens the full text in place. While it is open, that card's row may be taller; closing it restores the constant height.
+  4. The two sections, Proprietary systems and External systems, share one grid: their headers are full-width rows in it, and the card columns of one section align exactly with those of the other.
+  5. Cards are never narrower than about 320 px. As many columns as fit at that minimum share the width equally. In the default state, with both side panels open, the three proprietary systems sit on one row.
+  6. The cards area stops growing at about 1600 px, so a card is never wider than about 480 px when both panels are hidden on a wide monitor.
+  7. Anything inside a card that adapts to the available space adapts to the card's own width, not the window's.
+  8. Cards are not fixed-pixel boxes that wrap, which would leave a ragged right edge changing with every panel toggle.
+  9. At phone width the cards stack in one full-width column. Status words, logos, click and keyboard behaviour stay as REQ-GHA-045 states.
+  10. Recorded for later, not part of this requirement: when the number of systems grows beyond what cards suit, about eight, a list view with one row per system, the same status label and a one-line assessment becomes the default, with the cards kept as an optional tiles view.
+- **Priority:** P3
+- **Testable:** Yes (UI)
+- **Who builds:** Neo.
+- **Status:** confirmed by the owner 2026-11-09 (full text).
