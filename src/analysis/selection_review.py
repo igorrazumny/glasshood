@@ -139,11 +139,19 @@ def _real_alerts(record: dict) -> list:
 def _prose(value, what: str) -> str:
     if not isinstance(value, str) or not value.strip() or _LIST_LINE.search(value):
         raise ValueError(f"the model's {what} was not prose")
-    if _NOTE_WORDS.search(value):
-        raise ValueError(f"the model's {what} carried configuration notes into the review")
     if _WRONG_LEVEL.search(value):
         raise ValueError(f"the model's {what} called systems components")
     return value.strip()
+
+
+def _is_note(text) -> bool:
+    """Clause 5: an item or sentence about observations, configuration notes and the like."""
+    return isinstance(text, str) and _NOTE_WORDS.search(text) is not None
+
+
+def _without_notes(text: str) -> str:
+    """Clause 5: the sentences about notes are left out, whether in what the model gets or in what it wrote."""
+    return " ".join(s for s in _SENTENCE_END.split(text) if not _NOTE_WORDS.search(s))
 
 
 def _mentions(text: str, name: str) -> bool:
@@ -183,10 +191,12 @@ def _write(records: dict) -> dict:
     names = {p: n for p, n in _names().items() if p in records}
     outside = ov._outside_products()
     # an external service's own items and alert titles enumerate its components and incidents (clause 5):
-    # the model gets only its condition, score and assessment
+    # the model gets only its condition, score and assessment. A system's own notes, in its assessment
+    # and in its items, never reach the model either: it cannot repeat what it was not given.
     payload = ov.sanitize([{"system": names.get(p) or p, "condition": r.get("condition"), "score": r.get("score"),
-                            "assessment": r.get("summary"),
-                            **({} if p in outside else {"needs_attention": r.get("issues") or [], "alerts": _real_alerts(r)})}
+                            "assessment": _without_notes(r.get("summary") or ""),
+                            **({} if p in outside else {"needs_attention": [i for i in (r.get("issues") or []) if isinstance(i, str) and not _is_note(i)],
+                                                        "alerts": _real_alerts(r)})}
                            for p, r in sorted(records.items())])
     text, _ = ov.call_model(PROMPT, json.dumps(payload, default=str), deep=True)
     answer = ov.parse_json(text) or {}
@@ -199,19 +209,24 @@ def _write(records: dict) -> dict:
         raise ValueError("the model's score was missing or not a whole number from 1 to 10")
     mentions = _mentions
     issues = [_prose(x, "issue") for x in issues]
-    # a true sentence in the wrong place ("ColdVault has no operational fault") is left out, not
-    # refused: the rest of the answer stands, and a next step for a system whose item was left out
-    # goes with it (clause 6: next steps only for the listed issues)
-    dropped = [x for x in issues if _NON_ISSUE.search(x)]
+    # a true sentence in the wrong place ("ColdVault has no operational fault") or a note that slipped
+    # through ("leftover firewall rules") is left out, not refused: the rest of the answer stands, and
+    # a next step for a system whose item was left out goes with it (clause 6: next steps only for
+    # the listed issues)
+    dropped = [x for x in issues if _NON_ISSUE.search(x) or _is_note(x)]
     issues = [x for x in issues if x not in dropped]
+    steps = [s for s in steps if isinstance(s, str) and not _is_note(s)]
     if dropped:
         gone = [n for n in names.values() if any(mentions(x, n) for x in dropped)]
-        steps = [s for s in steps if isinstance(s, str) and not any(mentions(s, n) for n in gone)]
+        steps = [s for s in steps if not any(mentions(s, n) for n in gone)]
     if steps and not issues:
         if dropped:
             steps = []
         else:
             raise ValueError("the model gave next steps although nothing needs attention")
+    summary = _without_notes(_prose(answer.get("summary"), "summary"))
+    if not summary.strip():
+        raise ValueError("the model's summary was only about configuration notes")
     # one issue per external service in the selection; an internal system's fault that mentions the
     # provider it depends on is that system's issue, not the provider's
     internal = [names.get(p) or p for p in records if p not in outside]
@@ -221,7 +236,7 @@ def _write(records: dict) -> dict:
         if len(own) > 1:
             raise ValueError(f"the model split {name}'s trouble into several issues")
     named = lambda s: _as_named(s, names)
-    return {"summary": named(_without_counts(_prose(answer.get("summary"), "summary"), names)), "score": int(score),
+    return {"summary": named(_without_counts(summary, names)), "score": int(score),
             "issues": [named(x) for x in issues],
             "recommendations": [named(_prose(x, "next step")) for x in steps[:3]], "shape": SHAPE}
 
