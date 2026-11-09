@@ -120,14 +120,15 @@ def _line(event: dict) -> dict:
             'severity': severity, 'message': message}
 
 
-def query_logs(config: dict, since_hours: float, max_entries: int, make_client=None) -> list:
+def query_logs(config: dict, since_hours: float, max_entries: int, make_client=None, end_ms: int = None) -> list:
     """Newest lines across the configured group's streams, including quiet older streams.
 
     Read backwards within each stream so a busy stream cannot hide its latest lines.
     Empty pages are not EOF; AWS ends backwards pagination by repeating the token.
+    `end_ms` reads the lines before that moment instead of before now (REQ-GHA-032 clause 13).
     """
     logs = (make_client or client)('logs', config)
-    end = int(time.time() * 1000)
+    end = int(time.time() * 1000) if end_ms is None else int(end_ms)
     start = end - int(since_hours * 3600 * 1000)
     group = config['log_group']
     streams, token_value, seen = [], None, set()

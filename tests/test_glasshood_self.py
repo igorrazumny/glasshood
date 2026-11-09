@@ -55,7 +55,11 @@ def test_log_rows_become_log_lines_newest_first():
         return data
     lines = az.query_logs("ws1", "ContainerAppConsoleLogs_CL | where ContainerAppName_s == 'glasshood'", 1, 5, post=post)
     assert [l["severity"] for l in lines] == ["ERROR", "INFO"]
-    assert "ago(60m)" in seen["kql"] and "take 5" in seen["kql"]
+    assert "ago(60m)" in seen["kql"] and "take 5" in seen["kql"] and "TimeGenerated <" not in seen["kql"]
+    # REQ-GHA-032 clause 13: earlier lines are the ones before the oldest shown
+    from datetime import datetime, timezone
+    az.query_logs("ws1", "Q", 168, 5, post=post, before=datetime(2026, 11, 9, 10, 0, tzinfo=timezone.utc))
+    assert "| where TimeGenerated <= datetime(2026-11-09T10:00:00.000000Z) | order by" in seen["kql"]
 
 
 def test_a_stopped_loop_shows_as_stopped():

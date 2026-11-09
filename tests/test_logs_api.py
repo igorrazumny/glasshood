@@ -117,7 +117,7 @@ class TestLogsApi:
         assert args[2] >= 1, f"lines should be clamped to >=1, got {args[2]}"
 
     def test_lines_clamped_to_upper_bound(self):
-        """lines>200 → 200."""
+        """lines>500 → 500 (REQ-GHA-032 clause 12: several screens, not unbounded)."""
         with patch("src.api.routes.logs.verify_token") as mock_verify, \
              patch("src.api.routes.logs._query_logs_with_filter") as mock_query, \
              patch("src.api.routes.logs._resolve_node") as mock_resolve:
@@ -126,7 +126,64 @@ class TestLogsApi:
             mock_query.return_value = []
             _client().get("/api/logs/pl-api?lines=10000")
         args = mock_query.call_args.args
-        assert args[2] == 200, f"lines should be clamped to 200, got {args[2]}"
+        assert args[2] == 500, f"lines should be clamped to 500, got {args[2]}"
+
+    def test_the_window_opens_with_several_screens(self):
+        """REQ-GHA-032 clause 12: 300 lines by default."""
+        with patch("src.api.routes.logs.verify_token") as mock_verify, \
+             patch("src.api.routes.logs._query_logs_with_filter") as mock_query, \
+             patch("src.api.routes.logs._resolve_node") as mock_resolve:
+            mock_verify.return_value = None
+            mock_resolve.return_value = ("manifest_logs", "p", "f")
+            mock_query.return_value = []
+            _client().get("/api/logs/pl-api")
+        assert mock_query.call_args.args[2] == 300
+
+    def test_earlier_lines_come_from_before_the_oldest_shown_within_the_week(self):
+        """REQ-GHA-032 clause 13: `before` narrows the 7-day window to what is older than the oldest line shown."""
+        from datetime import datetime, timezone
+        from urllib.parse import quote
+        from src.api.routes.logs import QUIET_FALLBACK, EARLIER_EMPTY_NOTE
+        line = {"timestamp": "2026-11-09 09:00:00.000000+00:00", "severity": "INFO", "message": "m"}
+        # the oldest line's own text, in the GCP and the Azure form, sent as the window sends it (encoded)
+        for shown, answer in [("2026-11-09 10:00:00.123456+00:00", [line]), ("2026-11-09T10:00:00.1234567Z", [])]:
+            with patch("src.api.routes.logs.verify_token", return_value=None), \
+                 patch("src.api.routes.logs._query_logs_with_filter", return_value=answer) as mock_query, \
+                 patch("src.api.routes.logs._resolve_node", return_value=("manifest_logs", "p", "f")):
+                r = _client().get(f"/api/logs/pl-api?before={quote(shown, safe='')}")
+            args = mock_query.call_args.args
+            assert args[2] == 300 and args[3] == QUIET_FALLBACK
+            # the boundary is included; a time finer than a microsecond rounds up so nothing is skipped
+            assert args[4] == datetime(2026, 11, 9, 10, 0, 0, 123456 if answer else 123457, tzinfo=timezone.utc)
+            body = r.json()
+            assert body["earlier"] is True and body["window"] == "7d" and body["entries"] == answer
+            assert body.get("note") == (None if answer else EARLIER_EMPTY_NOTE)
+
+    def test_an_unreadable_before_is_refused(self):
+        with patch("src.api.routes.logs.verify_token", return_value=None), \
+             patch("src.api.routes.logs._resolve_node", return_value=("manifest_logs", "p", "f")):
+            r = _client().get("/api/logs/pl-api?before=yesterday")
+        assert r.status_code == 400
+
+    def test_the_gcp_filter_narrows_to_before_the_oldest_shown(self):
+        from datetime import datetime, timezone
+        from src.api.routes.logs import _query_logs_with_filter, QUIET_FALLBACK
+        before = datetime(2026, 11, 9, 10, 0, tzinfo=timezone.utc)
+        with patch("google.cloud.logging_v2.Client") as mock_client:
+            mock_client.return_value.list_entries.return_value = []
+            _query_logs_with_filter("p", 'resource.type="x"', 300, QUIET_FALLBACK, before)
+        sent = mock_client.return_value.list_entries.call_args.kwargs["filter_"]
+        assert sent.startswith('(resource.type="x") AND timestamp>="') and 'AND timestamp<="2026-11-09T10:00:00+00:00"' in sent
+
+    def test_a_provider_s_earlier_updates_are_the_ones_older_than_the_oldest_shown(self):
+        rows = [{"timestamp": "2026-11-09T10:30:00Z", "severity": "WARNING", "message": "new"},
+                {"timestamp": "2026-11-09T09:30:00Z", "severity": "WARNING", "message": "old"}]
+        with patch("src.api.routes.logs.verify_token", return_value=None), \
+             patch("src.collectors.statuspage.log_entries", return_value={"entries": rows, "note": None}):
+            r = _client().get("/api/logs/cf-x?before=2026-11-09T10:00:00Z")
+            r2 = _client().get("/api/logs/cf-x?before=2026-11-09T09:00:00Z")
+        assert [e["message"] for e in r.json()["entries"]] == ["old"] and r.json()["earlier"] is True
+        assert r2.json()["entries"] == [] and r2.json()["note"] == "No earlier lines in the last 7 days."
 
     def test_no_legacy_per_node_filter_dicts(self):
         """Truly-stale NODE_FILTERS / TYPE_FILTERS / _vm / _query_logs stay removed.
