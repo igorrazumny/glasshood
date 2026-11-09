@@ -155,6 +155,32 @@ def test_the_model_gets_display_names_and_each_system_s_attention_items():
     assert sent[0]["system"] == "Alpha" and sent[0]["needs_attention"] == ["Backend: 1 of 2 healthy"]
 
 
+def test_systems_are_called_by_their_display_names_whatever_case_the_model_used():
+    names = {"coldvault": "ColdVault", "glasshood": "GlassHood"}
+    assert sr._as_named("coldvault and Glasshood are fine; coldvault.ai answers; GLASSHOOD too.", names) \
+        == "ColdVault and GlassHood are fine; coldvault.ai answers; GlassHood too."
+    assert sr._as_named("A part of it is fine.", {"a": "Alpha"}) == "A part of it is fine."
+    cards = {"a": _rec()}
+    with patch.object(ov, "system_cards", return_value=cards), \
+         patch.object(ov, "call_model", return_value=(json.dumps(_answer("alpha is operating normally.", score=9)), {})):
+        sr.refresh_due(0); sr.refresh_due(100)
+    with patch.object(ov, "system_cards", return_value=cards):
+        assert sr.get_reviews()["all"]["summary"] == "Alpha is operating normally."
+
+
+def test_a_success_clears_an_earlier_failed_attempt():
+    cards = {"a": _rec()}
+    with patch.object(ov, "system_cards", return_value=cards), \
+         patch.object(ov, "call_model", return_value=('{"summary": ["bad"]}', {})):
+        sr.refresh_due(0); sr.refresh_due(100)
+    with patch.object(ov, "system_cards", return_value=cards):
+        assert sr.get_reviews()["all"]["update_failed"] is True
+    _run(cards, "Fine.", 800)
+    with patch.object(ov, "system_cards", return_value=cards):
+        got = sr.get_reviews()["all"]
+    assert got["summary"] == "Fine." and got["update_failed"] is False and got["current"] is True
+
+
 def test_the_diff_names_the_previous_check():
     from src.discovery import diff
     from src.models.topology import Node
