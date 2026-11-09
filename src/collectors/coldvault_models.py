@@ -27,7 +27,7 @@ _lock = threading.Lock()
 _state: dict = {"read": False, "reason": "not read yet", "checked_at": None, "models": {}}
 
 # The same prefixes ColdVault uses to tell a model's provider from its id
-_PREFIXES = (("dashscope", "dashscope"), ("redpill", "redpill"), ("vllm", "vllm"),
+_PREFIXES = (("dashscope", "dashscope"), ("tinfoil", "tinfoil"), ("redpill", "redpill"), ("vllm", "vllm"),
              ("gemini", "gemini"), ("gpt", "openai"), ("claude", "claude"),
              ("xai/", "grok"), ("grok", "grok"), ("qwen", "qwen"))
 
