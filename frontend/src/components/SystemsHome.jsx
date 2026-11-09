@@ -87,21 +87,23 @@ function SystemCard({ card: c, about, loadError, onOpen, onOpenAlert }) {
           ? <a href={c.sourceUrl} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="underline">{c.source}</a>
           : (c.outside ? c.source : c.subtitle)}
       </div>
-      <div className="mt-3 h-6 truncate">
-        {c.offline ? <AiOfflineLine offline={c.offline} onOpenAlert={onOpenAlert} /> : <StatusChip card={c} />}
+      <div className="mt-3 h-6 flex items-center min-w-0">
+        {c.offline ? <AiOfflineLine compact offline={c.offline} onOpenAlert={onOpenAlert} /> : <span className="truncate"><StatusChip card={c} /></span>}
       </div>
       <p className={`mt-1 text-sm h-5 truncate ${c.notice ? 'font-medium text-red-700 dark:text-red-400' : 'text-gray-700 dark:text-purple-200'}`}
         title={c.notice ? `Critical: ${c.notice}` : undefined}>
         {c.notice ? `Critical: ${c.notice}` : c.offline ? '' : c.line}
       </p>
       <div className="mt-3 pt-3 border-t border-border/70 dark:border-purple-700/70 flex-1 min-h-[6.5rem]">
+        {/* the offline card has the same slots as a normal one, so closed cards stay equal in height */}
         {c.offline ? (
-          <details onClick={e => e.stopPropagation()}>
-            <summary className="text-xs font-semibold text-gray-500 dark:text-purple-300 cursor-pointer truncate">
-              {a.when && about?.summary ? `Last evaluation, ${a.when.replace(/^evaluated /, '')}` : 'Not evaluated yet'}
-            </summary>
-            {about?.summary && <p className="text-sm text-gray-700 dark:text-purple-100 leading-relaxed mt-1">{about.summary}</p>}
-          </details>
+          <>
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-purple-300 mb-1 truncate">
+              {a.when && about?.summary ? `Last evaluation · ${a.when}` : 'Not evaluated yet'}
+            </div>
+            <div className="text-xs h-4" />
+            <Assessment text={about?.summary || ''} busy={false} />
+          </>
         ) : (
           <>
             <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-purple-300 mb-1 truncate">
