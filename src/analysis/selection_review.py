@@ -40,7 +40,8 @@ Answer in JSON only:
 # clause 5: words that mean the model carried notes into the review; such an answer is refused
 # the phrases a note summary is made of; a fault may still speak of a configuration, a duplicate or a follow-up
 _NOTE_WORDS = re.compile(r"(?i)\b(observations?|configuration notes?|configuration (and|or) security\b[^.]*?\bitems?|"
-                         r"follow-?up items?|leftovers?|findings?|cleanup|housekeeping|not checked|unverified)\b")
+                         r"follow-?up items?|leftovers?|findings?|cleanup (is |remains |items?|notes?)|housekeeping (items?|notes?)|"
+                         r"not checked|unverified)\b")
 # an issue that names no fault is not an issue (clause 5)
 _NON_ISSUE = re.compile(r"(?i)(no operational fault|needs attention\.?$|attention flag)")
 _LIST_LINE = re.compile(r"(?m)^\s*([-*•]|\d+[.)])\s")

@@ -234,10 +234,13 @@ def test_genuine_faults_and_actions_are_not_mistaken_for_notes():
     for text in ["ColdVault is unavailable because its configuration is invalid.",
                  "Restore ColdVault's last working configuration.",
                  "GitHub is sending duplicate webhook deliveries.",
-                 "Arrange a follow-up with Cloudflare support."]:
+                 "Arrange a follow-up with Cloudflare support.",
+                 "Run disk cleanup on ColdVault, then confirm recovery.",
+                 "ColdVault is unavailable because its housekeeping task exhausted the available disk space."]:
         assert sr._prose(text, "issue") == text
     for text in ["ColdVault carries configuration and security follow-up items.",
-                 "Some cleanup is outstanding.", "Leftover firewall rules remain.", "Several parts are not checked."]:
+                 "Some cleanup is outstanding.", "Housekeeping items remain on ColdVault.", "Leftover firewall rules remain.",
+                 "Several parts are not checked."]:
         with pytest.raises(ValueError):
             sr._prose(text, "issue")
 
