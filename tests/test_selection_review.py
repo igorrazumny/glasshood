@@ -260,15 +260,30 @@ def test_the_model_s_own_count_of_systems_is_left_out_and_the_rest_kept():
     assert got["summary"] == "GitHub reports degraded service." and got["current"] is True
     assert sr._without_counts("All selected systems are operating normally.") == "All selected systems are operating normally."
     assert sr._without_counts("The other systems are operating normally.") == "The other systems are operating normally."
-    with pytest.raises(ValueError):
-        sr._without_counts("2 systems need attention.")
+    # a count without the word "systems" is a count too
+    assert sr._without_counts("Four are healthy and one needs attention. Cloudflare reports degraded service.") \
+        == "Cloudflare reports degraded service."
+    assert sr._without_counts("ColdVault has one backend down; the rest serve normally.") \
+        == "ColdVault has one backend down; the rest serve normally."
+    for text in ["2 systems need attention.", "Three are operating normally.", "One needs attention."]:
+        with pytest.raises(ValueError):
+            sr._without_counts(text)
 
 
 def test_the_two_levels_have_their_own_words():
     """Clause 19: members of a selection are systems; components are the inside of one system."""
     assert "call them systems, never components" in sr.PROMPT and "Do not count the systems" in sr.PROMPT
-    with pytest.raises(ValueError):
-        sr._prose("GitHub reports degraded performance in several components.", "issue")
+    for text in ["ColdVault and Cloudflare are components of the selection.",
+                 "Each system is a component of the selected systems.",
+                 "The two members are the components in this review.",
+                 "The component systems are operating normally."]:
+        with pytest.raises(ValueError):
+            sr._prose(text, "summary")
+    # a system's own internal component keeps its name; a provider's components are not the wrong level
+    for text in ["ColdVault's authentication component is unavailable.",
+                 "Restore ColdVault's authentication component.",
+                 "GitHub reports degraded performance in several components."]:
+        assert sr._prose(text, "issue") == text
     assert "its components" in ov.SYSTEM_PROMPT and "ONE component" in ov.PART_PROMPT
     assert "never by their id" in ov.SYSTEM_PROMPT and "never by its id" in ov.PART_PROMPT
 

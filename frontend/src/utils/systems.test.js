@@ -250,4 +250,16 @@ test('the count sentence uses the cards\' status words and counts unassessed sys
   assert.equal(countsLine(thirteen), 'All 13 systems are healthy.')
 })
 
+test('an unread record map is not "no record": nothing is counted until the records are read', () => {
+  const base = [{ id: 'a', product: 'a' }, { id: 'b', product: 'b' }]
+  const unread = withRecords(base, null)
+  assert.equal(unread[0].recordsUnavailable, true)
+  assert.equal(countsLine(unread), null)
+  const read = withRecords(base, {})
+  assert.equal(read[0].recordsUnavailable, false)
+  assert.equal(countsLine(read), 'All two systems are not yet assessed.')
+  const partly = withRecords(base, { a: { condition: 'normal', summary: 'x' } })
+  assert.equal(countsLine(partly), 'One of two systems is healthy; one is not yet assessed.')
+})
+
 if (failed) { console.error(`${failed} failed`); process.exit(1) }

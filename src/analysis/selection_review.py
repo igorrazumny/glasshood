@@ -46,11 +46,16 @@ _NOTE_WORDS = re.compile(r"(?i)\b(observations?|configuration notes?|configurati
 # an issue that names no fault is not an issue (clause 5)
 _NON_ISSUE = re.compile(r"(?i)(no operational fault|needs attention\.?$|attention flag)")
 _LIST_LINE = re.compile(r"(?m)^\s*([-*•]|\d+[.)])\s")
-# clause 19: at the level of a selection its members are systems; "component" is the word for the inside of one
-_WRONG_LEVEL = re.compile(r"(?i)\bcomponents?\b")
-# clause 3 (amended): GlassHood states the counts itself; a sentence of the model that counts systems is left out
-_COUNTS = re.compile(r"(?i)\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)"
-                     r"( of (the )?(\d+|\w+))? (selected |monitored )?systems?\b")
+# clause 19: at the level of a selection its members are systems, never components; a system's own
+# internal component ("ColdVault's authentication component") keeps its name
+_WRONG_LEVEL = re.compile(r"(?i)\bcomponents? (of|in|within) (the |this |these |our )?(selection|selected systems|group|portfolio|estate|review)\b"
+                          r"|\b(systems?|members?)\b[^.;]*?\b(is|are|as|become|remain) (a |the |its |their )?components?\b"
+                          r"|\bcomponent systems?\b")
+# clause 3 (amended): GlassHood states the counts itself; a sentence of the model that counts systems is left out,
+# whether it says "four of five systems" or just "four are healthy and one needs attention"
+_NUM = r"(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)"
+_COUNTS = re.compile(rf"(?i)\b{_NUM}( of (the )?(\d+|\w+))? (selected |monitored )?systems?\b"
+                     rf"|\b{_NUM} (is|are|need|needs|remain|remains|operate|operates|run|runs|report|reports|show|shows|has|have)\b")
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
 _lock = threading.Lock()
 _reviews: dict = {}     # scope -> {summary, analyzed_at, sig}
@@ -135,7 +140,7 @@ def _prose(value, what: str) -> str:
     if _NOTE_WORDS.search(value):
         raise ValueError(f"the model's {what} carried configuration notes into the review")
     if _WRONG_LEVEL.search(value):
-        raise ValueError(f"the model's {what} spoke of components at the level of systems")
+        raise ValueError(f"the model's {what} called systems components")
     return value.strip()
 
 

@@ -81,7 +81,7 @@ function Changes({ diff }) {
   )
 }
 
-function SystemsList({ onOpenAlert, cards, review, loadError, systemsError, diff }) {
+function SystemsList({ onOpenAlert, cards, review, loadError, systemsError, recordsError, diff }) {
   if (!cards.length && systemsError) {
     return <p className="text-sm text-yellow-700 dark:text-yellow-300">{loadFailed('Your systems', systemsError)}</p>
   }
@@ -94,8 +94,14 @@ function SystemsList({ onOpenAlert, cards, review, loadError, systemsError, diff
   }
   const off = cards.find(c => c.offline)
   if (off) return <AiOfflineLine offline={off.offline} onOpenAlert={onOpenAlert} />
+  // REQ-GHA-046 clause 3: the count comes from the records; while they could not be read it is
+  // withheld and the reader is told, never counted as "not yet assessed"
+  const counts = countsLine(cards)
+  const recordsUnavailable = cards.some(c => c.recordsUnavailable)
   return (
     <div>
+      {recordsUnavailable && <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-1">
+        {recordsError ? loadFailed("The systems' status", recordsError) : "The systems' status is still loading."}</p>}
       {loadError && <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-1">{loadFailed(review?.summary ? 'A newer review' : 'The AI review', loadError)}</p>}
       {selectionNotice(review) && <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-1">{selectionNotice(review)}</p>}
       {review?.summary
@@ -105,7 +111,7 @@ function SystemsList({ onOpenAlert, cards, review, loadError, systemsError, diff
                 clause 3 (amended): GlassHood's own count of the systems by state opens the summary */}
             <div className="flex items-start gap-3">
               <ScoreBadge score={review.score} />
-              <p className="text-sm text-gray-700 dark:text-purple-100 leading-[1.55]">{countsLine(cards)} {review.summary}</p>
+              <p className="text-sm text-gray-700 dark:text-purple-100 leading-[1.55]">{counts ? `${counts} ` : ''}{review.summary}</p>
             </div>
             {review.issues?.length > 0 && (
               <div className="mt-3">
@@ -194,7 +200,7 @@ export default function AnalysisPanel({ data, topology, canvas, scopeLabel = 'Al
       {refreshNote && <p className="text-xs text-gray-500 dark:text-purple-300">{refreshNote}</p>}
 
       {listCards ? (
-        <SystemsList onOpenAlert={onOpenAlert} cards={listCards} review={review} loadError={reviewError} systemsError={systemsError} diff={diff} />
+        <SystemsList onOpenAlert={onOpenAlert} cards={listCards} review={review} loadError={reviewError} systemsError={systemsError} recordsError={descriptionsError} diff={diff} />
       ) : analysis.ai_offline ? (
         <div className="flex flex-col gap-2">
           <AiOfflineLine offline={analysis.ai_offline} onOpenAlert={onOpenAlert} />
