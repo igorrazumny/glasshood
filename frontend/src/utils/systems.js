@@ -253,7 +253,7 @@ export function statusReason(card) {
 
 // REQ-GHA-045 clause 4: what the last monitoring cycle changed, from the existing comparison
 export function changeLines(diff, max = 5) {
-  if (!diff || diff.first_run) return { none: 'Nothing to compare yet', lines: [], more: 0 }
+  if (!diff || diff.first_run) return { none: 'Nothing to compare yet', lines: [], more: 0, previousAt: null }
   const name = c => c.after?.label || c.before?.label || c.id
   const all = [
     ...(diff.changed || []).map(c => (c.before?.status !== c.after?.status
@@ -261,7 +261,8 @@ export function changeLines(diff, max = 5) {
     ...(diff.added || []).map(id => `${id}: new`),
     ...(diff.removed || []).map(id => `${id}: removed`),
   ]
-  return { none: all.length ? null : 'No changes', lines: all.slice(0, max), more: Math.max(0, all.length - max), unassigned: diff.unassigned || 0 }
+  return { none: all.length ? null : 'No changes', lines: all.slice(0, max), more: Math.max(0, all.length - max),
+    unassigned: diff.unassigned || 0, previousAt: diff.previous_at || null }
 }
 
 // REQ-GHA-037 clause 7 applies to the changes too: a group's panel lists only that group's parts.

@@ -24,9 +24,13 @@ def clean(tmp_path, monkeypatch):
 
 def _run(cards, answer, now):
     with patch.object(ov, "system_cards", return_value=cards), \
-         patch.object(ov, "call_model", return_value=(json.dumps({"summary": answer}), {})) as call:
+         patch.object(ov, "call_model", return_value=(json.dumps(_answer(answer)), {})) as call:
         sr.refresh_due(now)
     return call
+
+
+def _answer(summary, **more):
+    return {"summary": summary, "score": 7, "issues": [], "recommendations": [], **more}
 
 
 def test_written_only_after_settling_and_only_on_change():
@@ -101,6 +105,65 @@ def test_a_review_of_older_records_says_so():
     _run(newer, "- x", 200); _run(newer, "- x", 300)
     with patch.object(ov, "system_cards", return_value=newer):
         assert sr.get_reviews()["all"]["update_failed"] is True
+
+
+def test_the_review_has_the_single_system_shape_on_the_stronger_model():
+    cards = {"a": _rec("attention", alerts=[{"kind": "alarm", "severity": "critical", "title": "backend down", "rule_id": "z"}])}
+    answer = {"score": 6, "summary": "A is degraded.", "issues": ["A: one of two backends is down."],
+              "recommendations": ["Restore A's second backend.", "b", "c", "d"]}
+    with patch.object(ov, "system_cards", return_value=cards), \
+         patch.object(ov, "call_model", return_value=(json.dumps(answer), {})) as call:
+        sr.refresh_due(0); sr.refresh_due(100)
+    assert call.call_args.kwargs.get("deep") is True
+    with patch.object(ov, "system_cards", return_value=cards):
+        got = sr.get_reviews()["all"]
+    assert (got["score"], got["summary"], got["issues"], len(got["recommendations"])) == (6, "A is degraded.", ["A: one of two backends is down."], 3)
+
+
+@pytest.mark.parametrize("answer", [
+    _answer("ColdVault has leftover firewall rules."),
+    _answer("Fine.", issues=["Several parts are not checked."]),
+    _answer("Fine.", issues="text"),
+    _answer("Fine.", issues=["A is down."], recommendations=["- do this"]),
+    {"summary": "Fine.", "issues": [], "recommendations": []},
+    _answer("Fine.", score=99),
+    _answer("Fine.", score=True),
+    _answer("Fine.", score=7.5),
+    _answer("The services are operating normally.", score=9, recommendations=["Restart ColdVault."]),
+])
+def test_notes_and_malformed_answers_are_refused(answer):
+    cards = {"a": _rec()}
+    _run(cards, "Fine.", 0); _run(cards, "Fine.", 100)
+    newer = {"a": _rec(at=2.0)}
+    with patch.object(ov, "system_cards", return_value=newer), \
+         patch.object(ov, "call_model", return_value=(json.dumps(answer), {})):
+        sr.refresh_due(200); sr.refresh_due(300)
+    with patch.object(ov, "system_cards", return_value=newer):
+        got = sr.get_reviews()["all"]
+    assert got["summary"] == "Fine." and got["update_failed"] is True
+
+
+def test_the_diff_names_the_previous_check():
+    from src.discovery import diff
+    from src.models.topology import Node
+    diff._previous_snapshot = None
+    with patch.object(diff.time, "time", side_effect=[100.0, 200.0]):
+        first = diff.update_snapshot([Node(id="a", label="a", type="vm", status="healthy")])
+        second = diff.update_snapshot([Node(id="a", label="a", type="vm", status="error")])
+    assert first["previous_at"] is None
+    assert second["previous_at"] == 100.0 and second["changed"][0]["id"] == "a"
+
+
+def test_reviews_of_an_older_shape_are_set_aside_and_written_again(tmp_path):
+    (tmp_path / "ai_selection.json").write_text(json.dumps(
+        {"all": {"summary": "ColdVault has leftover firewall findings.", "analyzed_at": 1.0, "sig": "a:1.0:normal"}}))
+    cards = {"a": _rec()}
+    with patch.object(ov, "system_cards", return_value=cards):
+        assert sr.get_reviews().get("all", {}).get("summary") is None
+    assert _run(cards, "Fine.", 0).call_count == 0
+    assert _run(cards, "Fine.", 100).call_count == 2   # all systems and the internal group; no external record
+    saved = json.loads((tmp_path / "ai_selection.json").read_text())
+    assert saved["all"]["summary"] == "Fine." and saved["all"]["shape"] == sr.SHAPE
 
 
 def test_a_list_in_json_is_refused():

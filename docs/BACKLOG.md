@@ -775,6 +775,15 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
   17. The fixed half-height limits of REQ-GHA-038 clause 4 and their defaults are replaced by clauses 13 to 16. The default split when lists are open is about half each.
   Alert labels
   18. In the alert lists, every alert names its level (Critical, Medium or Information) in the same form and position as the existing tags, alongside its type when it has one, such as Observation, and its system.
+- **Amended 2026-11-09 (owner, confirmed as written): clauses 2 to 8 and 12 are replaced; all other clauses stand.**
+  2. When all systems or a group are selected, the review has the same shape as a single system's review: a short summary of the overall state, what needs attention and where, and next steps. It is written at the level of the selection, whose systems are its components.
+  3. The summary states the overall state in one or two sentences. Systems that are operating normally may be named together in one clause. A system is described on its own only where something needs attention.
+  4. The register is measured and factual, as in the single-system reviews: it states what is operating normally, what needs attention and why, and what to do. It contains no conversational openers or filler such as "Overall, things are mostly fine", and no reassurance beyond the facts.
+  5. What needs attention lists only actual faults and provider-reported problems, each in one plain sentence naming the system. Observations and configuration notes do not appear, individually or in summary. Incidents, locations, components and alert numbers are not enumerated.
+  6. Next steps are at most three, each a concrete action for the person responsible for the selection, and appear only when something needs attention.
+  7. The review carries a score out of 10 for the selection as a whole, shown as a single system's score is. It agrees with the saved status of each system (REQ-GHA-040), never contradicts it, and shows when it was evaluated and how long ago.
+  8. It does not repeat the cards' text. "Changed since the last check" appears only when something changed, names the time of the previous check, and is hidden otherwise.
+  12. This review may use a stronger model than the system assessments. The owner accepts its cost, which stays small because the review is short and is written only when a system's saved record changes (clause 11). The owner reads the live result; if it still falls short of clauses 2 to 6, the instructions are revised before anything else changes.
 - **Priority:** P2
 - **Testable:** Yes (API and UI; live reading of the text by the owner)
 - **Who builds:** Neo.

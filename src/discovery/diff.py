@@ -3,6 +3,7 @@
 
 import logging
 import threading
+import time
 from typing import Optional
 
 from src.models.topology import Node
@@ -15,6 +16,7 @@ _CANONICAL_FIELDS = ("id", "type", "status", "label", "gcp_resource_type")
 _previous_snapshot: Optional[dict] = None
 _current_diff: dict = {"added": [], "removed": [], "changed": [], "first_run": True}
 _lock = threading.Lock()
+_snapshot_at = [None]   # REQ-GHA-046 clause 8: when the compared snapshot was taken
 
 
 def _canonicalize(node) -> dict:
@@ -57,11 +59,13 @@ def update_snapshot(nodes: list) -> dict:
     global _previous_snapshot, _current_diff
 
     with _lock:
+        now = time.time()
         if _previous_snapshot is None:
             _previous_snapshot = {_canonicalize(n)["id"]: _canonicalize(n)
                                   for n in nodes}
+            _snapshot_at[0] = now
             _current_diff = {"added": [], "removed": [], "changed": [],
-                             "first_run": True}
+                             "first_run": True, "previous_at": None}
             return _current_diff
 
         diff = compute_diff(
@@ -69,9 +73,11 @@ def update_snapshot(nodes: list) -> dict:
             nodes,
         )
         diff["first_run"] = False
+        diff["previous_at"] = _snapshot_at[0]
         _current_diff = diff
         _previous_snapshot = {_canonicalize(n)["id"]: _canonicalize(n)
                               for n in nodes}
+        _snapshot_at[0] = now
 
         if diff["added"] or diff["removed"] or diff["changed"]:
             logger.info(f"Topology diff: +{len(diff['added'])} "

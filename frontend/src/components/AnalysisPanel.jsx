@@ -8,6 +8,7 @@ import { Brain, ChevronDown, ChevronRight, RefreshCw, AlertTriangle, CheckCircle
 import { apiFetch } from '../utils/api'
 import { statsSummary } from '../utils/canvasParts.js'
 import { overviewStamp, spendLine } from '../utils/overview.js'
+import { clock } from '../utils/time'
 import AiOfflineLine from './AiOfflineLine'
 import { assessmentLine, changeLines, loadFailed, selectionNotice } from '../utils/systems.js'
 
@@ -64,13 +65,16 @@ function TopologyStats({ topology, canvas }) {
 
 // REQ-GHA-037 clauses 7 and 9: the title names what the overview covers; on the home view or
 // a group it lists each system's own short assessment; box counts only for one system
+// REQ-GHA-046 clause 8: only when something changed, and since when
 function Changes({ diff }) {
-  const { none, lines, more, unassigned } = changeLines(diff)
+  const { none, lines, more, unassigned, previousAt } = changeLines(diff)
+  if (none) return null
   return (
     <div className="mt-3">
-      <h3 className="text-xs font-semibold text-gray-500 dark:text-purple-300 mb-1">Changed since the last check</h3>
-      {none && <p className="text-sm text-gray-600 dark:text-purple-200">{none}</p>}
-      {lines.length > 0 && <ul className="list-disc ml-4 text-sm text-gray-600 dark:text-purple-200">{lines.map(l => <li key={l}>{l}</li>)}</ul>}
+      <h3 className="text-xs font-semibold text-gray-500 dark:text-purple-300 mb-1">
+        Changed since the last check{previousAt ? ` at ${clock(previousAt * 1000)}` : ''}
+      </h3>
+      <ul className="list-disc ml-4 text-sm text-gray-600 dark:text-purple-200">{lines.map(l => <li key={l}>{l}</li>)}</ul>
       {more > 0 && <p className="text-xs text-gray-500 dark:text-purple-300">and {more} more</p>}
       {unassigned > 0 && <p className="text-xs text-gray-500 dark:text-purple-300">{unassigned} removed part{unassigned === 1 ? '' : 's'} could not be matched to a system</p>}
     </div>
@@ -97,7 +101,29 @@ function SystemsList({ onOpenAlert, cards, review, loadError, systemsError, diff
       {review?.summary
         ? <>
             <p className="text-xs text-gray-500 dark:text-purple-300 mb-1">{overviewStamp(review)}</p>
-            <p className="text-sm text-gray-700 dark:text-purple-100 leading-[1.55]">{review.summary}</p>
+            {/* REQ-GHA-046 clauses 2, 6 and 7: the single-system shape for the whole selection */}
+            <div className="flex items-start gap-3">
+              <ScoreBadge score={review.score} />
+              <p className="text-sm text-gray-700 dark:text-purple-100 leading-[1.55]">{review.summary}</p>
+            </div>
+            {review.issues?.length > 0 && (
+              <div className="mt-3">
+                <h3 className="text-xs font-semibold text-gray-500 dark:text-purple-300 uppercase mb-1">Needs attention</h3>
+                <ul className="space-y-1">
+                  {review.issues.map(issue => (
+                    <li key={issue} className="flex items-start gap-2 text-sm text-yellow-700 dark:text-yellow-300">
+                      <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" /><span>{issue}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {review.issues?.length > 0 && review.recommendations?.length > 0 && (
+              <div className="mt-3">
+                <h3 className="text-xs font-semibold text-gray-500 dark:text-purple-300 uppercase mb-1">Next steps</h3>
+                <ul className="space-y-1">{review.recommendations.map(r => <li key={r} className="text-sm text-gray-600 dark:text-purple-200">{r}</li>)}</ul>
+              </div>
+            )}
           </>
         : !loadError && !review?.update_failed && <p className="text-gray-500 dark:text-purple-300 text-sm flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> AI evaluation in progress…</p>}
       <Changes diff={diff} />

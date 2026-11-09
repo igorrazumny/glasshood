@@ -38,3 +38,6 @@ assert.equal(await loadSplit(async () => ({ split: null })), null)
 assert.equal(selectionNotice({ summary: 'x', current: true }), null)
 assert.match(selectionNotice({ summary: 'x', current: false }), /newer review.*before the newest/)
 assert.match(selectionNotice({ summary: 'x', current: false, update_failed: true }), /could not be written.*before the newest/)
+
+assert.equal(changeLines({ added: ['a'], removed: [], changed: [], previous_at: 123 }).previousAt, 123)
+assert.equal(changeLines({ added: [], removed: [], changed: [] }).none, 'No changes')
