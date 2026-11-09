@@ -12,7 +12,7 @@ import { usePolling } from '../hooks/usePolling'
 import { apiFetch } from '../utils/api'
 import { loadFailed } from '../utils/systems'
 import { clock, dateTime } from '../utils/time'
-import { EARLIER_EMPTY, PAGE, earlierLines, mergeEntries } from '../utils/logsView'
+import { EARLIER_EMPTY, PAGE, earlierRequest, mergeEntries } from '../utils/logsView'
 
 const SEVERITY_COLORS = {
   ERROR: 'text-red-400',
@@ -80,7 +80,8 @@ export default function LogViewerModal({ nodeId, nodeLabel, nodeStatus, isDemo, 
     setLoadingEarlier(true)
     setEarlierNote(null)
     try {
-      const body = await apiFetch(`/api/logs/${nodeId}?lines=${earlierLines(have)}&before=${encodeURIComponent(have[0].timestamp)}`)
+      const ask = earlierRequest(have)
+      const body = await apiFetch(`/api/logs/${nodeId}?lines=${ask.lines}&before=${encodeURIComponent(ask.before)}`)
       const got = body?.entries || []
       if (body?.error) {
         setEarlierNote(body.error)
@@ -91,6 +92,7 @@ export default function LogViewerModal({ nodeId, nodeLabel, nodeStatus, isDemo, 
         keepRef.current = bodyRef.current?.scrollHeight ?? null
         setWentBack(true)
         setAll(prev => mergeEntries(prev, got))
+        if (ask.skipped) setEarlierNote('Too many lines share one moment; some of them are not shown.')
       }
     } catch (e) {
       setEarlierNote(loadFailed('Earlier lines', e?.message || e))

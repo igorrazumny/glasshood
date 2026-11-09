@@ -3,7 +3,7 @@
 // what it loaded. Run: node frontend/src/utils/logsView.test.js
 
 import assert from 'node:assert/strict'
-import { noLogsReason, mergeEntries, earlierLines, PAGE, EARLIER_EMPTY } from './logsView.js'
+import { noLogsReason, mergeEntries, earlierLines, earlierRequest, EARLIER_LIMIT, PAGE, EARLIER_EMPTY } from './logsView.js'
 
 let failed = 0
 function test(name, fn) {
@@ -44,6 +44,14 @@ test('lines sharing a timestamp are separate occurrences and can all be reached 
   const page = Array.from({ length: 300 }, () => ({ ...line }))
   assert.equal(earlierLines(page), 600)
   assert.equal(mergeEntries(page, Array.from({ length: 301 }, () => ({ ...line }))).length, 301)
+})
+
+test('a moment with more lines than a request carries never blocks older history', () => {
+  const t = '2026-11-09T10:00:00.000Z'
+  const line = { timestamp: t, severity: 'INFO', message: 'same' }
+  assert.deepEqual(earlierRequest([line]), { lines: PAGE + 1, before: t, skipped: false })
+  const full = Array.from({ length: EARLIER_LIMIT }, () => ({ ...line }))
+  assert.deepEqual(earlierRequest(full), { lines: PAGE, before: '2026-11-09T09:59:59.999Z', skipped: true })
 })
 
 test('the page is several screens and the empty-earlier note is fixed', () => {

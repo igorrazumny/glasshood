@@ -20,6 +20,17 @@ export function earlierLines(have) {
   return PAGE + (have || []).filter(e => e.timestamp === have[0].timestamp).length
 }
 
+// More lines at one moment than a request may carry cannot be paged through: step just before that
+// moment, so older history stays reachable, and say that some lines there were not shown.
+export const EARLIER_LIMIT = 2000
+export function earlierRequest(have) {
+  const lines = earlierLines(have)
+  const ts = have[0].timestamp
+  const ms = Date.parse(ts)
+  if (lines < EARLIER_LIMIT || Number.isNaN(ms)) return { lines: Math.min(lines, EARLIER_LIMIT), before: ts, skipped: false }
+  return { lines: PAGE, before: new Date(ms - 1).toISOString(), skipped: true }
+}
+
 const key = e => `${e.timestamp}|${e.severity}|${e.message}`
 const when = e => { const t = Date.parse(e.timestamp); return Number.isNaN(t) ? 0 : t }
 
