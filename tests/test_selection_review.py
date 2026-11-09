@@ -123,7 +123,6 @@ def test_the_review_has_the_single_system_shape_on_the_stronger_model():
 
 @pytest.mark.parametrize("answer", [
     _answer("ColdVault has leftover firewall rules."),
-    _answer("Fine.", issues=["Several parts are not checked."]),
     _answer("Fine.", issues="text"),
     _answer("Fine.", issues=["A is down."], recommendations=["- do this"]),
     {"summary": "Fine.", "issues": [], "recommendations": []},
@@ -240,11 +239,79 @@ def test_genuine_faults_and_actions_are_not_mistaken_for_notes():
                  "Run disk cleanup on ColdVault, then confirm recovery.",
                  "ColdVault is unavailable because its housekeeping task exhausted the available disk space."]:
         assert sr._prose(text, "issue") == text
+        assert not sr._is_note(text)
     for text in ["ColdVault carries configuration and security follow-up items.",
                  "Some cleanup is outstanding.", "Housekeeping items remain on ColdVault.", "Leftover firewall rules remain.",
                  "Several parts are not checked."]:
-        with pytest.raises(ValueError):
-            sr._prose(text, "issue")
+        assert sr._is_note(text)
+
+
+def test_a_system_s_own_notes_never_reach_the_model():
+    """Clause 5: notes in a system's assessment and items are stripped before the model sees them."""
+    cards = {"a": {**_rec("attention"), "summary": "Alpha serves its users normally. A few configuration leftovers remain.",
+                   "issues": ["Leftover firewall rules remain.", "One backend is down."]}}
+    with patch.object(ov, "system_cards", return_value=cards), \
+         patch.object(ov, "call_model", return_value=(json.dumps(_answer("Alpha has one backend down.", score=6, issues=["Alpha has one backend down."])), {})) as call:
+        sr.refresh_due(0); sr.refresh_due(100)
+    sent = json.loads(call.call_args.args[1])[0]
+    assert sent["assessment"] == "Alpha serves its users normally." and sent["needs_attention"] == ["One backend is down."]
+
+
+def test_a_note_the_model_wrote_anyway_is_left_out_and_the_review_kept():
+    """Clause 5: a note sentence, item or step goes; the rest of the review stands instead of a failed update."""
+    cards = {"a": _rec("attention"), "gh": _rec("attention")}
+    answer = _answer("Alpha is operating normally. Some configuration notes remain on Alpha. GitHub reports degraded service.", score=6,
+                     issues=["Alpha carries leftover firewall rules.", "GitHub reports degraded service."],
+                     recommendations=["Review the housekeeping items on Alpha.", "Follow GitHub's status updates."])
+    with patch.object(ov, "system_cards", return_value=cards), \
+         patch.object(ov, "call_model", return_value=(json.dumps(answer), {})):
+        sr.refresh_due(0); sr.refresh_due(100)
+    with patch.object(ov, "system_cards", return_value=cards):
+        got = sr.get_reviews()["all"]
+    assert got["summary"] == "Alpha is operating normally. GitHub reports degraded service."
+    assert got["issues"] == ["GitHub reports degraded service."] and got["recommendations"] == ["Follow GitHub's status updates."]
+    assert got["current"] is True and got["update_failed"] is False
+
+
+def test_a_fault_mixed_with_a_note_is_never_lost():
+    """A sentence with a fault and a note keeps the fault: it reaches the model, and if the model writes
+    such a sentence the answer is refused rather than published with the fault deleted."""
+    mixed = "Alpha's backend is down, and leftover firewall rules remain."
+    assert sr._is_mixed(mixed) and not sr._is_note(mixed)
+    cards = {"a": {**_rec("failing"), "summary": mixed, "issues": [mixed]}}
+    with patch.object(ov, "system_cards", return_value=cards), \
+         patch.object(ov, "call_model", return_value=(json.dumps(_answer("Alpha's backend is down.", score=3, issues=["Alpha's backend is down."])), {})) as call:
+        sr.refresh_due(0); sr.refresh_due(100)
+    sent = json.loads(call.call_args.args[1])[0]
+    assert sent["assessment"] == mixed and sent["needs_attention"] == [mixed]
+    with patch.object(ov, "system_cards", return_value=cards):
+        assert sr.get_reviews()["all"]["issues"] == ["Alpha's backend is down."]
+    newer = {"a": {**cards["a"], "analyzed_at": 2.0}}
+    for answer in [_answer(f"{mixed} GitHub is operating normally.", score=3, issues=["Alpha's backend is down."]),
+                   _answer("Alpha's backend is down.", score=3, issues=[mixed]),
+                   _answer("Alpha's backend is down.", score=3, issues=["Alpha's backend is down."],
+                           recommendations=["Restore Alpha's backend and remove the leftover rules."])]:
+        with patch.object(ov, "system_cards", return_value=newer), \
+             patch.object(ov, "call_model", return_value=(json.dumps(answer), {})):
+            sr._failed_at.clear(); sr.refresh_due(200); sr.refresh_due(300)
+        with patch.object(ov, "system_cards", return_value=newer):
+            got = sr.get_reviews()["all"]
+        assert got["issues"] == ["Alpha's backend is down."] and got["current"] is False and got["update_failed"] is True
+
+
+def test_a_dropped_note_keeps_the_remedy_for_a_surviving_fault_of_the_same_system():
+    cards = {"a": _rec("failing")}
+    answer = _answer("Alpha's backend is down.", score=3,
+                     issues=["Alpha's backend is down.", "Alpha has leftover firewall rules."],
+                     recommendations=["Restore Alpha's failed backend and confirm recovery."])
+    with patch.object(ov, "system_cards", return_value=cards), \
+         patch.object(ov, "call_model", return_value=(json.dumps(answer), {})):
+        sr.refresh_due(0); sr.refresh_due(100)
+    with patch.object(ov, "system_cards", return_value=cards):
+        got = sr.get_reviews()["all"]
+    assert got["issues"] == ["Alpha's backend is down."]
+    assert got["recommendations"] == ["Restore Alpha's failed backend and confirm recovery."]
+    assert got["current"] is True and got["update_failed"] is False
 
 
 def test_the_model_s_own_count_of_systems_is_left_out_and_the_rest_kept():
