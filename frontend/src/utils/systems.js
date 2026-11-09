@@ -214,31 +214,46 @@ export function listAssessments(cards, descriptions, nowMs, loadError = null) {
 // REQ-GHA-037 clause 7: the header says what it covers — per group on the home view,
 // the selected system's own state when one is chosen
 
+// REQ-GHA-048: one item: the path down the left panel to the selection, then how that selection stands,
+// from the saved records and in the cards' words. Red is only for a proprietary system.
+const needsAttention = c => c.state === 'error' || c.state === 'degraded' || c.critical
+function selectionOverview(cards) {
+  if (cards.some(c => c.recordsUnavailable)) return 'status not available yet'
+  const n = cards.filter(needsAttention).length
+  const u = cards.filter(c => c.state === 'not checked' && !c.critical).length
+  const bits = [`${cards.length} system${cards.length === 1 ? '' : 's'}`]
+  if (n) bits.push(`${n} need${n === 1 ? 's' : ''} attention`)
+  if (u) bits.push(`${u} not yet assessed`)
+  if (!n && !u) bits.push(cards.length === 1 ? 'healthy' : 'all healthy')
+  return bits.join(', ')
+}
+function selectionMark(cards) {
+  const own = cards.filter(c => !c.outside)
+  const ext = cards.filter(c => c.outside)
+  return own.some(c => c.state === 'error') ? 'error'
+    : own.some(c => c.state === 'degraded' || c.critical) || ext.some(needsAttention) ? 'degraded'
+    : cards.length && cards.every(c => c.state === 'healthy') ? 'healthy' : 'unknown'
+}
+function headerItem(steps, overview, state) {
+  const ancestors = steps.slice(0, -1).join(' › ')
+  const tail = `${steps[steps.length - 1]}: ${overview}`
+  return { text: ancestors ? `${ancestors} › ${tail}` : tail, ancestors, tail, state }
+}
+
 export function headerLine(cards, activeProject) {
   const off = cards.find(c => c.offline)
   if (off) return { text: off.line, state: 'unknown', offline: off.offline }
+  if (!cards.length) return { text: 'Loading your systems…', state: 'unknown' }
   const one = cards.find(c => c.id === activeProject)
-  if (one) return { text: `${one.label}: ${statusWord(one.state)}`, state: one.state }
-  const groups = groupedCards(cardsInGroup(cards, isGroupId(activeProject) ? activeProject : null))
-  if (!groups.length) return { text: 'Loading your systems…', state: 'unknown' }
-  const parts = groups.map(({ group, cards: gc }) => {
-    const name = group.outside ? 'External services' : 'Our systems'
-    if (gc.every(c => c.state === 'not checked')) return `${name}: status not available`
-    const n = gc.filter(c => c.state === 'error' || c.state === 'degraded' || c.critical).length
-    const u = gc.filter(c => c.state === 'not checked' && !c.critical).length
-    // a system not yet assessed is named, never folded into "operating normally"
-    if (!u) return `${name}: ${n ? `${n} need${n === 1 ? 's' : ''} attention` : 'operating normally'}`
-    const ok = gc.length - n - u
-    const bits = [n && `${n} need${n === 1 ? 's' : ''} attention`, ok && `${ok} operating normally`, `${u} status unavailable`]
-    return `${name}: ${bits.filter(Boolean).join(', ')}`
-  })
-  // red only for our own systems; an external service's trouble alone shows amber
-  const own = groups.filter(g => !g.group.outside).flatMap(g => g.cards)
-  const ext = groups.filter(g => g.group.outside).flatMap(g => g.cards)
-  const state = own.some(c => c.state === 'error') ? 'error'
-    : own.some(c => c.state === 'degraded' || c.critical) || ext.some(c => c.state === 'error' || c.state === 'degraded' || c.critical) ? 'degraded'
-    : [...own, ...ext].every(c => c.state === 'healthy') ? 'healthy' : 'unknown'
-  return { text: parts.join(' · '), state }
+  if (one) {
+    const group = GROUPS.find(g => g.outside === !!one.outside)
+    const word = one.recordsUnavailable ? 'status not available yet'
+      : one.state === 'not checked' && !one.critical ? 'Not yet assessed' : statusWord(one.state)
+    return headerItem(['All systems', group.label, one.label], word, selectionMark([one]))
+  }
+  const group = GROUPS.find(g => g.id === activeProject)
+  const inScope = group ? cardsInGroup(cards, group.id) : cards
+  return headerItem(group ? ['All systems', group.label] : ['All systems'], selectionOverview(inScope), selectionMark(inScope))
 }
 
 // REQ-GHA-045 clause 5: one word per state, wherever a system's status is summarised, and the reason first

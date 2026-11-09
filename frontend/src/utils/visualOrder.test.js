@@ -8,7 +8,7 @@ assert.deepEqual(['healthy', 'degraded', 'error', 'not checked'].map(statusWord)
 assert.equal(statusReason({ notes: 8 }), '8 configuration notes')
 assert.equal(statusReason({ critical: 1, warning: 1, notes: 3 }), '2 alerts (1 critical)')
 const cards = [{ id: 'a', label: 'A', product: 'a', state: 'healthy' }, { id: 'b', label: 'B', product: 'b', state: 'degraded', notes: 1 }]
-assert.equal(headerLine(cards, 'b').text, 'B: Needs attention')
+assert.match(headerLine(cards, 'b').text, /B: Needs attention$/)
 assert.equal(alarmAgo({ first_seen: new Date(900000).toISOString() }, 1800000), '15 min ago')
 
 import { changeLines } from './systems.js'

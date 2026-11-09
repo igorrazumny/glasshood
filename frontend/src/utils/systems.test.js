@@ -116,9 +116,9 @@ test('an old assessment keeps its text without an age warning; a failed refresh 
 
 test('the header says what it covers', () => {
   const cards = systemCards(manifests, nodes, alerts)
-  assert.equal(headerLine(cards, null).text, 'Our systems: 1 needs attention · External services: 1 needs attention')
-  assert.equal(headerLine(cards, 'manifest-coldvault-prod').text, 'ColdVault: Needs attention')
-  assert.equal(headerLine(cards, 'group-external').text, 'External services: 1 needs attention')
+  assert.equal(headerLine(cards, null).text, 'All systems: 2 systems, 2 need attention')
+  assert.equal(headerLine(cards, 'manifest-coldvault-prod').text, 'All systems › Proprietary systems › ColdVault: Needs attention')
+  assert.equal(headerLine(cards, 'group-external').text, 'All systems › External systems: 1 system, 1 needs attention')
   assert.equal(headerLine([], null).text, 'Loading your systems…')
 })
 
@@ -152,7 +152,7 @@ test('a group with an unassessed system never claims it operates normally', () =
   // shadow P1 on #123
   const cards = [{ id: 'x', label: 'A', state: 'healthy' }, { id: 'y', label: 'B', state: 'not checked' }]
   const line = headerLine(cards.map(c => ({ ...c, outside: false, critical: 0 })), null).text
-  assert.equal(line, 'Our systems: 1 operating normally, 1 status unavailable')
+  assert.equal(line, 'All systems: 2 systems, 1 not yet assessed')
 })
 
 test('a failed read is said in plain words, never shown as still loading', () => {
@@ -210,7 +210,7 @@ test('a system with no record is never shown as working', () => {
 
 test('one system with no record does not read as operational', () => {
   const [c] = withRecords([{ id: 'a', product: 'a', label: 'A', outside: false, state: 'healthy' }], {})
-  assert.equal(headerLine([c], null).text, 'Our systems: status not available')
+  assert.equal(headerLine([c], null).text, 'All systems: 1 system, 1 not yet assessed')
   assert.notEqual(headerLine([c], null).state, 'healthy')
 })
 
@@ -260,6 +260,24 @@ test('an unread record map is not "no record": nothing is counted until the reco
   assert.equal(countsLine(read), 'All two systems are not yet assessed.')
   const partly = withRecords(base, { a: { condition: 'normal', summary: 'x' } })
   assert.equal(countsLine(partly), 'One of two systems is healthy; one is not yet assessed.')
+})
+
+// REQ-GHA-048
+test('the top line follows the selection, in the left panel\'s words, and the mark covers only the selection', () => {
+  const c = (id, state, outside = false) => ({ id, label: id, state, outside, critical: 0 })
+  const cards = [c('a', 'healthy'), c('b', 'healthy'), c('gh', 'error', true)]
+  assert.equal(headerLine(cards, 'group-internal').text, 'All systems › Proprietary systems: 2 systems, all healthy')
+  assert.equal(headerLine(cards, 'group-internal').state, 'healthy')
+  assert.equal(headerLine(cards, null).state, 'degraded')          // external trouble alone is amber
+  assert.equal(headerLine(cards, 'gh').state, 'degraded')
+  const item = headerLine(cards, 'gh')
+  assert.equal(item.ancestors, 'All systems › External systems'); assert.equal(item.tail, 'gh: Degraded')
+  assert.equal(headerLine([c('a', 'error')], 'a').state, 'error')
+  assert.equal(headerLine([c('a', 'not checked')], 'a').text, 'All systems › Proprietary systems › a: Not yet assessed')
+  const unread = withRecords([{ id: 'a', product: 'a', label: 'a' }], null)
+  assert.equal(headerLine(unread, null).text, 'All systems: status not available yet')
+  assert.equal(headerLine(unread, 'a').text, 'All systems › Proprietary systems › a: status not available yet')
+  for (const s of [null, 'group-internal', 'group-external', 'gh']) assert.doesNotMatch(headerLine(cards, s).text, /Our systems|External services/)
 })
 
 if (failed) { console.error(`${failed} failed`); process.exit(1) }

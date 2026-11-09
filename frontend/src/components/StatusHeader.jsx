@@ -194,9 +194,15 @@ export default function StatusHeader({ topology, lastUpdated, onRefresh, onLogou
         {isDemo && <span className="text-sm bg-accent-500/20 text-accent-700 dark:bg-accent-500/20 dark:text-accent-300 px-2 py-1 rounded">Sample data</span>}
         {readOnly && <span className="text-sm bg-sky-500/20 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300 px-2 py-1 rounded">Read-only · live system</span>}
         <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${STATUS_DOT[status]} animate-pulse`} title={statusText} />
-        <span className={`text-sm font-medium truncate hidden sm:flex items-center gap-2 ${STATUS_COLOR[status]}`}>
+        <span className={`text-sm font-medium min-w-0 flex items-center gap-2 ${STATUS_COLOR[status]}`}>
           {scope?.offline ? <AiOfflineLine offline={scope.offline} onOpenAlert={onOpenAlert} />
-            : (statusText || '').split(' · ').map(s => <span key={s} className="px-2 py-0.5 rounded border border-current/30 truncate">{s}</span>)}
+            : (
+              <span className="flex items-center min-w-0 px-2 py-0.5 rounded border border-current/30" title={statusText}>
+                {/* REQ-GHA-048 clause 7: the path gives way first, the selection and its overview stay */}
+                {scope?.ancestors && <span className="truncate shrink-[1000] min-w-0 mr-1">{scope.ancestors} ›</span>}
+                <span className="truncate">{scope?.tail || statusText}</span>
+              </span>
+            )}
         </span>
       </div>
 
