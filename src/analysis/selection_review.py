@@ -16,7 +16,7 @@ SCOPES = ("all", "group-internal", "group-external")
 # The contract and instructions a review was written under. Bumped with every revision of the contract or
 # of PROMPT, so a saved review of an older version is set aside at load and written once more (one call per
 # selection): the owner's live reading (clause 12) is then of the revised instructions, not of a cached text.
-SHAPE = 4
+SHAPE = 5
 SETTLE_S = 90       # a round rewrites records one by one: wait until they stop changing
 RETRY_S = 600
 
@@ -28,8 +28,8 @@ Rules:
 - The summary is one or two sentences on the selection as a whole: first the overall situation, then what deserves a call-out. Do not go through the systems one by one. When more than two systems are operating normally, say so collectively ("the other systems are operating normally") rather than naming each.
 - Under issues, list only actual faults and provider-reported problems, one plain sentence each, naming the system and saying what is wrong. Never list a system without saying what is wrong with it.
 - Configuration notes, observations, leftovers, findings and parts that are not checked are outside this review: never mention them. A system whose attention comes only from such notes gets no issue and no next step; if the summary names it at all, it says the system has no operational fault.
-- Never enumerate incidents, locations, components or alert numbers. Describe the pattern and what it means for the business.
-- Next steps address only the listed issues, at most three, each a concrete action for the person responsible. No next step for a system operating normally. Empty when issues are empty.
+- Never enumerate incidents, locations, components or alert numbers. Describe the pattern and what it means for the business. An external service's trouble is one issue in one sentence: the pattern, never one item per component, location, incident or maintenance.
+- Next steps address only the listed issues, at most three, each a concrete action the person responsible for this selection can take. For a problem at an external provider that person is the provider's customer: the steps are to follow the provider's updates, check the selection's own services that depend on it, and prepare or use alternatives. Never tell them to repair the provider's service. No next step for a system operating normally. Empty when issues are empty.
 - Agree with each system's condition: a "normal" system is given no problem.
 Answer in JSON only:
 {"score": 1-10 for the selection as a whole,
@@ -148,9 +148,12 @@ def _write(records: dict) -> dict:
     """Clauses 2 to 7: the single-system shape, on the stronger model (clause 12)."""
     from src.analysis import vertex_overview as ov
     names = {p: n for p, n in _names().items() if p in records}
+    outside = ov._outside_products()
+    # an external service's own items and alert titles enumerate its components and incidents (clause 5):
+    # the model gets only its condition, score and assessment
     payload = ov.sanitize([{"system": names.get(p) or p, "condition": r.get("condition"), "score": r.get("score"),
-                            "assessment": r.get("summary"), "needs_attention": r.get("issues") or [],
-                            "alerts": _real_alerts(r)}
+                            "assessment": r.get("summary"),
+                            **({} if p in outside else {"needs_attention": r.get("issues") or [], "alerts": _real_alerts(r)})}
                            for p, r in sorted(records.items())])
     text, _ = ov.call_model(PROMPT, json.dumps(payload, default=str), deep=True)
     answer = ov.parse_json(text) or {}
@@ -166,6 +169,15 @@ def _write(records: dict) -> dict:
     issues = [_prose(x, "issue") for x in issues]
     if any(_NON_ISSUE.search(x) for x in issues):
         raise ValueError("the model listed an issue that names no fault")
+    # one issue per external service in the selection; an internal system's fault that mentions the
+    # provider it depends on is that system's issue, not the provider's
+    mentions = lambda text, name: re.search(rf"(?i)\b{re.escape(name)}\b", text) is not None
+    internal = [names.get(p) or p for p in records if p not in outside]
+    for p in [p for p in records if p in outside]:
+        name = names.get(p) or p
+        own = [x for x in issues if mentions(x, name) and not any(mentions(x, n) for n in internal)]
+        if len(own) > 1:
+            raise ValueError(f"the model split {name}'s trouble into several issues")
     named = lambda s: _as_named(s, names)
     return {"summary": named(_prose(answer.get("summary"), "summary")), "score": int(score),
             "issues": [named(x) for x in issues],
