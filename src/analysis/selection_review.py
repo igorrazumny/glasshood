@@ -16,18 +16,22 @@ SCOPES = ("all", "group-internal", "group-external")
 SETTLE_S = 90       # a round rewrites records one by one: wait until they stop changing
 RETRY_S = 600
 
-PROMPT = """You tell a person responsible for several systems how things stand across them, in a few seconds of reading.
-You get each system's condition, its latest assessment and its real open alerts.
-Write one to three short sentences of plain prose about the selection as a whole: are things generally fine, and what, if anything, deserves a call-out.
+PROMPT = """You review the state of a selection of systems for the person responsible for all of them. Each system is one component of the selection.
+You get each system's condition, score, latest assessment and its real open alerts.
+Write in the measured, factual register of an operations report: what is operating normally, what needs attention and why, and what to do. No conversational openers, no filler, no reassurance beyond the facts.
 Rules:
-- Speak about the whole situation. Name a system only to call something out; never go through the systems one by one.
-- No lists, no bullet points, no headings. Never enumerate incidents, locations, components, findings or alert numbers.
-- Never mention configuration notes, observations, leftovers, cleanup or anything not checked. They are not part of this review.
-- A system whose condition is "failing", or "attention" because of a real fault or a provider-reported problem, is called out in a few words.
-- If nothing deserves a call-out, say plainly that all is going fine.
-- Agree with each system's condition; never contradict it.
-Answer in JSON only: {"summary": "the review"}"""
+- Configuration notes, observations, leftovers, findings and parts that are not checked are outside this review. Never mention them, not even in summary. A system whose attention comes only from such notes has no operational fault: if you name it, say that in those words, and never say why it needs attention.
+- Never enumerate incidents, locations, components or alert numbers. Describe the pattern and what it means for the business.
+- Agree with each system's condition. A "failing" system and an "attention" system with an actual fault or a provider-reported problem are reflected; a "normal" system is given no problem.
+- Systems operating normally may be named together in one clause. A system is described on its own only where something needs attention.
+Answer in JSON only:
+{"score": 1-10 for the selection as a whole,
+ "summary": "one or two sentences on the overall state",
+ "issues": ["one plain sentence per actual fault or provider-reported problem, naming the system; empty if none"],
+ "recommendations": ["at most three concrete actions for the person responsible; empty when nothing needs attention"]}"""
 
+# clause 5: words that mean the model carried notes into the review; such an answer is refused
+_NOTE_WORDS = re.compile(r"(?i)\b(observations?|configuration notes?|leftovers?|findings?|not checked|unverified)\b")
 _LIST_LINE = re.compile(r"(?m)^\s*([-*•]|\d+[.)])\s")
 _lock = threading.Lock()
 _reviews: dict = {}     # scope -> {summary, analyzed_at, sig}
@@ -100,15 +104,30 @@ def _real_alerts(record: dict) -> list:
             and not str(a.get("rule_id") or "").startswith("finding:")]
 
 
-def _write(records: dict) -> str:
+def _prose(value, what: str) -> str:
+    if not isinstance(value, str) or not value.strip() or _LIST_LINE.search(value):
+        raise ValueError(f"the model's {what} was not prose")
+    if _NOTE_WORDS.search(value):
+        raise ValueError(f"the model's {what} carried configuration notes into the review")
+    return value.strip()
+
+
+def _write(records: dict) -> dict:
+    """Clauses 2 to 7: the single-system shape, on the stronger model (clause 12)."""
     from src.analysis import vertex_overview as ov
-    payload = ov.sanitize([{"system": p, "condition": r.get("condition"), "assessment": r.get("summary"),
-                            "alerts": _real_alerts(r)} for p, r in sorted(records.items())])
-    text, _ = ov.call_model(PROMPT, json.dumps(payload, default=str))
-    summary = (ov.parse_json(text) or {}).get("summary")
-    if not isinstance(summary, str) or not summary.strip() or _LIST_LINE.search(summary):
-        raise ValueError("the model's answer was not prose")
-    return summary.strip()
+    payload = ov.sanitize([{"system": p, "condition": r.get("condition"), "score": r.get("score"),
+                            "assessment": r.get("summary"), "alerts": _real_alerts(r)}
+                           for p, r in sorted(records.items())])
+    text, _ = ov.call_model(PROMPT, json.dumps(payload, default=str), deep=True)
+    answer = ov.parse_json(text) or {}
+    issues, steps = answer.get("issues") or [], answer.get("recommendations") or []
+    if not isinstance(issues, list) or not isinstance(steps, list):
+        raise ValueError("the model's lists were not lists")
+    score = answer.get("score")
+    return {"summary": _prose(answer.get("summary"), "summary"),
+            "score": int(score) if isinstance(score, (int, float)) and 1 <= score <= 10 else None,
+            "issues": [_prose(x, "issue") for x in issues],
+            "recommendations": [_prose(x, "next step") for x in steps[:3]]}
 
 
 def _by_scope() -> dict:
@@ -145,13 +164,13 @@ def refresh_due(now: float = None) -> None:
         if now - _seen[scope][1] < SETTLE_S or (failed and failed[0] == sig and now - failed[1] < RETRY_S):
             continue
         try:
-            summary = _write(records)
+            written = _write(records)
         except Exception as e:
             _failed_at[scope] = (sig, now)
             logger.warning(f"selection review {scope} failed: {type(e).__name__}")
             continue
         with _lock:
-            _reviews[scope] = {"summary": summary, "analyzed_at": now, "sig": sig}
+            _reviews[scope] = {**written, "analyzed_at": now, "sig": sig}
         changed = True
     if changed:
         _unsaved[0] = True
@@ -168,6 +187,8 @@ def get_reviews() -> dict:
         if not records and not v:
             continue
         sig = _signature(records)
-        out[scope] = {"summary": v.get("summary"), "analyzed_at": v.get("analyzed_at"), "current": v.get("sig") == sig,
+        out[scope] = {"summary": v.get("summary"), "score": v.get("score"), "issues": v.get("issues") or [],
+                      "recommendations": v.get("recommendations") or [],
+                      "analyzed_at": v.get("analyzed_at"), "current": v.get("sig") == sig,
                       "update_failed": (_failed_at.get(scope) or (None,))[0] == sig}
     return out
