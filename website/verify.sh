@@ -30,6 +30,11 @@ revalidates() {
   get "$1" >/dev/null || { fail "$1: no answer"; return; }
   grep -qi '^cache-control:.*no-cache' "$TMP/head" || fail "$1: not sent to revalidate"
 }
+# kept <url>: Cache-Control keeps the file for a year (the two Lato files never change under their names)
+kept() {
+  get "$1" >/dev/null || { fail "$1: no answer"; return; }
+  grep -qi '^cache-control:.*max-age=31536000.*immutable' "$TMP/head" || fail "$1: not kept for a year"
+}
 # forwards <url> <target>: a redirect to exactly <target>
 forwards() {
   local got; got=$(get "$1") || { fail "$1: no answer"; return; }
@@ -56,7 +61,8 @@ serves "$SITE/architecture/" "$S/architecture/index.html"
 for f in assets/site.css assets/contact.js architecture/app.js architecture/styles.css robots.txt sitemap.xml; do
   serves "$SITE/$f" "$S/$f"
 done
-for f in architecture/ architecture/app.js architecture/styles.css; do revalidates "$SITE/$f"; done
+for f in architecture/ architecture/app.js architecture/styles.css assets/site.css; do revalidates "$SITE/$f"; done
+for f in assets/fonts/lato-400.woff2 assets/fonts/lato-700.woff2 architecture/fonts/lato-400.woff2 architecture/fonts/lato-700.woff2; do kept "$SITE/$f"; done
 for p in /demo /demo/ /view; do forwards "$SITE$p" "https://app.glasshood.ai/demo"; done
 missing "$SITE/no-such-page/"
 get "$SITE/" >/dev/null && grep -qi '^x-content-type-options: *nosniff' "$TMP/head" || fail "$SITE/: no X-Content-Type-Options"
@@ -67,6 +73,7 @@ for f in architecture/app.js architecture/styles.css architecture/img/glasshood-
   serves "$ARCH/$f" "$A/$f"
 done
 for f in "" architecture/app.js architecture/styles.css; do revalidates "$ARCH/$f"; done
+for f in architecture/fonts/lato-400.woff2 architecture/fonts/lato-700.woff2; do kept "$ARCH/$f"; done
 missing "$ARCH/no-such-page/"
 
 if [ "$FAILED" -ne 0 ]; then echo "Verification FAILED for $SITE and $ARCH" >&2; exit 1; fi

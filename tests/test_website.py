@@ -111,15 +111,41 @@ def test_older_demo_addresses_go_to_the_demo_in_the_app():
     assert home.index("location.replace") < home.index("</head>"), "forward before the page renders"
 
 
-def test_both_hosts_revalidate_everything_and_send_security_headers():
-    for cfg_path in (_PUB / "staticwebapp.config.json", _W / "architecture/staticwebapp.config.json"):
+def test_both_hosts_revalidate_everything_but_the_fonts_and_send_security_headers():
+    # Pages, styles and scripts are revalidated on every load; the two Lato files never change under their names, so
+    # they are kept by the browser for a year (clause 14, amended 2026-11-09: Lato from the first paint).
+    for cfg_path, font_routes in ((_PUB / "staticwebapp.config.json", ("/assets/fonts/*", "/architecture/fonts/*")),
+                                  (_W / "architecture/staticwebapp.config.json", ("/architecture/fonts/*",))):
         cfg = json.loads(_read(cfg_path))
         headers = cfg["globalHeaders"]
         assert headers["Cache-Control"] == "no-cache, must-revalidate", cfg_path
         assert headers["X-Content-Type-Options"] == "nosniff"
         assert "Referrer-Policy" in headers and "X-Frame-Options" in headers
         assert cfg["responseOverrides"]["404"]["rewrite"] == "/404.html"
-        assert "immutable" not in json.dumps(cfg)
+        routes = {r["route"]: r for r in cfg["routes"]}
+        for route in font_routes:
+            assert routes[route] == {"route": route, "headers": {"Cache-Control": "public, max-age=31536000, immutable"}}, (cfg_path, route)
+        assert json.dumps(cfg).count("immutable") == len(font_routes), cfg_path
+
+
+def test_lato_from_the_first_paint():
+    # Clause 14, amended 2026-11-09: both Lato weights are preloaded before the stylesheet on every page, declared with
+    # font-display block (a late font leaves the text invisible for up to three seconds and then shows Lato; only a
+    # font that takes longer than that is drawn in the system font and swapped, where Chrome under optional swapped at
+    # any delay), on the site and on the architecture page.
+    for page in _NAV_PAGES:
+        html = _read(page)
+        for weight in ("400", "700"):
+            assert f'<link rel="preload" href="/assets/fonts/lato-{weight}.woff2" as="font" type="font/woff2" crossorigin>' in html, page
+        assert html.index("lato-700.woff2") < html.index('rel="stylesheet"'), page
+    arch = _read(_ARCH / "index.html")
+    for weight in ("400", "700"):
+        assert f'<link rel="preload" href="/architecture/fonts/lato-{weight}.woff2" as="font" type="font/woff2" crossorigin>' in arch
+    assert arch.index("lato-700.woff2") < arch.index('rel="stylesheet"') and 'href="/architecture/styles.css?v=29"' in arch
+    for css, folder in ((_read(_PUB / "assets/site.css"), "/assets/fonts"), (_read(_ARCH / "styles.css"), "/architecture/fonts")):
+        for weight in ("400", "700"):
+            assert f"font-weight:{weight};font-display:block;\n  src:url({folder}/lato-{weight}.woff2) format('woff2')" in css, (folder, weight)
+        assert "font-display:swap" not in css and "font-display:optional" not in css
 
 
 # --- the app's state (clause 1, amended 2026-11-05): the public pages do not show it ---
