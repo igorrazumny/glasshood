@@ -131,6 +131,8 @@ def test_the_review_has_the_single_system_shape_on_the_stronger_model():
     _answer("Fine.", score=True),
     _answer("Fine.", score=7.5),
     _answer("The services are operating normally.", score=9, recommendations=["Restart ColdVault."]),
+    _answer("ColdVault has no operational fault, but it carries configuration and security follow-up items."),
+    _answer("Fine; some cleanup is outstanding on ColdVault."),
 ])
 def test_notes_and_malformed_answers_are_refused(answer):
     cards = {"a": _rec()}
