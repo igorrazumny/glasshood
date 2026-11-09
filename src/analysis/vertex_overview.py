@@ -1009,7 +1009,7 @@ def system_cards() -> dict:
     return {k: {"ai_offline": off, "critical_notice": notice if k == ai_budget.GROUP else None,
                 "summary": v.get("summary"), "score": v.get("score"), "analyzed_at": v.get("analyzed_at"),
                 "error": v.get("error"), "stale": _with_staleness(v).get("stale"),
-                "condition": v.get("condition"), "alerts": v.get("alerts"),
+                "condition": v.get("condition"), "alerts": v.get("alerts"), "issues": v.get("issues") or [],
                 "job": jobs.get(k) or {"status": "complete"}} for k, v in both.items()}
 
 
