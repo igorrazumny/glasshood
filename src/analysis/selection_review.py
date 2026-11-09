@@ -38,8 +38,9 @@ Answer in JSON only:
  "recommendations": ["at most three concrete actions, only for the listed issues"]}"""
 
 # clause 5: words that mean the model carried notes into the review; such an answer is refused
-_NOTE_WORDS = re.compile(r"(?i)\b(observations?|configuration|leftovers?|findings?|follow-?ups?|follow-?up items?|cleanup|"
-                         r"housekeeping|security-related|not checked|unverified|unused|duplicate)\b")
+# the phrases a note summary is made of; a fault may still speak of a configuration, a duplicate or a follow-up
+_NOTE_WORDS = re.compile(r"(?i)\b(observations?|configuration notes?|configuration (and|or) security\b[^.]*?\bitems?|"
+                         r"follow-?up items?|leftovers?|findings?|cleanup|housekeeping|not checked|unverified)\b")
 # an issue that names no fault is not an issue (clause 5)
 _NON_ISSUE = re.compile(r"(?i)(no operational fault|needs attention\.?$|attention flag)")
 _LIST_LINE = re.compile(r"(?m)^\s*([-*•]|\d+[.)])\s")

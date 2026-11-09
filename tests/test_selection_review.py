@@ -230,6 +230,18 @@ def test_an_issue_that_names_no_fault_is_left_out_and_the_review_kept():
     assert got["current"] is True and got["update_failed"] is False
 
 
+def test_genuine_faults_and_actions_are_not_mistaken_for_notes():
+    for text in ["ColdVault is unavailable because its configuration is invalid.",
+                 "Restore ColdVault's last working configuration.",
+                 "GitHub is sending duplicate webhook deliveries.",
+                 "Arrange a follow-up with Cloudflare support."]:
+        assert sr._prose(text, "issue") == text
+    for text in ["ColdVault carries configuration and security follow-up items.",
+                 "Some cleanup is outstanding.", "Leftover firewall rules remain.", "Several parts are not checked."]:
+        with pytest.raises(ValueError):
+            sr._prose(text, "issue")
+
+
 def test_a_step_for_a_left_out_item_goes_with_it(monkeypatch):
     monkeypatch.setattr(sr, "_names", lambda: {"a": "ColdVault", "gh": "Cloudflare"})
     cards = {"a": _rec("normal"), "gh": _rec("attention")}
