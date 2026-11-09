@@ -131,6 +131,8 @@ def test_the_review_has_the_single_system_shape_on_the_stronger_model():
     _answer("Fine.", score=True),
     _answer("Fine.", score=7.5),
     _answer("The services are operating normally.", score=9, recommendations=["Restart ColdVault."]),
+    _answer("ColdVault has no operational fault, but it carries configuration and security follow-up items."),
+    _answer("Fine; some cleanup is outstanding on ColdVault."),
 ])
 def test_notes_and_malformed_answers_are_refused(answer):
     cards = {"a": _rec()}
@@ -226,6 +228,21 @@ def test_an_issue_that_names_no_fault_is_left_out_and_the_review_kept():
         got = sr.get_reviews()["all"]
     assert got["summary"] == "Alpha has no operational fault." and got["issues"] == [] and got["recommendations"] == []
     assert got["current"] is True and got["update_failed"] is False
+
+
+def test_genuine_faults_and_actions_are_not_mistaken_for_notes():
+    for text in ["ColdVault is unavailable because its configuration is invalid.",
+                 "Restore ColdVault's last working configuration.",
+                 "GitHub is sending duplicate webhook deliveries.",
+                 "Arrange a follow-up with Cloudflare support.",
+                 "Run disk cleanup on ColdVault, then confirm recovery.",
+                 "ColdVault is unavailable because its housekeeping task exhausted the available disk space."]:
+        assert sr._prose(text, "issue") == text
+    for text in ["ColdVault carries configuration and security follow-up items.",
+                 "Some cleanup is outstanding.", "Housekeeping items remain on ColdVault.", "Leftover firewall rules remain.",
+                 "Several parts are not checked."]:
+        with pytest.raises(ValueError):
+            sr._prose(text, "issue")
 
 
 def test_a_step_for_a_left_out_item_goes_with_it(monkeypatch):

@@ -16,7 +16,7 @@ SCOPES = ("all", "group-internal", "group-external")
 # The contract and instructions a review was written under. Bumped with every revision of the contract or
 # of PROMPT, so a saved review of an older version is set aside at load and written once more (one call per
 # selection): the owner's live reading (clause 12) is then of the revised instructions, not of a cached text.
-SHAPE = 5
+SHAPE = 6
 SETTLE_S = 90       # a round rewrites records one by one: wait until they stop changing
 RETRY_S = 600
 
@@ -27,7 +27,7 @@ Rules:
 - Use each system's name exactly as given.
 - The summary is one or two sentences on the selection as a whole: first the overall situation, then what deserves a call-out. Do not go through the systems one by one. When more than two systems are operating normally, say so collectively ("the other systems are operating normally") rather than naming each.
 - Under issues, list only actual faults and provider-reported problems, one plain sentence each, naming the system and saying what is wrong. Never list a system without saying what is wrong with it.
-- Configuration notes, observations, leftovers, findings and parts that are not checked are outside this review: never mention them. A system whose attention comes only from such notes gets no issue and no next step; if the summary names it at all, it says the system has no operational fault.
+- Configuration notes, observations, leftovers, findings, follow-up items, cleanup and parts that are not checked are outside this review: never mention them, in any words. A system whose attention comes only from such notes gets no issue and no next step; if the summary names it at all, it says only that the system has no operational fault, and never explains or hints why it is marked for attention.
 - Never enumerate incidents, locations, components or alert numbers. Describe the pattern and what it means for the business. An external service's trouble is one issue in one sentence: the pattern, never one item per component, location, incident or maintenance.
 - Next steps address only the listed issues, at most three, each a concrete action the person responsible for this selection can take. For a problem at an external provider that person is the provider's customer: the steps are to follow the provider's updates, check the selection's own services that depend on it, and prepare or use alternatives. Never tell them to repair the provider's service. No next step for a system operating normally. Empty when issues are empty.
 - Agree with each system's condition: a "normal" system is given no problem.
@@ -38,7 +38,10 @@ Answer in JSON only:
  "recommendations": ["at most three concrete actions, only for the listed issues"]}"""
 
 # clause 5: words that mean the model carried notes into the review; such an answer is refused
-_NOTE_WORDS = re.compile(r"(?i)\b(observations?|configuration notes?|leftovers?|findings?|not checked|unverified)\b")
+# the phrases a note summary is made of; a fault may still speak of a configuration, a duplicate or a follow-up
+_NOTE_WORDS = re.compile(r"(?i)\b(observations?|configuration notes?|configuration (and|or) security\b[^.]*?\bitems?|"
+                         r"follow-?up items?|leftovers?|findings?|cleanup (is |remains |items?|notes?)|housekeeping (items?|notes?)|"
+                         r"not checked|unverified)\b")
 # an issue that names no fault is not an issue (clause 5)
 _NON_ISSUE = re.compile(r"(?i)(no operational fault|needs attention\.?$|attention flag)")
 _LIST_LINE = re.compile(r"(?m)^\s*([-*•]|\d+[.)])\s")
