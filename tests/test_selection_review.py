@@ -20,6 +20,7 @@ def clean(tmp_path, monkeypatch):
     sr._reviews.clear(); sr._seen.clear(); sr._failed_at.clear(); sr._loaded[0] = False; sr._unsaved[0] = False; sr.problem[0] = None
     monkeypatch.setattr(ov, "ai_offline", lambda: None)
     monkeypatch.setattr(ov, "_outside_products", lambda: {"gh"})
+    monkeypatch.setattr(sr, "_names", lambda: {"a": "Alpha", "gh": "GitHub"})
 
 
 def _run(cards, answer, now):
@@ -130,6 +131,8 @@ def test_the_review_has_the_single_system_shape_on_the_stronger_model():
     _answer("Fine.", score=True),
     _answer("Fine.", score=7.5),
     _answer("The services are operating normally.", score=9, recommendations=["Restart ColdVault."]),
+    _answer("Fine.", issues=["ColdVault needs attention."]),
+    _answer("Fine.", issues=["ColdVault has no operational fault in this review."]),
 ])
 def test_notes_and_malformed_answers_are_refused(answer):
     cards = {"a": _rec()}
@@ -141,6 +144,15 @@ def test_notes_and_malformed_answers_are_refused(answer):
     with patch.object(ov, "system_cards", return_value=newer):
         got = sr.get_reviews()["all"]
     assert got["summary"] == "Fine." and got["update_failed"] is True
+
+
+def test_the_model_gets_display_names_and_each_system_s_attention_items():
+    cards = {"a": {**_rec("attention"), "issues": ["Backend: 1 of 2 healthy"]}}
+    with patch.object(ov, "system_cards", return_value=cards), \
+         patch.object(ov, "call_model", return_value=(json.dumps(_answer("x", score=6, issues=["Alpha: one backend is down."])), {})) as call:
+        sr.refresh_due(0); sr.refresh_due(100)
+    sent = json.loads(call.call_args.args[1])
+    assert sent[0]["system"] == "Alpha" and sent[0]["needs_attention"] == ["Backend: 1 of 2 healthy"]
 
 
 def test_the_diff_names_the_previous_check():

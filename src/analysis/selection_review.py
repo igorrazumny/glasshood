@@ -13,26 +13,34 @@ import time
 logger = logging.getLogger(__name__)
 
 SCOPES = ("all", "group-internal", "group-external")
-SHAPE = 2   # the amended contract of 2026-11-09; a review saved under an older shape is not shown as current
+# The contract and instructions a review was written under. Bumped with every revision of the contract or
+# of PROMPT, so a saved review of an older version is set aside at load and written once more (one call per
+# selection): the owner's live reading (clause 12) is then of the revised instructions, not of a cached text.
+SHAPE = 3
 SETTLE_S = 90       # a round rewrites records one by one: wait until they stop changing
 RETRY_S = 600
 
 PROMPT = """You review the state of a selection of systems for the person responsible for all of them. Each system is one component of the selection.
-You get each system's condition, score, latest assessment and its real open alerts.
-Write in the measured, factual register of an operations report: what is operating normally, what needs attention and why, and what to do. No conversational openers, no filler, no reassurance beyond the facts.
+For each system you get its name, condition, score, latest assessment, the items its own review listed under needs attention, and its real open alerts.
+Write in the measured, factual register of an operations report. No conversational openers, no filler, no reassurance beyond the facts.
 Rules:
-- Configuration notes, observations, leftovers, findings and parts that are not checked are outside this review. Never mention them, not even in summary. A system whose attention comes only from such notes has no operational fault: if you name it, say that in those words, and never say why it needs attention.
+- Use each system's name exactly as given.
+- The summary is one or two sentences on the selection as a whole: first the overall situation, then what deserves a call-out. Do not go through the systems one by one. Systems operating normally may be named together in one clause.
+- Under issues, list only actual faults and provider-reported problems, one plain sentence each, naming the system and saying what is wrong. Never list a system without saying what is wrong with it.
+- Configuration notes, observations, leftovers, findings and parts that are not checked are outside this review: never mention them. A system whose attention comes only from such notes gets no issue and no next step; if the summary names it at all, it says the system has no operational fault.
 - Never enumerate incidents, locations, components or alert numbers. Describe the pattern and what it means for the business.
-- Agree with each system's condition. A "failing" system and an "attention" system with an actual fault or a provider-reported problem are reflected; a "normal" system is given no problem.
-- Systems operating normally may be named together in one clause. A system is described on its own only where something needs attention.
+- Next steps address only the listed issues, at most three, each a concrete action for the person responsible. No next step for a system operating normally. Empty when issues are empty.
+- Agree with each system's condition: a "normal" system is given no problem.
 Answer in JSON only:
 {"score": 1-10 for the selection as a whole,
- "summary": "one or two sentences on the overall state",
- "issues": ["one plain sentence per actual fault or provider-reported problem, naming the system; empty if none"],
- "recommendations": ["at most three concrete actions for the person responsible; empty when nothing needs attention"]}"""
+ "summary": "one or two sentences",
+ "issues": ["one sentence per actual fault or provider-reported problem"],
+ "recommendations": ["at most three concrete actions, only for the listed issues"]}"""
 
 # clause 5: words that mean the model carried notes into the review; such an answer is refused
 _NOTE_WORDS = re.compile(r"(?i)\b(observations?|configuration notes?|leftovers?|findings?|not checked|unverified)\b")
+# an issue that names no fault is not an issue (clause 5)
+_NON_ISSUE = re.compile(r"(?i)(no operational fault|needs attention\.?$|attention flag)")
 _LIST_LINE = re.compile(r"(?m)^\s*([-*•]|\d+[.)])\s")
 _lock = threading.Lock()
 _reviews: dict = {}     # scope -> {summary, analyzed_at, sig}
@@ -119,11 +127,19 @@ def _prose(value, what: str) -> str:
     return value.strip()
 
 
+def _names() -> dict:
+    """product -> the name the reader sees on the card"""
+    from src.api.routes.manifests import _load_manifests
+    return {m.get("product"): m.get("solution") or m.get("display_name") or m.get("product") for m in _load_manifests()}
+
+
 def _write(records: dict) -> dict:
     """Clauses 2 to 7: the single-system shape, on the stronger model (clause 12)."""
     from src.analysis import vertex_overview as ov
-    payload = ov.sanitize([{"system": p, "condition": r.get("condition"), "score": r.get("score"),
-                            "assessment": r.get("summary"), "alerts": _real_alerts(r)}
+    names = _names()
+    payload = ov.sanitize([{"system": names.get(p) or p, "condition": r.get("condition"), "score": r.get("score"),
+                            "assessment": r.get("summary"), "needs_attention": r.get("issues") or [],
+                            "alerts": _real_alerts(r)}
                            for p, r in sorted(records.items())])
     text, _ = ov.call_model(PROMPT, json.dumps(payload, default=str), deep=True)
     answer = ov.parse_json(text) or {}
@@ -136,8 +152,11 @@ def _write(records: dict) -> dict:
         raise ValueError("the model's score was missing or not a whole number from 1 to 10")
     if steps and not issues:
         raise ValueError("the model gave next steps although nothing needs attention")
+    issues = [_prose(x, "issue") for x in issues]
+    if any(_NON_ISSUE.search(x) for x in issues):
+        raise ValueError("the model listed an issue that names no fault")
     return {"summary": _prose(answer.get("summary"), "summary"), "score": int(score),
-            "issues": [_prose(x, "issue") for x in issues],
+            "issues": issues,
             "recommendations": [_prose(x, "next step") for x in steps[:3]], "shape": SHAPE}
 
 
