@@ -118,7 +118,7 @@ function SystemsList({ onOpenAlert, cards, review, loadError, systemsError, diff
                 </ul>
               </div>
             )}
-            {review.recommendations?.length > 0 && (
+            {review.issues?.length > 0 && review.recommendations?.length > 0 && (
               <div className="mt-3">
                 <h3 className="text-xs font-semibold text-gray-500 dark:text-purple-300 uppercase mb-1">Next steps</h3>
                 <ul className="space-y-1">{review.recommendations.map(r => <li key={r} className="text-sm text-gray-600 dark:text-purple-200">{r}</li>)}</ul>

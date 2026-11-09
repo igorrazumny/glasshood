@@ -13,6 +13,7 @@ import time
 logger = logging.getLogger(__name__)
 
 SCOPES = ("all", "group-internal", "group-external")
+SHAPE = 2   # the amended contract of 2026-11-09; a review saved under an older shape is not shown as current
 SETTLE_S = 90       # a round rewrites records one by one: wait until they stop changing
 RETRY_S = 600
 
@@ -56,7 +57,13 @@ def _load() -> None:
         try:
             if path and os.path.exists(path):
                 with open(path) as f:
-                    _reviews.update(json.load(f))
+                    saved = json.load(f)
+                kept = {k: v for k, v in saved.items() if isinstance(v, dict) and v.get("shape") == SHAPE}
+                if len(kept) != len(saved):
+                    # an older contract's text may carry what the amendment forbids: written again once
+                    logger.info(f"{len(saved) - len(kept)} saved reviews of an older shape set aside; rewritten at the next scan")
+                    _unsaved[0] = True
+                _reviews.update(kept)
             _loaded[0] = True
             problem[0] = None
         except OSError as e:
@@ -124,10 +131,14 @@ def _write(records: dict) -> dict:
     if not isinstance(issues, list) or not isinstance(steps, list):
         raise ValueError("the model's lists were not lists")
     score = answer.get("score")
-    return {"summary": _prose(answer.get("summary"), "summary"),
-            "score": int(score) if isinstance(score, (int, float)) and 1 <= score <= 10 else None,
+    # clause 7: a score is part of the review; clause 6: next steps only where something needs attention
+    if isinstance(score, bool) or not isinstance(score, (int, float)) or not 1 <= score <= 10 or score != int(score):
+        raise ValueError("the model's score was missing or not a whole number from 1 to 10")
+    if steps and not issues:
+        raise ValueError("the model gave next steps although nothing needs attention")
+    return {"summary": _prose(answer.get("summary"), "summary"), "score": int(score),
             "issues": [_prose(x, "issue") for x in issues],
-            "recommendations": [_prose(x, "next step") for x in steps[:3]]}
+            "recommendations": [_prose(x, "next step") for x in steps[:3]], "shape": SHAPE}
 
 
 def _by_scope() -> dict:
