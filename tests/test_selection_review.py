@@ -273,6 +273,47 @@ def test_a_note_the_model_wrote_anyway_is_left_out_and_the_review_kept():
     assert got["current"] is True and got["update_failed"] is False
 
 
+def test_a_fault_mixed_with_a_note_is_never_lost():
+    """A sentence with a fault and a note keeps the fault: it reaches the model, and if the model writes
+    such a sentence the answer is refused rather than published with the fault deleted."""
+    mixed = "Alpha's backend is down, and leftover firewall rules remain."
+    assert sr._is_mixed(mixed) and not sr._is_note(mixed)
+    cards = {"a": {**_rec("failing"), "summary": mixed, "issues": [mixed]}}
+    with patch.object(ov, "system_cards", return_value=cards), \
+         patch.object(ov, "call_model", return_value=(json.dumps(_answer("Alpha's backend is down.", score=3, issues=["Alpha's backend is down."])), {})) as call:
+        sr.refresh_due(0); sr.refresh_due(100)
+    sent = json.loads(call.call_args.args[1])[0]
+    assert sent["assessment"] == mixed and sent["needs_attention"] == [mixed]
+    with patch.object(ov, "system_cards", return_value=cards):
+        assert sr.get_reviews()["all"]["issues"] == ["Alpha's backend is down."]
+    newer = {"a": {**cards["a"], "analyzed_at": 2.0}}
+    for answer in [_answer(f"{mixed} GitHub is operating normally.", score=3, issues=["Alpha's backend is down."]),
+                   _answer("Alpha's backend is down.", score=3, issues=[mixed]),
+                   _answer("Alpha's backend is down.", score=3, issues=["Alpha's backend is down."],
+                           recommendations=["Restore Alpha's backend and remove the leftover rules."])]:
+        with patch.object(ov, "system_cards", return_value=newer), \
+             patch.object(ov, "call_model", return_value=(json.dumps(answer), {})):
+            sr._failed_at.clear(); sr.refresh_due(200); sr.refresh_due(300)
+        with patch.object(ov, "system_cards", return_value=newer):
+            got = sr.get_reviews()["all"]
+        assert got["issues"] == ["Alpha's backend is down."] and got["current"] is False and got["update_failed"] is True
+
+
+def test_a_dropped_note_keeps_the_remedy_for_a_surviving_fault_of_the_same_system():
+    cards = {"a": _rec("failing")}
+    answer = _answer("Alpha's backend is down.", score=3,
+                     issues=["Alpha's backend is down.", "Alpha has leftover firewall rules."],
+                     recommendations=["Restore Alpha's failed backend and confirm recovery."])
+    with patch.object(ov, "system_cards", return_value=cards), \
+         patch.object(ov, "call_model", return_value=(json.dumps(answer), {})):
+        sr.refresh_due(0); sr.refresh_due(100)
+    with patch.object(ov, "system_cards", return_value=cards):
+        got = sr.get_reviews()["all"]
+    assert got["issues"] == ["Alpha's backend is down."]
+    assert got["recommendations"] == ["Restore Alpha's failed backend and confirm recovery."]
+    assert got["current"] is True and got["update_failed"] is False
+
+
 def test_the_model_s_own_count_of_systems_is_left_out_and_the_rest_kept():
     """Clause 3 (amended): GlassHood states the counts itself; a count sentence of the model goes."""
     cards = {"a": _rec(), "gh": _rec("attention")}

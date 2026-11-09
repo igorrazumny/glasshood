@@ -43,6 +43,11 @@ Answer in JSON only:
 _NOTE_WORDS = re.compile(r"(?i)\b(observations?|configuration notes?|configuration (and|or) security\b[^.]*?\bitems?|"
                          r"follow-?up items?|leftovers?|findings?|cleanup (is |remains |items?|notes?)|housekeeping (items?|notes?)|"
                          r"not checked|unverified)\b")
+# a sentence that carries a note AND a fault ("the backend is down, and leftover firewall rules remain")
+# is never thrown away with the note: the fault matters more
+_FAULT_WORDS = re.compile(r"(?i)\b(down|unavailable|unreachable|fail(s|ed|ing|ures?)?|outages?|errors?|degrad(ed|ation|ing)|"
+                          r"not (working|responding|serving|answering|reachable|ready)|timed? ?outs?|refus(ed|es|ing)|"
+                          r"crash(ed|es|ing)?|exhausted|disrupt(ed|ions?)|incidents?|slow(downs?)?|latency|unhealthy|stopped|broken)\b")
 # an issue that names no fault is not an issue (clause 5)
 _NON_ISSUE = re.compile(r"(?i)(no operational fault|needs attention\.?$|attention flag)")
 _LIST_LINE = re.compile(r"(?m)^\s*([-*•]|\d+[.)])\s")
@@ -145,13 +150,28 @@ def _prose(value, what: str) -> str:
 
 
 def _is_note(text) -> bool:
-    """Clause 5: an item or sentence about observations, configuration notes and the like."""
-    return isinstance(text, str) and _NOTE_WORDS.search(text) is not None
+    """Clause 5: an item or sentence that is only about observations, configuration notes and the like."""
+    return isinstance(text, str) and _NOTE_WORDS.search(text) is not None and not _FAULT_WORDS.search(text)
 
 
-def _without_notes(text: str) -> str:
-    """Clause 5: the sentences about notes are left out, whether in what the model gets or in what it wrote."""
-    return " ".join(s for s in _SENTENCE_END.split(text) if not _NOTE_WORDS.search(s))
+def _is_mixed(text) -> bool:
+    """A note and a fault in one sentence: the fault must not be lost, so the sentence is never dropped."""
+    return isinstance(text, str) and _NOTE_WORDS.search(text) is not None and _FAULT_WORDS.search(text) is not None
+
+
+def _without_notes(text: str, strict: bool = False) -> str:
+    """Clause 5: sentences only about notes are left out. In what the model gets, a sentence that mixes a
+    fault with a note stays (the fault matters more); in what the model wrote (strict), such a sentence
+    cannot be separated safely and the answer is refused, so the last good review stays."""
+    kept = []
+    for s in _SENTENCE_END.split(text):
+        if _is_mixed(s):
+            if strict:
+                raise ValueError("the model mixed a fault with configuration notes in one sentence")
+            kept.append(s)
+        elif not _is_note(s):
+            kept.append(s)
+    return " ".join(kept)
 
 
 def _mentions(text: str, name: str) -> bool:
@@ -209,22 +229,35 @@ def _write(records: dict) -> dict:
         raise ValueError("the model's score was missing or not a whole number from 1 to 10")
     mentions = _mentions
     issues = [_prose(x, "issue") for x in issues]
+    steps = [_prose(x, "next step") for x in steps]
+    # a fault and a note in one item cannot be separated safely: the answer is refused, never published
+    # with the fault deleted
+    if any(_is_mixed(x) for x in issues + steps):
+        raise ValueError("the model mixed a fault with configuration notes in one item")
     # a true sentence in the wrong place ("ColdVault has no operational fault") or a note that slipped
-    # through ("leftover firewall rules") is left out, not refused: the rest of the answer stands, and
-    # a next step for a system whose item was left out goes with it (clause 6: next steps only for
-    # the listed issues)
+    # through ("leftover firewall rules") is left out, not refused: the rest of the answer stands
     dropped = [x for x in issues if _NON_ISSUE.search(x) or _is_note(x)]
     issues = [x for x in issues if x not in dropped]
-    steps = [s for s in steps if isinstance(s, str) and not _is_note(s)]
-    if dropped:
-        gone = [n for n in names.values() if any(mentions(x, n) for x in dropped)]
-        steps = [s for s in steps if not any(mentions(s, n) for n in gone)]
+    faulty = [n for n in names.values() if any(mentions(x, n) for x in issues)]
+    # a next step goes with a dropped item only when its system has no surviving issue (clause 6: next
+    # steps only for the listed issues); a note step about a system that still has a fault could be
+    # that fault's remedy, so the answer is refused instead of losing it
+    gone = [n for n in names.values() if n not in faulty and any(mentions(x, n) for x in dropped)]
+    kept_steps = []
+    for s in steps:
+        if _is_note(s):
+            if any(mentions(s, n) for n in faulty):
+                raise ValueError("the model's next step mixed a note with a system that has a fault")
+            continue
+        if not any(mentions(s, n) for n in gone):
+            kept_steps.append(s)
+    steps = kept_steps
     if steps and not issues:
         if dropped:
             steps = []
         else:
             raise ValueError("the model gave next steps although nothing needs attention")
-    summary = _without_notes(_prose(answer.get("summary"), "summary"))
+    summary = _without_notes(_prose(answer.get("summary"), "summary"), strict=True)
     if not summary.strip():
         raise ValueError("the model's summary was only about configuration notes")
     # one issue per external service in the selection; an internal system's fault that mentions the
@@ -238,7 +271,7 @@ def _write(records: dict) -> dict:
     named = lambda s: _as_named(s, names)
     return {"summary": named(_without_counts(summary, names)), "score": int(score),
             "issues": [named(x) for x in issues],
-            "recommendations": [named(_prose(x, "next step")) for x in steps[:3]], "shape": SHAPE}
+            "recommendations": [named(x) for x in steps[:3]], "shape": SHAPE}
 
 
 def _by_scope() -> dict:
