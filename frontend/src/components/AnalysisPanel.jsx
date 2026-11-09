@@ -10,7 +10,7 @@ import { statsSummary } from '../utils/canvasParts.js'
 import { overviewStamp, spendLine } from '../utils/overview.js'
 import { clock } from '../utils/time'
 import AiOfflineLine from './AiOfflineLine'
-import { assessmentLine, changeLines, loadFailed, selectionNotice } from '../utils/systems.js'
+import { assessmentLine, changeLines, countsLine, loadFailed, selectionNotice } from '../utils/systems.js'
 
 function ScoreBadge({ score }) {
   if (score === null || score === undefined) return null
@@ -101,10 +101,11 @@ function SystemsList({ onOpenAlert, cards, review, loadError, systemsError, diff
       {review?.summary
         ? <>
             <p className="text-xs text-gray-500 dark:text-purple-300 mb-1">{overviewStamp(review)}</p>
-            {/* REQ-GHA-046 clauses 2, 6 and 7: the single-system shape for the whole selection */}
+            {/* REQ-GHA-046 clauses 2, 6 and 7: the single-system shape for the whole selection;
+                clause 3 (amended): GlassHood's own count of the systems by state opens the summary */}
             <div className="flex items-start gap-3">
               <ScoreBadge score={review.score} />
-              <p className="text-sm text-gray-700 dark:text-purple-100 leading-[1.55]">{review.summary}</p>
+              <p className="text-sm text-gray-700 dark:text-purple-100 leading-[1.55]">{countsLine(cards)} {review.summary}</p>
             </div>
             {review.issues?.length > 0 && (
               <div className="mt-3">

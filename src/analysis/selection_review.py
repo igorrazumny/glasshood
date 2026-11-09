@@ -16,16 +16,17 @@ SCOPES = ("all", "group-internal", "group-external")
 # The contract and instructions a review was written under. Bumped with every revision of the contract or
 # of PROMPT, so a saved review of an older version is set aside at load and written once more (one call per
 # selection): the owner's live reading (clause 12) is then of the revised instructions, not of a cached text.
-SHAPE = 6
+SHAPE = 7
 SETTLE_S = 90       # a round rewrites records one by one: wait until they stop changing
 RETRY_S = 600
 
-PROMPT = """You review the state of a selection of systems for the person responsible for all of them. Each system is one component of the selection.
+PROMPT = """You review the state of a selection of systems for the person responsible for all of them. The selection's members are systems: call them systems, never components, and call the selection as a whole "the selected systems".
 For each system you get its name, condition, score, latest assessment, the items its own review listed under needs attention, and its real open alerts.
 Write in the measured, factual register of an operations report. No conversational openers, no filler, no reassurance beyond the facts.
 Rules:
 - Use each system's name exactly as given.
-- The summary is one or two sentences on the selection as a whole: first the overall situation, then what deserves a call-out. Do not go through the systems one by one. When more than two systems are operating normally, say so collectively ("the other systems are operating normally") rather than naming each.
+- GlassHood itself states, before your text, how many systems are in each state. Do not count the systems and do not say how many are operating normally or need attention.
+- The summary is one or two sentences on the selection as a whole: first the overall situation in words, then what deserves a call-out. Do not go through the systems one by one. When more than two systems are operating normally, say so collectively ("the other systems are operating normally") rather than naming each.
 - Under issues, list only actual faults and provider-reported problems, one plain sentence each, naming the system and saying what is wrong. Never list a system without saying what is wrong with it.
 - Configuration notes, observations, leftovers, findings, follow-up items, cleanup and parts that are not checked are outside this review: never mention them, in any words. A system whose attention comes only from such notes gets no issue and no next step; if the summary names it at all, it says only that the system has no operational fault, and never explains or hints why it is marked for attention.
 - Never enumerate incidents, locations, components or alert numbers. Describe the pattern and what it means for the business. An external service's trouble is one issue in one sentence: the pattern, never one item per component, location, incident or maintenance.
@@ -45,6 +46,12 @@ _NOTE_WORDS = re.compile(r"(?i)\b(observations?|configuration notes?|configurati
 # an issue that names no fault is not an issue (clause 5)
 _NON_ISSUE = re.compile(r"(?i)(no operational fault|needs attention\.?$|attention flag)")
 _LIST_LINE = re.compile(r"(?m)^\s*([-*•]|\d+[.)])\s")
+# clause 19: at the level of a selection its members are systems; "component" is the word for the inside of one
+_WRONG_LEVEL = re.compile(r"(?i)\bcomponents?\b")
+# clause 3 (amended): GlassHood states the counts itself; a sentence of the model that counts systems is left out
+_COUNTS = re.compile(r"(?i)\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)"
+                     r"( of (the )?(\d+|\w+))? (selected |monitored )?systems?\b")
+_SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
 _lock = threading.Lock()
 _reviews: dict = {}     # scope -> {summary, analyzed_at, sig}
 _seen: dict = {}        # scope -> (sig, since when)
@@ -127,7 +134,17 @@ def _prose(value, what: str) -> str:
         raise ValueError(f"the model's {what} was not prose")
     if _NOTE_WORDS.search(value):
         raise ValueError(f"the model's {what} carried configuration notes into the review")
+    if _WRONG_LEVEL.search(value):
+        raise ValueError(f"the model's {what} spoke of components at the level of systems")
     return value.strip()
+
+
+def _without_counts(summary: str) -> str:
+    """GlassHood's own count sentence opens the review; the model's sentences that count systems are left out."""
+    kept = [s for s in _SENTENCE_END.split(summary) if not _COUNTS.search(s)]
+    if not kept:
+        raise ValueError("the model's summary only counted the systems")
+    return " ".join(kept)
 
 
 def _names() -> dict:
@@ -191,7 +208,7 @@ def _write(records: dict) -> dict:
         if len(own) > 1:
             raise ValueError(f"the model split {name}'s trouble into several issues")
     named = lambda s: _as_named(s, names)
-    return {"summary": named(_prose(answer.get("summary"), "summary")), "score": int(score),
+    return {"summary": named(_without_counts(_prose(answer.get("summary"), "summary"))), "score": int(score),
             "issues": [named(x) for x in issues],
             "recommendations": [named(_prose(x, "next step")) for x in steps[:3]], "shape": SHAPE}
 

@@ -3,7 +3,7 @@
 // Run: node frontend/src/utils/systems.test.js
 
 import assert from 'node:assert/strict'
-import { TREE_LEFT, headerLine, withRecords, offlineLine, systemCards, systemOfNodes, portfolioLine, systemId, groupedCards, cardsInGroup, assessmentLine, listAssessments, loadFailed, staleDataLine } from './systems.js'
+import { TREE_LEFT, headerLine, withRecords, offlineLine, systemCards, systemOfNodes, portfolioLine, systemId, groupedCards, cardsInGroup, assessmentLine, listAssessments, loadFailed, staleDataLine, countsLine } from './systems.js'
 
 let failed = 0
 function test(name, fn) {
@@ -232,6 +232,22 @@ test('AI offline: grey, one line, the number, and never a colour from the old re
   assert.equal(headerLine([c], null).offline, ai_offline)
   const [row] = listAssessments([{ id: 'a', label: 'A', product: 'a' }], { a: { ai_offline, summary: 'old', analyzed_at: 1 } }, Date.now())
   assert.equal(row.offline, ai_offline); assert.equal(row.last.text, 'old')
+})
+
+// REQ-GHA-046 clause 3 (amended 2026-11-09): GlassHood's own count opens the selection review
+test('the count sentence uses the cards\' status words and counts unassessed systems apart', () => {
+  const s = state => ({ state })
+  assert.equal(countsLine([s('healthy'), s('healthy'), s('healthy'), s('healthy'), s('degraded')]),
+    'Four of five systems are healthy; one needs attention.')
+  assert.equal(countsLine([s('healthy'), s('healthy'), s('healthy')]), 'All three systems are healthy.')
+  assert.equal(countsLine([s('degraded'), s('error'), s('not checked'), s('healthy')]),
+    'One of four systems is healthy; one needs attention; one is degraded; one is not yet assessed.')
+  assert.equal(countsLine([s('healthy'), {}]), 'One of two systems is healthy; one is not yet assessed.')
+  assert.equal(countsLine([s('degraded')]), 'The one system needs attention.')
+  assert.equal(countsLine([]), null)
+  assert.equal(countsLine(null), null)
+  const thirteen = Array.from({ length: 13 }, () => s('healthy'))
+  assert.equal(countsLine(thirteen), 'All 13 systems are healthy.')
 })
 
 if (failed) { console.error(`${failed} failed`); process.exit(1) }

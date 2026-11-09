@@ -133,6 +133,8 @@ def test_the_review_has_the_single_system_shape_on_the_stronger_model():
     _answer("The services are operating normally.", score=9, recommendations=["Restart ColdVault."]),
     _answer("ColdVault has no operational fault, but it carries configuration and security follow-up items."),
     _answer("Fine; some cleanup is outstanding on ColdVault."),
+    _answer("Several components of the selection are degraded."),
+    _answer("Four of five systems are operating normally."),
 ])
 def test_notes_and_malformed_answers_are_refused(answer):
     cards = {"a": _rec()}
@@ -207,7 +209,7 @@ def test_internal_faults_through_a_shared_provider_are_not_the_provider_s_issues
     cards = {"a": _rec("attention"), "b": _rec("attention"), **({"gh": _rec("attention")} if with_provider else {})}
     issues = ["Alpha requests time out through GitHub.", "Beta login fails through GitHub."] + \
         (["GitHub reports degraded service."] if with_provider else [])
-    answer = _answer("Two systems fail through GitHub.", score=4, issues=issues)
+    answer = _answer("Alpha and Beta fail through GitHub.", score=4, issues=issues)
     with patch.object(ov, "system_cards", return_value=cards), \
          patch.object(ov, "call_model", return_value=(json.dumps(answer), {})):
         sr.refresh_due(0); sr.refresh_due(100)
@@ -243,6 +245,32 @@ def test_genuine_faults_and_actions_are_not_mistaken_for_notes():
                  "Several parts are not checked."]:
         with pytest.raises(ValueError):
             sr._prose(text, "issue")
+
+
+def test_the_model_s_own_count_of_systems_is_left_out_and_the_rest_kept():
+    """Clause 3 (amended): GlassHood states the counts itself; a count sentence of the model goes."""
+    cards = {"a": _rec(), "gh": _rec("attention")}
+    answer = _answer("Four of the five systems are operating normally. GitHub reports degraded service.", score=6,
+                     issues=["GitHub reports degraded service."])
+    with patch.object(ov, "system_cards", return_value=cards), \
+         patch.object(ov, "call_model", return_value=(json.dumps(answer), {})):
+        sr.refresh_due(0); sr.refresh_due(100)
+    with patch.object(ov, "system_cards", return_value=cards):
+        got = sr.get_reviews()["all"]
+    assert got["summary"] == "GitHub reports degraded service." and got["current"] is True
+    assert sr._without_counts("All selected systems are operating normally.") == "All selected systems are operating normally."
+    assert sr._without_counts("The other systems are operating normally.") == "The other systems are operating normally."
+    with pytest.raises(ValueError):
+        sr._without_counts("2 systems need attention.")
+
+
+def test_the_two_levels_have_their_own_words():
+    """Clause 19: members of a selection are systems; components are the inside of one system."""
+    assert "call them systems, never components" in sr.PROMPT and "Do not count the systems" in sr.PROMPT
+    with pytest.raises(ValueError):
+        sr._prose("GitHub reports degraded performance in several components.", "issue")
+    assert "its components" in ov.SYSTEM_PROMPT and "ONE component" in ov.PART_PROMPT
+    assert "never by their id" in ov.SYSTEM_PROMPT and "never by its id" in ov.PART_PROMPT
 
 
 def test_a_step_for_a_left_out_item_goes_with_it(monkeypatch):
