@@ -12,7 +12,7 @@ import { usePolling } from '../hooks/usePolling'
 import { apiFetch } from '../utils/api'
 import { loadFailed } from '../utils/systems'
 import { clock, dateTime } from '../utils/time'
-import { EARLIER_EMPTY, PAGE, mergeEntries } from '../utils/logsView'
+import { EARLIER_EMPTY, PAGE, earlierLines, mergeEntries } from '../utils/logsView'
 
 const SEVERITY_COLORS = {
   ERROR: 'text-red-400',
@@ -80,7 +80,7 @@ export default function LogViewerModal({ nodeId, nodeLabel, nodeStatus, isDemo, 
     setLoadingEarlier(true)
     setEarlierNote(null)
     try {
-      const body = await apiFetch(`/api/logs/${nodeId}?lines=${PAGE}&before=${encodeURIComponent(have[0].timestamp)}`)
+      const body = await apiFetch(`/api/logs/${nodeId}?lines=${earlierLines(have)}&before=${encodeURIComponent(have[0].timestamp)}`)
       const got = body?.entries || []
       if (body?.error) {
         setEarlierNote(body.error)

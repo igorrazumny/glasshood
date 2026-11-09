@@ -121,7 +121,7 @@ def query_logs(workspace: str, query: str, since_hours: float, max_entries: int,
     `before` (a datetime) reads the lines older than that moment (REQ-GHA-032 clause 13)."""
     kql = f"{query} | where TimeGenerated > ago({int(since_hours * 60)}m)"
     if before is not None:
-        kql += f" | where TimeGenerated < datetime({before.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')}Z)"
+        kql += f" | where TimeGenerated <= datetime({before.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')}Z)"
     kql += f" | order by TimeGenerated desc | take {int(max_entries)}"
     if post:
         data = post(workspace, kql)

@@ -15,14 +15,26 @@ export function noLogsReason(node) {
   return first.reason || 'This part writes no logs GlassHood can read.'
 }
 
+// how many lines to ask for: one page plus those already held at the oldest moment, which come back
+export function earlierLines(have) {
+  return PAGE + (have || []).filter(e => e.timestamp === have[0].timestamp).length
+}
+
 const key = e => `${e.timestamp}|${e.severity}|${e.message}`
 const when = e => { const t = Date.parse(e.timestamp); return Number.isNaN(t) ? 0 : t }
 
-// clause 13: nothing loaded is removed; the lines are kept oldest first, newest at the bottom
+// clause 13: nothing loaded is removed; the lines are kept oldest first, newest at the bottom.
+// Identical lines are separate occurrences: an answer adds only those beyond what is already held.
 export function mergeEntries(existing, incoming) {
   const have = existing || []
-  const seen = new Set(have.map(key))
-  const added = (incoming || []).filter(e => e && e.timestamp !== undefined && !seen.has(key(e)))
+  const held = new Map()
+  for (const e of have) held.set(key(e), (held.get(key(e)) || 0) + 1)
+  const added = (incoming || []).filter(e => {
+    if (!e || e.timestamp === undefined) return false
+    const left = held.get(key(e)) || 0
+    if (left) { held.set(key(e), left - 1); return false }
+    return true
+  })
   if (!added.length) return have
   return [...have, ...added].sort((a, b) => when(a) - when(b))
 }

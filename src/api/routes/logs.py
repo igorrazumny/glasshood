@@ -38,19 +38,24 @@ EMPTY_NOTE = "No log lines for this part in the last 7 days."
 EARLIER_EMPTY_NOTE = "No earlier lines in the last 7 days."
 UNKNOWN_NOTE = "GlassHood does not know this part, so it cannot look up its logs."
 LINES_DEFAULT, LINES_MAX = 300, 500
+# "before" includes the boundary moment, so lines sharing the oldest timestamp can be reached;
+# the window asks for one page plus the lines it already holds at that moment
+LINES_MAX_EARLIER = 2000
 
 
 def _parse_before(before: str) -> datetime:
     """The oldest line shown, in any of the forms the windows print (GCP, AWS, Azure, provider)."""
     text = before.strip().replace(" ", "T")
+    finer = re.search(r"\.\d{6}(\d*[1-9]\d*)", text) is not None     # finer than a microsecond: round up, so nothing is skipped
     text = re.sub(r"(\.\d{6})\d+", r"\1", text).replace("Z", "+00:00")
     dt = datetime.fromisoformat(text)
+    dt = dt + timedelta(microseconds=1) if finer else dt
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
 def _older(timestamp, before: datetime) -> bool:
     try:
-        return _parse_before(str(timestamp)) < before
+        return _parse_before(str(timestamp)) <= before
     except ValueError:
         return False
 
@@ -70,7 +75,7 @@ def _query_logs_with_filter(project: str, log_filter: str, max_entries: int = 10
     cutoff = datetime.now(timezone.utc) - window
     filter_str = f'({log_filter}) AND timestamp>="{cutoff.isoformat()}"'
     if before is not None:
-        filter_str += f' AND timestamp<"{before.isoformat()}"'
+        filter_str += f' AND timestamp<="{before.isoformat()}"'
 
     client = Client(project=project)
     entries = list(client.list_entries(
@@ -268,7 +273,7 @@ async def _earlier(node_id: str, status: str, project, resolved_filter, lines: i
             from src.collectors.aws_resources import query_logs
             hours = (before - floor).total_seconds() / 3600
             entries = await loop.run_in_executor(
-                None, lambda: query_logs(resolved_filter, hours, lines, end_ms=int(before.timestamp() * 1000)))
+                None, lambda: query_logs(resolved_filter, hours, lines, end_ms=int(before.timestamp() * 1000) + 1))
         elif status == "azure_logs":
             from src.collectors.azure_resources import query_logs
             entries = await loop.run_in_executor(
@@ -333,7 +338,7 @@ async def get_logs(node_id: str, request: Request, lines: int = LINES_DEFAULT, b
         return {"node_id": node_id, "entries": [], "count": 0,
                 "error": UNKNOWN_NOTE}
 
-    lines = max(1, min(lines, LINES_MAX))
+    lines = max(1, min(lines, LINES_MAX_EARLIER if before_dt is not None else LINES_MAX))
     if status == "no_logs":
         return {"node_id": node_id, "entries": [], "count": 0, "note": resolved_filter}
     if before_dt is not None:

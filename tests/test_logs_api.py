@@ -153,7 +153,8 @@ class TestLogsApi:
                 r = _client().get(f"/api/logs/pl-api?before={quote(shown, safe='')}")
             args = mock_query.call_args.args
             assert args[2] == 300 and args[3] == QUIET_FALLBACK
-            assert args[4] == datetime(2026, 11, 9, 10, 0, 0, 123456, tzinfo=timezone.utc)
+            # the boundary is included; a time finer than a microsecond rounds up so nothing is skipped
+            assert args[4] == datetime(2026, 11, 9, 10, 0, 0, 123456 if answer else 123457, tzinfo=timezone.utc)
             body = r.json()
             assert body["earlier"] is True and body["window"] == "7d" and body["entries"] == answer
             assert body.get("note") == (None if answer else EARLIER_EMPTY_NOTE)
@@ -172,7 +173,7 @@ class TestLogsApi:
             mock_client.return_value.list_entries.return_value = []
             _query_logs_with_filter("p", 'resource.type="x"', 300, QUIET_FALLBACK, before)
         sent = mock_client.return_value.list_entries.call_args.kwargs["filter_"]
-        assert sent.startswith('(resource.type="x") AND timestamp>="') and 'AND timestamp<"2026-11-09T10:00:00+00:00"' in sent
+        assert sent.startswith('(resource.type="x") AND timestamp>="') and 'AND timestamp<="2026-11-09T10:00:00+00:00"' in sent
 
     def test_a_provider_s_earlier_updates_are_the_ones_older_than_the_oldest_shown(self):
         rows = [{"timestamp": "2026-11-09T10:30:00Z", "severity": "WARNING", "message": "new"},

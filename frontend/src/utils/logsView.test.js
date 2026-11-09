@@ -3,7 +3,7 @@
 // what it loaded. Run: node frontend/src/utils/logsView.test.js
 
 import assert from 'node:assert/strict'
-import { noLogsReason, mergeEntries, PAGE, EARLIER_EMPTY } from './logsView.js'
+import { noLogsReason, mergeEntries, earlierLines, PAGE, EARLIER_EMPTY } from './logsView.js'
 
 let failed = 0
 function test(name, fn) {
@@ -34,6 +34,16 @@ test('loaded lines are kept oldest first, nothing is removed, duplicates join on
   assert.deepEqual(earlier.map(e => e.message), ['a', 'b', 'c', 'd'])
   assert.equal(mergeEntries(earlier, []).length, 4)
   assert.equal(mergeEntries(null, null).length, 0)
+})
+
+test('lines sharing a timestamp are separate occurrences and can all be reached across a page boundary', () => {
+  const t = '2026-11-09T10:00:00Z'
+  const line = { timestamp: t, severity: 'INFO', message: 'same' }
+  assert.equal(mergeEntries([line], [{ ...line }, { ...line }]).length, 2)
+  assert.equal(mergeEntries([line, { ...line }], [{ ...line }]).length, 2)
+  const page = Array.from({ length: 300 }, () => ({ ...line }))
+  assert.equal(earlierLines(page), 600)
+  assert.equal(mergeEntries(page, Array.from({ length: 301 }, () => ({ ...line }))).length, 301)
 })
 
 test('the page is several screens and the empty-earlier note is fixed', () => {
