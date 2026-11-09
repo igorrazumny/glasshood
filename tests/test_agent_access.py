@@ -100,14 +100,60 @@ def test_a_correction_is_recorded_for_the_operator_and_changes_nothing():
     assert c.post("/api/agents/systems/cv/corrections", json={**body, "kind": "x"}).status_code == 400
     assert c.post("/api/agents/systems/cv/corrections", json=body).status_code == 200
     assert store.corrections()[0]["agent"] == "architect"
-    assert c.get("/api/agents/corrections").status_code == 403       # an agent is a viewer
+    assert c.get("/api/agents/corrections").status_code == 401       # not for agents
     assert c.get("/api/agents/systems/cv").json()["open_alerts"]     # nothing closed
 
 
 @pytest.mark.parametrize("call", [("post", "/api/agents/keys"), ("delete", "/api/agents/keys/tank"), ("post", "/api/alerts/ack")])
 def test_an_agent_cannot_use_any_other_write(call):
     r = getattr(client("tank"), call[0])(call[1], **({"json": {"agent": "x"}} if call[0] == "post" else {}))
-    assert r.status_code == 403
+    assert r.status_code == 401
+
+
+def test_an_agent_credential_opens_nothing_outside_the_agents_routes():
+    c = client("tank")
+    assert c.get("/api/manifests").status_code == 401 and c.get("/api/alerts").status_code == 401
+    assert c.put("/api/preferences/right-panel", json={"split": 0.4}).status_code == 401
+
+
+def test_a_failed_save_loses_no_change():
+    store._started[0] = -1000
+    store.record_changes({"cv": {"condition": "normal"}}, {}, now=1)
+    store.record_changes({"cv": {"condition": "failing"}}, {}, now=2)
+    with patch.object(store, "_save", side_effect=store.Unavailable("x")):
+        with pytest.raises(store.Unavailable):
+            store.changes_for("a")
+        with pytest.raises(store.Unavailable):
+            store.record_changes({"cv": {"condition": "normal"}}, {}, now=3)
+    assert len(store.changes_for("a")) == 1
+
+
+def test_real_changes_right_after_a_restart_are_kept_and_an_alarm_ends_only_once_settled():
+    store._started[0] = -1000
+    store.record_changes({"cv": {"condition": "normal"}}, {"cv": [{"number": 1, "title": "x", "severity": "warning"}]}, now=1)
+    store._started[0] = None
+    store.record_changes({"cv": {"condition": "failing"}}, {"cv": []}, now=100)
+    store.record_changes({"cv": {"condition": "normal"}}, {"cv": []}, now=500)
+    assert [e["kind"] for e in store.changes_for("a")] == ["status_changed", "status_changed"]
+    store.record_changes({"cv": {"condition": "normal"}}, {"cv": []}, now=701)
+    assert [e["kind"] for e in store.changes_for("a")] == ["alert_ended"]
+
+
+def test_discarded_changes_are_said():
+    store._started[0] = -1000
+    store.record_changes({"cv": {"condition": "normal"}}, {}, now=1)
+    store.record_changes({"cv": {"condition": "failing"}}, {}, now=2)
+    assert store.missed("a") is False
+    store._state["events"] = []
+    store.record_changes({"cv": {"condition": "normal"}}, {}, now=3)
+    assert store.missed("a") is True
+
+
+def test_while_ai_is_offline_the_saved_status_is_not_presented_as_current(monkeypatch):
+    monkeypatch.setattr(ov, "system_cards", lambda: {"cv": {"condition": "normal", "ai_offline": {"since": 1}, "stale": True}})
+    c = client("tank")
+    for s in (c.get("/api/agents/systems").json()["systems"][0], c.get("/api/agents/systems/cv").json()):
+        assert s["status"].startswith("Unknown") and s["last_evaluated_status"] == "Healthy" and s["stale"] is True
 
 
 def test_unreadable_state_is_said():

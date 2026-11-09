@@ -33,6 +33,7 @@ def _agent(request: Request) -> str:
         raise HTTPException(status_code=503, detail=str(e))
     if not agent:
         raise HTTPException(status_code=401, detail="Unknown or withdrawn agent credential")
+    request.state.agent_ctx = {"user": f"agent:{agent}", "role": "viewer", "customer_id": ""}
     logger.info(f"agent read: {agent} {request.method} {request.url.path}")
     return agent
 
@@ -118,6 +119,16 @@ def scan(nodes) -> None:
     store.record_changes(ov.system_cards(), alerts_by_system(nodes))
 
 
+def _standing(record) -> dict:
+    """Clauses 2 and 5: as the cards say it. While AI is offline the saved status is history, not current."""
+    record = record or {}
+    off = record.get("ai_offline")
+    word = store.status_word(record)
+    return {"status": "Unknown: AI evaluation offline" if off else word, "ai_offline": off,
+            "last_evaluated_status": word if off else None, "stale": bool(record.get("stale")),
+            "evaluated_at": record.get("analyzed_at"), "evaluation_error": record.get("error")}
+
+
 @router.get("/api/agents/systems")
 def list_systems(request: Request):
     _agent(request)
@@ -125,7 +136,7 @@ def list_systems(request: Request):
     outside, records = ov._outside_products(), ov.system_cards()
     return {"systems": [{"system": p, "name": d.get("solution") or p,
                          "group": "External systems" if p in outside else "Proprietary systems",
-                         "status": store.status_word(records.get(p)), "evaluated_at": (records.get(p) or {}).get("analyzed_at"),
+                         **_standing(records.get(p)),
                          "responsible_agent": d.get("responsible_agent")}
                         for p, (d, _) in _landscapes().items()]}
 
@@ -137,8 +148,7 @@ def get_system(system: str, request: Request):
     from src.analysis import vertex_overview as ov
     record = ov.system_cards().get(system) or {}
     nodes = _topology()
-    return {"system": system, "name": data.get("solution") or system, "status": store.status_word(record),
-            "evaluated_at": record.get("analyzed_at"), "evaluation_error": record.get("error"),
+    return {"system": system, "name": data.get("solution") or system, **_standing(record),
             "score": record.get("score"), "summary": record.get("summary"), "issues": record.get("issues") or [],
             "open_alerts": [_alert_line(a) for a in alerts_by_system(nodes).get(system) or []],
             "components": [{"id": n["id"], "label": n.get("label"), "status": n.get("status")} for n in _components(system, nodes)]}
@@ -160,7 +170,8 @@ def changes(request: Request, system: str = None):
     if system:
         _landscape(system)
     try:
-        return {"changes": store.changes_for(agent, system)}
+        missed = store.missed(agent, system)
+        return {"changes": store.changes_for(agent, system), "missed_earlier_changes": missed}
     except store.Unavailable as e:
         raise HTTPException(status_code=503, detail=str(e))
 

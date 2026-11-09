@@ -2,6 +2,7 @@
 # Purpose: REQ-GHA-049: what agents need that outlives a restart: each agent's credential (only its
 #   hash), the feed of changes with each agent's position in it, and the corrections agents submitted.
 
+import copy
 import hashlib
 import json
 import logging
@@ -14,7 +15,7 @@ import time
 logger = logging.getLogger(__name__)
 
 MAX_EVENTS = 5000
-STARTUP_GRACE_S = 600   # after a restart the alarms are rebuilt: nothing is compared until they are
+STARTUP_GRACE_S = 600   # after a restart the alarms are rebuilt: an alarm is not called ended until they are
 WORDS = {"normal": "Healthy", "attention": "Needs attention", "failing": "Degraded"}
 
 _lock = threading.RLock()
@@ -61,6 +62,16 @@ def _save() -> None:
         raise Unavailable(f"the agents' state could not be saved ({type(e).__name__})") from None
 
 
+def _commit(before: dict) -> None:
+    """Saved, or nothing happened: a failed save leaves memory as it was, so no change is lost."""
+    try:
+        _save()
+    except Unavailable:
+        _state.clear()
+        _state.update(before)
+        raise
+
+
 def _hash(key: str) -> str:
     return hashlib.sha256(key.encode()).hexdigest()
 
@@ -70,19 +81,21 @@ def create_key(agent: str) -> str:
     key = "gha_" + secrets.token_urlsafe(32)
     with _lock:
         _load()
+        before = copy.deepcopy(_state)
         _state["keys"] = {h: v for h, v in _state["keys"].items() if v["agent"] != agent}
         _state["keys"][_hash(key)] = {"agent": agent, "created": time.time()}
-        _save()
+        _commit(before)
     return key
 
 
 def withdraw_key(agent: str) -> bool:
     with _lock:
         _load()
+        before = copy.deepcopy(_state)
         kept = {h: v for h, v in _state["keys"].items() if v["agent"] != agent}
         changed = len(kept) != len(_state["keys"])
         _state["keys"] = kept
-        _save()
+        _commit(before)
     return changed
 
 
@@ -106,10 +119,10 @@ def record_changes(records: dict, alerts_by_system: dict, now: float = None) -> 
     now = time.time() if now is None else now
     if _started[0] is None:
         _started[0] = now
-    if now - _started[0] < STARTUP_GRACE_S:
-        return
+    settled = now - _started[0] >= STARTUP_GRACE_S
     with _lock:
         _load()
+        previous = copy.deepcopy(_state)
         changed = False
         for system, record in records.items():
             if not (record or {}).get("condition"):
@@ -127,15 +140,27 @@ def record_changes(records: dict, alerts_by_system: dict, now: float = None) -> 
                         _add(now, system, "alert_new", number=number, **a)
                         changed = True
                 for number, a in before["alerts"].items():
-                    if number not in alerts:
+                    if number in alerts:
+                        continue
+                    if settled:
                         _add(now, system, "alert_ended", number=number, **a)
                         changed = True
+                    else:       # alarms still being rebuilt: kept until it is known whether it really ended
+                        alerts[number] = a
             if before != {"status": word, "alerts": alerts}:
                 _state["snapshot"][system] = {"status": word, "alerts": alerts}
                 changed = True
         if changed:
             _state["events"] = _state["events"][-MAX_EVENTS:]
-            _save()
+            _commit(previous)
+
+
+def missed(agent: str, system: str = None) -> bool:
+    """Older changes were discarded before this agent read them: it should re-read the current state."""
+    with _lock:
+        _load()
+        since = _state["positions"].get(f"{agent}|{system or '*'}", 0)
+        return bool(_state["events"]) and _state["events"][0]["seq"] > since + 1
 
 
 def changes_for(agent: str, system: str = None) -> list:
@@ -146,8 +171,9 @@ def changes_for(agent: str, system: str = None) -> list:
         since = _state["positions"].get(scope, 0)
         out = [e for e in _state["events"] if e["seq"] > since and (not system or e["system"] == system)]
         if out:
+            before = copy.deepcopy(_state)
             _state["positions"][scope] = out[-1]["seq"]
-            _save()
+            _commit(before)
     return out
 
 
@@ -156,8 +182,9 @@ def add_correction(agent: str, system: str, kind: str, component: str, descripti
             "kind": kind, "component": component, "description": description, "evidence": evidence}
     with _lock:
         _load()
+        before = copy.deepcopy(_state)
         _state["corrections"].append(item)
-        _save()
+        _commit(before)
     return item
 
 
