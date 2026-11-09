@@ -164,11 +164,15 @@ def _write(records: dict) -> dict:
     # clause 7: a score is part of the review; clause 6: next steps only where something needs attention
     if isinstance(score, bool) or not isinstance(score, (int, float)) or not 1 <= score <= 10 or score != int(score):
         raise ValueError("the model's score was missing or not a whole number from 1 to 10")
-    if steps and not issues:
-        raise ValueError("the model gave next steps although nothing needs attention")
     issues = [_prose(x, "issue") for x in issues]
-    if any(_NON_ISSUE.search(x) for x in issues):
-        raise ValueError("the model listed an issue that names no fault")
+    # a true sentence in the wrong place ("ColdVault has no operational fault") is left out, not
+    # refused: the rest of the answer stands, and next steps go with the issues that remain
+    issues = [x for x in issues if not _NON_ISSUE.search(x)]
+    if steps and not issues:
+        if any(answer.get("issues") or []):
+            steps = []
+        else:
+            raise ValueError("the model gave next steps although nothing needs attention")
     # one issue per external service in the selection; an internal system's fault that mentions the
     # provider it depends on is that system's issue, not the provider's
     mentions = lambda text, name: re.search(rf"(?i)\b{re.escape(name)}\b", text) is not None
@@ -221,7 +225,7 @@ def refresh_due(now: float = None) -> None:
             written = _write(records)
         except Exception as e:
             _failed_at[scope] = (sig, now)
-            logger.warning(f"selection review {scope} failed: {type(e).__name__}")
+            logger.warning(f"selection review {scope} failed: {type(e).__name__}: {str(e)[:200]}")
             continue
         with _lock:
             _reviews[scope] = {**written, "analyzed_at": now, "sig": sig}
