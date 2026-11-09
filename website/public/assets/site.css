@@ -4,9 +4,9 @@
    architecture/styles.css, so the architecture page carries the same masthead and footer;
    a test keeps the two equal. */
 
-@font-face{font-family:'Lato';font-style:normal;font-weight:400;font-display:swap;
+@font-face{font-family:'Lato';font-style:normal;font-weight:400;font-display:optional;
   src:url(/assets/fonts/lato-400.woff2) format('woff2')}
-@font-face{font-family:'Lato';font-style:normal;font-weight:700;font-display:swap;
+@font-face{font-family:'Lato';font-style:normal;font-weight:700;font-display:optional;
   src:url(/assets/fonts/lato-700.woff2) format('woff2')}
 
 :root{

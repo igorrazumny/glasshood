@@ -5,9 +5,9 @@
    max-width 800–880px. */
 /* Lato from the same two files the site serves (website/FONTS.txt), so the masthead renders the same
    on every page and the page loads nothing from outside its own address. */
-@font-face{font-family:'Lato';font-style:normal;font-weight:400;font-display:swap;
+@font-face{font-family:'Lato';font-style:normal;font-weight:400;font-display:optional;
   src:url(/architecture/fonts/lato-400.woff2) format('woff2')}
-@font-face{font-family:'Lato';font-style:normal;font-weight:700;font-display:swap;
+@font-face{font-family:'Lato';font-style:normal;font-weight:700;font-display:optional;
   src:url(/architecture/fonts/lato-700.woff2) format('woff2')}
 :root{
   --blue:#0c41cd; --navy:#000055; --orange:#e75a1e;
