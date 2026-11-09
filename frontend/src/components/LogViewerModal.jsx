@@ -14,6 +14,8 @@ import { loadFailed } from '../utils/systems'
 import { clock, dateTime } from '../utils/time'
 import { EARLIER_EMPTY, PAGE, earlierRequest, mergeEntries } from '../utils/logsView'
 
+const SKIPPED_NOTE = 'Too many lines share one moment; some of them are not shown.'
+
 const SEVERITY_COLORS = {
   ERROR: 'text-red-400',
   WARNING: 'text-yellow-400',
@@ -86,13 +88,13 @@ export default function LogViewerModal({ nodeId, nodeLabel, nodeStatus, isDemo, 
       if (body?.error) {
         setEarlierNote(body.error)
       } else if (mergeEntries(have, got).length === have.length) {
-        setEarlierNote(body?.note || EARLIER_EMPTY)
+        setEarlierNote(ask.skipped ? `${SKIPPED_NOTE} ${EARLIER_EMPTY}` : (body?.note || EARLIER_EMPTY))
         setExhausted(true)
       } else {
         keepRef.current = bodyRef.current?.scrollHeight ?? null
         setWentBack(true)
         setAll(prev => mergeEntries(prev, got))
-        if (ask.skipped) setEarlierNote('Too many lines share one moment; some of them are not shown.')
+        if (ask.skipped) setEarlierNote(SKIPPED_NOTE)
       }
     } catch (e) {
       setEarlierNote(loadFailed('Earlier lines', e?.message || e))

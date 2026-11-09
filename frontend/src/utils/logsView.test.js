@@ -50,6 +50,8 @@ test('a moment with more lines than a request carries never blocks older history
   const t = '2026-11-09T10:00:00.000Z'
   const line = { timestamp: t, severity: 'INFO', message: 'same' }
   assert.deepEqual(earlierRequest([line]), { lines: PAGE + 1, before: t, skipped: false })
+  const almost = Array.from({ length: 1800 }, () => ({ ...line }))
+  assert.deepEqual(earlierRequest(almost), { lines: EARLIER_LIMIT, before: t, skipped: false })
   const full = Array.from({ length: EARLIER_LIMIT }, () => ({ ...line }))
   assert.deepEqual(earlierRequest(full), { lines: PAGE, before: '2026-11-09T09:59:59.999Z', skipped: true })
 })

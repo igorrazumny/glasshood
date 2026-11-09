@@ -27,7 +27,8 @@ export function earlierRequest(have) {
   const lines = earlierLines(have)
   const ts = have[0].timestamp
   const ms = Date.parse(ts)
-  if (lines < EARLIER_LIMIT || Number.isNaN(ms)) return { lines: Math.min(lines, EARLIER_LIMIT), before: ts, skipped: false }
+  // only a moment already holding a full request is skipped; below that, the largest request is tried first
+  if (lines - PAGE < EARLIER_LIMIT || Number.isNaN(ms)) return { lines: Math.min(lines, EARLIER_LIMIT), before: ts, skipped: false }
   return { lines: PAGE, before: new Date(ms - 1).toISOString(), skipped: true }
 }
 
