@@ -4,7 +4,7 @@
 // surface so the panel reads correctly in both themes.
 
 import { useState } from 'react'
-import { Brain, ChevronDown, ChevronRight, RefreshCw, AlertTriangle, CheckCircle, Server, Shield, Loader2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, RefreshCw, AlertTriangle, CheckCircle, Server, Shield, Loader2 } from 'lucide-react'
 import { apiFetch } from '../utils/api'
 import { statsSummary } from '../utils/canvasParts.js'
 import { overviewStamp, spendLine } from '../utils/overview.js'
@@ -172,7 +172,6 @@ export default function AnalysisPanel({ data, topology, canvas, scopeLabel = 'Al
       <div className="flex items-center justify-between">
         <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="flex items-center gap-2 text-left">
           {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-          <Brain size={16} className="text-accent-500 dark:text-accent-300" />
           <span className="text-base font-semibold text-gray-900 dark:text-white">AI review · {scopeLabel}</span>
         </button>
         {spend && (
