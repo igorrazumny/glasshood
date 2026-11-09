@@ -130,8 +130,9 @@ def test_both_hosts_revalidate_everything_but_the_fonts_and_send_security_header
 
 def test_lato_from_the_first_paint():
     # Clause 14, amended 2026-11-09: both Lato weights are preloaded before the stylesheet on every page, declared with
-    # font-display block (a late font leaves the text invisible for up to three seconds and then shows Lato; no
-    # substitute font is drawn and replaced, which Chrome did under optional), on the site and on the architecture page.
+    # font-display block (a late font leaves the text invisible for up to three seconds and then shows Lato; only a
+    # font that takes longer than that is drawn in the system font and swapped, where Chrome under optional swapped at
+    # any delay), on the site and on the architecture page.
     for page in _NAV_PAGES:
         html = _read(page)
         for weight in ("400", "700"):
