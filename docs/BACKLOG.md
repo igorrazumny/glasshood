@@ -812,3 +812,21 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Testable:** Yes (UI)
 - **Who builds:** Neo.
 - **Status:** confirmed by the owner 2026-11-09 (full text).
+
+## REQ-GHA-048: The top line says where the reader is and how that selection stands, in the same words as the left panel
+
+- **Goal:** The line at the top of the screen always matches what is selected, and the product uses one name for each thing.
+- **Why:** Owner, 2026-11-09. The left panel says Proprietary systems while the top line says "Our systems"; the top line also stays the same whatever is selected.
+- **Target state:**
+  1. The top line shows one item: the path to the current selection, then a short overview of that selection.
+  2. The path follows the left panel from its top level down to what is selected, with one step per level. For example: "All systems: 5 systems, 3 need attention"; "All systems › Proprietary systems: 3 systems, 1 needs attention"; "All systems › Proprietary systems › ColdVault: Needs attention". A further level in the left panel adds one more step in the same way.
+  3. The line changes as soon as the selection changes, and always covers exactly what is on the screen.
+  4. The overview comes from the same saved records and uses the same status words as the cards (REQ-GHA-040, REQ-GHA-045 clause 5). A system not yet assessed is counted as such, and nothing is counted while the records have not been read. When AI is offline, the line stays as REQ-GHA-042 states.
+  5. One name for each thing, everywhere on screen: Proprietary systems and External systems. "Our systems" and "External services" no longer appear.
+  6. The coloured mark beside the line reflects the selection only. The existing rule stays: red is only for a proprietary system, and trouble at an external system alone shows amber.
+  7. At phone width the line stays on one row and shortens from the left, so the current selection and its overview remain readable.
+  8. Unchanged: the heading and counts in the middle area, the left panel, and the Read-only badge.
+- **Priority:** P2
+- **Testable:** Yes (UI)
+- **Who builds:** Neo.
+- **Status:** confirmed by the owner 2026-11-09 (full text).

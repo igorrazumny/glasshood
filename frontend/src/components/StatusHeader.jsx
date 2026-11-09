@@ -187,17 +187,23 @@ export default function StatusHeader({ topology, lastUpdated, onRefresh, onLogou
     setRefreshing(false)
   }
 
+  const selectionItem = scope?.offline ? <AiOfflineLine offline={scope.offline} onOpenAlert={onOpenAlert} /> : (
+    <span className="flex items-center min-w-0 px-2 py-0.5 rounded border border-current/30" title={statusText}>
+      {/* REQ-GHA-048 clause 7: the path gives way first, the selection and its overview stay */}
+      {scope?.ancestors && <span className="truncate shrink-[1000] min-w-0 mr-1">{scope.ancestors} ›</span>}
+      <span className="truncate">{scope?.tail || statusText}</span>
+    </span>
+  )
+
   return (
+    <>
     <div className="flex items-center justify-between px-3 sm:px-5 h-16 bg-card dark:bg-purple-900 border-b border-border dark:border-purple-700 relative z-50 transition-colors duration-200">
       <div className="flex items-center gap-3 sm:gap-4 min-w-0">
         <img src="/glasshood-logo-full.png" alt="GlassHood" className="h-[46px] flex-shrink-0" />
         {isDemo && <span className="text-sm bg-accent-500/20 text-accent-700 dark:bg-accent-500/20 dark:text-accent-300 px-2 py-1 rounded">Sample data</span>}
         {readOnly && <span className="text-sm bg-sky-500/20 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300 px-2 py-1 rounded">Read-only · live system</span>}
         <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${STATUS_DOT[status]} animate-pulse`} title={statusText} />
-        <span className={`text-sm font-medium truncate hidden sm:flex items-center gap-2 ${STATUS_COLOR[status]}`}>
-          {scope?.offline ? <AiOfflineLine offline={scope.offline} onOpenAlert={onOpenAlert} />
-            : (statusText || '').split(' · ').map(s => <span key={s} className="px-2 py-0.5 rounded border border-current/30 truncate">{s}</span>)}
-        </span>
+        <span className={`hidden sm:flex text-sm font-medium min-w-0 items-center gap-2 ${STATUS_COLOR[status]}`}>{selectionItem}</span>
       </div>
 
       <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0">
@@ -230,5 +236,8 @@ export default function StatusHeader({ topology, lastUpdated, onRefresh, onLogou
         )}
       </div>
     </div>
+    {/* REQ-GHA-048 clause 7: at phone width the logo and controls leave no room, so the line has its own row */}
+    <div className={`sm:hidden flex items-center min-w-0 px-3 py-1 text-sm font-medium bg-card dark:bg-purple-900 border-b border-border dark:border-purple-700 ${STATUS_COLOR[status]}`}>{selectionItem}</div>
+    </>
   )
 }
