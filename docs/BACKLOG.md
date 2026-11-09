@@ -500,6 +500,11 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
   9. The lines shown are chosen from what is clicked, never from text the browser sends (REQ-704 stays).
   10. A box GlassHood cannot read says why in plain words; never an empty window without a reason.
 - **Owner decision, same day:** the Error counter, Alert rules and Notification channels boxes are removed from the ColdVault landscape, since ColdVault deleted those resources (architect, REQ-207, 2026-11-07 18:38Z).
+- **Amended 2026-11-09 (owner, confirmed as written): clauses 1 and 10 are extended; the rule "every box has a View Logs button" is replaced.**
+  11. A box shows View Logs only when GlassHood has a log source for it: its own, the one of the box it runs in, or the provider's published updates for a component of an external system. A box whose landscape file says it has no log source shows no View Logs button; its details say in one line that it writes no logs GlassHood can read, with the reason from the landscape file. Pressing View Logs never leads to a window saying that no logs are configured. Whether a box has a log source is known before the window opens, from the landscape file; it is never found out by trying.
+  12. The log window opens with enough lines for several screens: the most recent lines of the window it shows (the last hour, or the last 7 days when the hour is quiet), at least 300 of them where that many exist, newest at the bottom as today. A box with fewer lines shows all it has.
+  13. The reader can go further back: a control at the top of the window, "Show earlier lines", adds the lines before the oldest one shown, as often as wanted, back to the 7-day limit; when nothing earlier exists, the window says so. Adding earlier lines keeps the reader's place; the 30-second refresh adds newer lines at the bottom without removing what was loaded.
+  14. Unchanged: the filter is derived on the server from the box (REQ-704); an external component's window shows the provider's updates; the Live demo keeps its sample data; an empty window still gives its plain reason.
 - **Priority:** P2
 - **Testable:** Yes (UI + API: for every box on the live landscape the logs call returns lines or a plain reason, none returns "Unknown node", and the button shows on every box)
 - **Who builds:** Neo.
