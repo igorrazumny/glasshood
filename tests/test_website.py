@@ -130,8 +130,8 @@ def test_both_hosts_revalidate_everything_but_the_fonts_and_send_security_header
 
 def test_lato_from_the_first_paint():
     # Clause 14, amended 2026-11-09: both Lato weights are preloaded before the stylesheet on every page, declared with
-    # font-display optional (a page view has Lato at first paint or keeps the system font, never a swap), on the site
-    # and on the architecture page.
+    # font-display block (a late font leaves the text invisible for up to three seconds and then shows Lato; no
+    # substitute font is drawn and replaced, which Chrome did under optional), on the site and on the architecture page.
     for page in _NAV_PAGES:
         html = _read(page)
         for weight in ("400", "700"):
@@ -143,8 +143,8 @@ def test_lato_from_the_first_paint():
     assert arch.index("lato-700.woff2") < arch.index('rel="stylesheet"') and 'href="/architecture/styles.css?v=29"' in arch
     for css, folder in ((_read(_PUB / "assets/site.css"), "/assets/fonts"), (_read(_ARCH / "styles.css"), "/architecture/fonts")):
         for weight in ("400", "700"):
-            assert f"font-weight:{weight};font-display:optional;\n  src:url({folder}/lato-{weight}.woff2) format('woff2')" in css, (folder, weight)
-        assert "font-display:swap" not in css
+            assert f"font-weight:{weight};font-display:block;\n  src:url({folder}/lato-{weight}.woff2) format('woff2')" in css, (folder, weight)
+        assert "font-display:swap" not in css and "font-display:optional" not in css
 
 
 # --- the app's state (clause 1, amended 2026-11-05): the public pages do not show it ---
