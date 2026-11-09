@@ -160,6 +160,7 @@ def test_systems_are_called_by_their_display_names_whatever_case_the_model_used(
     assert sr._as_named("coldvault and Glasshood are fine; coldvault.ai answers; GLASSHOOD too.", names) \
         == "ColdVault and GlassHood are fine; coldvault.ai answers; GlassHood too."
     assert sr._as_named("A part of it is fine.", {"a": "Alpha"}) == "A part of it is fine."
+    assert sr._as_named("The affected system is coldvault. coldvault-mig stays.", names) == "The affected system is ColdVault. coldvault-mig stays."
     cards = {"a": _rec()}
     with patch.object(ov, "system_cards", return_value=cards), \
          patch.object(ov, "call_model", return_value=(json.dumps(_answer("alpha is operating normally.", score=9)), {})):

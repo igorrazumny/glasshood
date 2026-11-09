@@ -139,7 +139,8 @@ def _as_named(text: str, names: dict) -> str:
         for word in {product, name}:
             if len(word) < 4:   # a short id could be an ordinary word; only real names are normalised
                 continue
-            text = re.sub(rf"(?i)(?<![\w.-]){re.escape(word)}(?![\w.-])", name, text)
+            # a dot counts as part of a domain only when a word follows it; a full stop does not
+            text = re.sub(rf"(?i)(?<![\w.-]){re.escape(word)}(?![\w-])(?!\.\w)", name, text)
     return text
 
 
