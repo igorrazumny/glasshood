@@ -52,10 +52,12 @@ _WRONG_LEVEL = re.compile(r"(?i)\bcomponents? (of|in|within) (the |this |these |
                           r"|\b(systems?|members?)\b[^.;]*?\b(is|are|as|become|remain) (a |the |its |their )?components?\b"
                           r"|\bcomponent systems?\b")
 # clause 3 (amended): GlassHood states the counts itself; a sentence of the model that counts systems is left out,
-# whether it says "four of five systems" or just "four are healthy and one needs attention"
+# whether it says "four of five systems" or just "four are healthy and one needs attention". A bare count
+# ("one is down") in a sentence that names a system describes that system ("ColdVault has two backends;
+# one is down") and stays.
 _NUM = r"(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)"
-_COUNTS = re.compile(rf"(?i)\b{_NUM}( of (the )?(\d+|\w+))? (selected |monitored )?systems?\b"
-                     rf"|\b{_NUM} (is|are|need|needs|remain|remains|operate|operates|run|runs|report|reports|show|shows|has|have)\b")
+_SYSTEM_COUNT = re.compile(rf"(?i)\b{_NUM}( of (the )?(\d+|\w+))? (selected |monitored )?systems?\b")
+_BARE_COUNT = re.compile(rf"(?i)\b{_NUM} (is|are|need|needs|remain|remains|operate|operates|run|runs|report|reports|show|shows|has|have)\b")
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
 _lock = threading.Lock()
 _reviews: dict = {}     # scope -> {summary, analyzed_at, sig}
@@ -144,9 +146,15 @@ def _prose(value, what: str) -> str:
     return value.strip()
 
 
-def _without_counts(summary: str) -> str:
+def _mentions(text: str, name: str) -> bool:
+    return re.search(rf"(?i)\b{re.escape(name)}\b", text) is not None
+
+
+def _without_counts(summary: str, names: dict) -> str:
     """GlassHood's own count sentence opens the review; the model's sentences that count systems are left out."""
-    kept = [s for s in _SENTENCE_END.split(summary) if not _COUNTS.search(s)]
+    words = {w for pair in names.items() for w in pair if len(w) >= 4}
+    kept = [s for s in _SENTENCE_END.split(summary)
+            if not _SYSTEM_COUNT.search(s) and not (_BARE_COUNT.search(s) and not any(_mentions(s, w) for w in words))]
     if not kept:
         raise ValueError("the model's summary only counted the systems")
     return " ".join(kept)
@@ -189,7 +197,7 @@ def _write(records: dict) -> dict:
     # clause 7: a score is part of the review; clause 6: next steps only where something needs attention
     if isinstance(score, bool) or not isinstance(score, (int, float)) or not 1 <= score <= 10 or score != int(score):
         raise ValueError("the model's score was missing or not a whole number from 1 to 10")
-    mentions = lambda text, name: re.search(rf"(?i)\b{re.escape(name)}\b", text) is not None
+    mentions = _mentions
     issues = [_prose(x, "issue") for x in issues]
     # a true sentence in the wrong place ("ColdVault has no operational fault") is left out, not
     # refused: the rest of the answer stands, and a next step for a system whose item was left out
@@ -213,7 +221,7 @@ def _write(records: dict) -> dict:
         if len(own) > 1:
             raise ValueError(f"the model split {name}'s trouble into several issues")
     named = lambda s: _as_named(s, names)
-    return {"summary": named(_without_counts(_prose(answer.get("summary"), "summary"))), "score": int(score),
+    return {"summary": named(_without_counts(_prose(answer.get("summary"), "summary"), names)), "score": int(score),
             "issues": [named(x) for x in issues],
             "recommendations": [named(_prose(x, "next step")) for x in steps[:3]], "shape": SHAPE}
 

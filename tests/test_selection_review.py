@@ -258,16 +258,20 @@ def test_the_model_s_own_count_of_systems_is_left_out_and_the_rest_kept():
     with patch.object(ov, "system_cards", return_value=cards):
         got = sr.get_reviews()["all"]
     assert got["summary"] == "GitHub reports degraded service." and got["current"] is True
-    assert sr._without_counts("All selected systems are operating normally.") == "All selected systems are operating normally."
-    assert sr._without_counts("The other systems are operating normally.") == "The other systems are operating normally."
+    names = {"a": "ColdVault", "gh": "Cloudflare"}
+    assert sr._without_counts("All selected systems are operating normally.", names) == "All selected systems are operating normally."
+    assert sr._without_counts("The other systems are operating normally.", names) == "The other systems are operating normally."
     # a count without the word "systems" is a count too
-    assert sr._without_counts("Four are healthy and one needs attention. Cloudflare reports degraded service.") \
+    assert sr._without_counts("Four are healthy and one needs attention. Cloudflare reports degraded service.", names) \
         == "Cloudflare reports degraded service."
-    assert sr._without_counts("ColdVault has one backend down; the rest serve normally.") \
-        == "ColdVault has one backend down; the rest serve normally."
+    # a bare number in a sentence that names a system describes that system, never the selection
+    for text in ["ColdVault has one backend down; the rest serve normally.",
+                 "ColdVault has two backends; one is down.",
+                 "ColdVault has two backends; one is down. The other systems are operating normally."]:
+        assert sr._without_counts(text, names) == text
     for text in ["2 systems need attention.", "Three are operating normally.", "One needs attention."]:
         with pytest.raises(ValueError):
-            sr._without_counts(text)
+            sr._without_counts(text, names)
 
 
 def test_the_two_levels_have_their_own_words():

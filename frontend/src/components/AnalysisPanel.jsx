@@ -102,6 +102,8 @@ function SystemsList({ onOpenAlert, cards, review, loadError, systemsError, reco
     <div>
       {recordsUnavailable && <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-1">
         {recordsError ? loadFailed("The systems' status", recordsError) : "The systems' status is still loading."}</p>}
+      {!recordsUnavailable && recordsError && <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-1">
+        {loadFailed("A newer status of the systems", recordsError)} The counts are from the last read.</p>}
       {loadError && <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-1">{loadFailed(review?.summary ? 'A newer review' : 'The AI review', loadError)}</p>}
       {selectionNotice(review) && <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-1">{selectionNotice(review)}</p>}
       {review?.summary
