@@ -142,7 +142,7 @@ function SystemsList({ onOpenAlert, cards, review, loadError, systemsError, reco
 
 export default function AnalysisPanel({ data, topology, canvas, scopeLabel = 'All systems', listCards = null,
                                         descriptions = null, showStats = true, loading = false, onOpenAlert = null,
-                                        fetchError = null, descriptionsError = null, systemsError = null, diff = null, review = null, reviewError = null }) {
+                                        fetchError = null, descriptionsError = null, systemsError = null, diff = null, review = null, reviewError = null, corrections = [] }) {
   const [refreshing, setRefreshing] = useState(false)
   const [refreshNote, setRefreshNote] = useState('')
   const [open, setOpen] = useState(true)   // REQ-GHA-045 clause 7: the reader can fold it away
@@ -258,6 +258,16 @@ export default function AnalysisPanel({ data, topology, canvas, scopeLabel = 'Al
             </div>
           )}
         </>
+      )}
+
+      {/* REQ-GHA-049 clause 14: what responsible agents found wrong in the setup, for the operator to apply */}
+      {corrections.length > 0 && (
+        <div>
+          <h3 className="text-xs font-semibold text-gray-500 dark:text-purple-300 uppercase mb-1">Corrections from agents</h3>
+          <ul className="space-y-1">
+            {corrections.map(c => <li key={c.id} className="text-sm text-gray-600 dark:text-purple-200">{c.system} · {c.component}: {c.description} ({c.agent}; evidence: {c.evidence})</li>)}
+          </ul>
+        </div>
       )}
 
       {spend && (

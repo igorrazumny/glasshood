@@ -213,6 +213,12 @@ def verify_token(request: Request) -> dict:
         request.state.user_context = ctx
         return ctx
 
+    # REQ-GHA-049: an agent credential opens only /api/agents; its route has already checked it
+    agent_ctx = getattr(request.state, "agent_ctx", None)
+    if isinstance(agent_ctx, dict) and request.url.path.startswith("/api/agents/"):
+        request.state.user_context = agent_ctx
+        return agent_ctx
+
     raise HTTPException(status_code=401, detail="Missing authentication")
 
 

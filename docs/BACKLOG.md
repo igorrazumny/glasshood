@@ -831,3 +831,28 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Testable:** Yes (UI)
 - **Who builds:** Neo.
 - **Status:** confirmed by the owner 2026-11-09 (full text).
+
+## REQ-GHA-049: Agents read what GlassHood sees, through MCP, and the responsible agent verifies the setup
+
+- **Goal:** The agent responsible for a system connects to GlassHood and sees what the monitoring says, so nobody has to pass it screenshots or copied text; it can also check that GlassHood's picture of its system is correct.
+- **Why:** Owner, 2026-11-09. Agents should react to what monitoring says without the owner relaying it. The ColdVault landscape turned out to be out of date, and only the responsible agent could tell.
+- **Target state:**
+  1. An agent connects through MCP and gets the list of available commands from the protocol itself.
+  2. One command lists all monitored systems, with each system's name, group and status in the words the cards use.
+  3. An agent selects one system and reads its latest AI review, its score, its open alerts with level and number, its components with their state, and a component's recent log lines.
+  4. An agent asks what changed since its last look, for one system or for all: new alerts, ended alerts, and changes of a system's status. It gets each change once, with its time, and GlassHood remembers each agent's position across restarts.
+  5. Answers are GlassHood's own saved records, with the time each was evaluated. When GlassHood or a record cannot be read, the answer says so and never presents old data as current.
+  6. Each agent has its own credential, kept outside the repository, that survives restarts and can be withdrawn on its own. Every read is recorded under that agent's name.
+  7. Agents only read. No command changes, acknowledges or starts anything in GlassHood or in a monitored system (the one exception is clause 14).
+  8. An agent can read every system, so that one can see the provider or dependency trouble behind its own. The full setup of clauses 11 to 14 is available only to the agent responsible for that system.
+  9. Setting up an agent takes one configuration entry, described in the repository. ColdVault's, TestRobin's and GlassHood's agents are connected as the first users.
+  10. The public demo MCP server (REQ-GHA-019) stays as it is.
+  11. Each system has a responsible agent. The landscape file names it. To begin with, the architect is responsible for ColdVault, tank for TestRobin and neo for GlassHood.
+  12. Full setup. The responsible agent can read everything GlassHood holds about its system: every component and connection; how each component is checked and where its logs are read; every alarm with its threshold; every configuration note and whether it is accepted; the version and time of the landscape file in use. Credential values are never part of it.
+  13. Verification. One command gives, for each component, what GlassHood expects and what it last found: the check, its result, when it ran, and whether it could be checked at all. The agent can then compare this with its current implementation, part by part. The answer says plainly which parts GlassHood could not confirm, so an unchecked part is never taken as correct.
+  14. Corrections. The agent can submit the differences it found through MCP: a part that no longer exists, one that is missing, or one described wrongly, each with its evidence. GlassHood records them against the system and shows them to the operator. A submission never changes the landscape or closes an alert by itself; an operator applies it. This is the only thing agents may write.
+- **Out of scope:** waking an agent when something happens; acknowledging alerts.
+- **Priority:** P2
+- **Testable:** Yes (API, and a live connection by each first agent)
+- **Who builds:** Neo.
+- **Status:** confirmed by the owner 2026-11-09 (full text).
