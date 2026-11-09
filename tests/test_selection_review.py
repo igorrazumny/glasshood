@@ -131,8 +131,6 @@ def test_the_review_has_the_single_system_shape_on_the_stronger_model():
     _answer("Fine.", score=True),
     _answer("Fine.", score=7.5),
     _answer("The services are operating normally.", score=9, recommendations=["Restart ColdVault."]),
-    _answer("Fine.", issues=["ColdVault needs attention."]),
-    _answer("Fine.", issues=["ColdVault has no operational fault in this review."]),
 ])
 def test_notes_and_malformed_answers_are_refused(answer):
     cards = {"a": _rec()}
@@ -214,6 +212,35 @@ def test_internal_faults_through_a_shared_provider_are_not_the_provider_s_issues
     with patch.object(ov, "system_cards", return_value=cards):
         got = sr.get_reviews()["all"]
     assert got["issues"] == issues and got["current"] is True and got["update_failed"] is False
+
+
+def test_an_issue_that_names_no_fault_is_left_out_and_the_review_kept():
+    cards = {"a": _rec("attention")}
+    answer = _answer("Alpha has no operational fault.", score=8,
+                     issues=["Alpha has no operational fault in this review.", "Alpha needs attention."],
+                     recommendations=["Review Alpha."])
+    with patch.object(ov, "system_cards", return_value=cards), \
+         patch.object(ov, "call_model", return_value=(json.dumps(answer), {})):
+        sr.refresh_due(0); sr.refresh_due(100)
+    with patch.object(ov, "system_cards", return_value=cards):
+        got = sr.get_reviews()["all"]
+    assert got["summary"] == "Alpha has no operational fault." and got["issues"] == [] and got["recommendations"] == []
+    assert got["current"] is True and got["update_failed"] is False
+
+
+def test_a_step_for_a_left_out_item_goes_with_it(monkeypatch):
+    monkeypatch.setattr(sr, "_names", lambda: {"a": "ColdVault", "gh": "Cloudflare"})
+    cards = {"a": _rec("normal"), "gh": _rec("attention")}
+    answer = _answer("Cloudflare is degraded; ColdVault is operating normally.", score=6,
+                     issues=["ColdVault has no operational fault.", "Cloudflare reports degraded service."],
+                     recommendations=["Restart ColdVault.", "Follow Cloudflare status updates."])
+    with patch.object(ov, "system_cards", return_value=cards), \
+         patch.object(ov, "call_model", return_value=(json.dumps(answer), {})):
+        sr.refresh_due(0); sr.refresh_due(100)
+    with patch.object(ov, "system_cards", return_value=cards):
+        got = sr.get_reviews()["all"]
+    assert got["issues"] == ["Cloudflare reports degraded service."]
+    assert got["recommendations"] == ["Follow Cloudflare status updates."]
 
 
 def test_the_diff_names_the_previous_check():
