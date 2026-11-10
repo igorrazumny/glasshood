@@ -877,3 +877,20 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Testable:** Yes (API, and a live connection by each first agent)
 - **Who builds:** Neo.
 - **Status:** confirmed by the owner 2026-11-09 (full text).
+
+## REQ-GHA-050: When an evaluation was made, and whether it is out of date
+
+- **Goal:** A reader can tell at a glance how old each evaluation is and whether a new one is on its way.
+- **Why:** Owner, 2026-11-10. Cards show only the time ("Evaluated 15:35 CET"). After GlassHood has slept for a week, the saved evaluations would look like today's.
+- **Target state:**
+  1. Each card's evaluation line shows the time alone only if the evaluation was made today. Otherwise it also shows the date: "Evaluated yesterday 15:35 CET", or "Evaluated 3 Nov, 15:35 CET".
+  2. An evaluation older than 3 hours counts as out of date (GlassHood re-evaluates every 3 hours, so a current one is never older).
+  3. An out-of-date card gets a visible amber mark next to the evaluation line, for example "Out of date · 2 days old". The status and the summary stay, so the reader still sees the last known state.
+  4. Under the mark, one line says what is happening with the new evaluation, only the case that is true: "A new evaluation is running." (while GlassHood checks the system after waking or on its regular check); "Waiting for a new evaluation." (no check started yet); "The new evaluation failed; it will be tried again." (the last attempt failed).
+  5. When the new evaluation arrives, the mark and the line disappear without reloading the page.
+  6. The selection review in the side panel follows the same rules: a date when it is not from today, and the same mark when older than 3 hours.
+  7. The "1 hour ago" in the top right stays as it is.
+- **Priority:** P2
+- **Testable:** Yes (UI)
+- **Who builds:** Neo.
+- **Status:** confirmed by the owner 2026-11-10 (full text).
