@@ -94,9 +94,9 @@ def test_sitemap_lists_the_indexable_pages_and_robots_names_it():
     sm = _read(_PUB / "sitemap.xml")
     for path in _PAGES:
         assert f"<loc>https://glasshood.ai{path}</loc>" in sm
-    # The architecture page is noindex today, so it stays out of the sitemap until it is not.
-    if "noindex" in _read(_ARCH / "index.html"):
-        assert "/architecture/" not in sm
+    # REQ-GHA-018, fifth amendment of 2026-11-10: the architecture page is indexable and in the sitemap.
+    assert "noindex" not in _read(_ARCH / "index.html")
+    assert "<loc>https://glasshood.ai/architecture/</loc>" in sm
     assert "Sitemap: https://glasshood.ai/sitemap.xml" in _read(_PUB / "robots.txt")
 
 
@@ -631,3 +631,24 @@ def test_app_links_open_a_new_tab_and_site_links_do_not(page):
         elif href.startswith(("/", "#", "https://glasshood.ai/", "https://architecture.glasshood.ai")):
             assert " target=" not in tag, tag
     assert seen >= 2
+
+
+
+def test_search_findability():
+    """REQ-GHA-018, fifth amendment of 2026-11-10."""
+    for page in _ALL_PAGES:
+        footer = _read(page).split('<footer class="footer">', 1)[1]
+        assert '<a href="https://9robots.ai/" class="site-footer-link">by 9robots</a>' in footer, page
+    home = _read(_PUB / "index.html")
+    raw = re.search(r'<script type="application/ld\+json">(.*?)</script>', home).group(1)
+    data = json.loads(raw)
+    assert data["@type"] == "SoftwareApplication" and data["name"] == "GlassHood"
+    assert data["creator"] == {"@type": "Organization", "name": "9robots", "url": "https://9robots.ai"}
+    assert data["description"] in home.replace(raw, "")
+    arch = _read(_ARCH / "index.html")
+    assert '<link rel="canonical" href="https://glasshood.ai/architecture/">' in arch
+    for prop in ("og:type", "og:url", "og:title", "og:description", "og:image"):
+        assert f'property="{prop}"' in arch, prop
+    bad = re.compile(r"\bvalidated\b|\bcompliant\b|FDA[- ]approved", re.I)
+    for page in _ALL_PAGES:
+        assert not bad.search(_read(page)), page
