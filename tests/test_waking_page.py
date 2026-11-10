@@ -97,12 +97,21 @@ def test_every_visible_string_is_in_the_wording_block():
     assert "GlassHood" in text and "TestRobin" not in _HTML
 
 
-def test_the_message_says_starting_up_to_3_minutes_and_never_why():
-    # REQ-GHA-018 clause 6, amended 2026-11-05: GlassHood is starting, this can take up to 3 minutes,
+def test_the_message_says_starting_30_to_40_seconds_and_never_why():
+    # REQ-GHA-018 clause 6, amended 2026-11-05 and 2026-11-10: GlassHood is starting, usually 30 to 40 s,
     # the visitor is taken in automatically; the page never says why the app was not running.
     text = _SCRIPT.split("var TEXT = {", 1)[1].split("};", 1)[0]
     values = " ".join(re.findall(r':\s*"([^"]*)"', text))
     assert 'wakingTitle: "GlassHood is starting"' in text
-    assert "can take up to 3 minutes" in values and "taken in automatically" in values
+    assert "This usually takes 30 to 40 seconds." in values and "taken in automatically" in values
+    assert "3 minutes" not in values
     for why in ("on demand", "sleep", "not in use", "idle", "unused"):
         assert why not in values.lower(), why
+
+
+def test_the_app_offers_nothing_until_the_controller_says_awake():
+    # REQ-GHA-018 fifth amendment 2026-11-10: no Log in or Live demo can reach a sleeping app
+    from pathlib import Path
+    app = (Path(__file__).parents[1] / "frontend/src/App.jsx").read_text()
+    assert "useState(!WAKE.controller)" in app and "if (!awake) return null" in app
+    assert app.index("if (!awake) return null") < app.index("<LoginScreen")
