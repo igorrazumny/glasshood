@@ -171,8 +171,10 @@ def test_the_page_shows_how_glasshood_is_reached_today():
         assert href in ("https://glasshood.ai/", "https://glasshood.ai/architecture/", "https://glasshood.ai/contact/", "https://glasshood.ai/demo"), href
 
 
-def test_noindex_and_title():
-    assert 'content="noindex, nofollow"' in _HTML
+def test_indexable_and_title():
+    # REQ-GHA-018, seventh amendment of 2026-11-10: the page is indexable, with its canonical address.
+    assert "noindex" not in _HTML
+    assert '<link rel="canonical" href="https://glasshood.ai/architecture/">' in _HTML
     assert "<title>Architecture - GlassHood</title>" in _HTML
 
 
