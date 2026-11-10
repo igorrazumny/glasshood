@@ -918,3 +918,4 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
   3. A smaller image: drop what the running app does not need (pytest first) and check whether any Google library is unused.
   4. Not done: an always-ready controller instance (monthly cost), startup CPU boost (GlassHood's own startup is 2.5 s), moving to GCP.
   5. Measure three real wakes before and after; if clearly under 30 s, the waking page text changes to match.
+- **Amendment 2 (owner "put it back" 2026-11-10):** amendment 1 clause 1 is withdrawn. Measured live: with ingress open, one request while asleep started a replica (Azure log: "triggered by s0-upstream_rq_total") while the controller still said asleep. Asleep again means ingress refused (REQ-GHA-018 unchanged); the wake keeps lifting it. The start and readiness checks (clause 2) and the smaller image (clause 3) stay.
