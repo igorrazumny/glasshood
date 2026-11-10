@@ -50,6 +50,9 @@ wake_scale() {
 import json, sys
 t = json.load(sys.stdin)
 t.pop("revisionSuffix", None)
+# az containerapp show adds imageType to each container; api-version 2025-01-01 refuses it
+for c in t.get("containers") or []:
+    c.pop("imageType", None)
 t["scale"]["pollingInterval"] = 1
 t["scale"]["cooldownPeriod"] = 30
 sys.path.insert(0, sys.argv[1])
