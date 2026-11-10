@@ -8,6 +8,7 @@ import Dashboard from './components/Dashboard'
 import ErrorBoundary from './components/ErrorBoundary'
 import { getToken, clearToken, setAuth0TokenGetter, SESSION_ENDED_EVENT } from './utils/api'
 import { ensureAwakeOrRedirect, startActivityTracking, reportUse } from './utils/activity'
+import { WAKE } from './config/wake'
 
 function getInitialState() {
   const params = new URLSearchParams(window.location.search)
@@ -30,11 +31,14 @@ export default function App() {
   const [mode, setMode] = useState(initial.mode)
   const [prefillDemo, setPrefillDemo] = useState(initial.prefillDemo)
   const { isAuthenticated, isLoading, user, getAccessTokenSilently, logout: auth0Logout } = useAuthSession()
+  // REQ-GHA-018 fifth amendment 2026-11-10: nothing that could reach a sleeping app is offered
+  // until the wake controller says it is awake; an asleep visitor goes straight to the waking page
+  const [awake, setAwake] = useState(!WAKE.controller)
 
   // REQ-GHA-018: an asleep app hands the visitor to the waking page; an awake one
   // starts reporting person-caused use. Both are no-ops without a wake controller.
   useEffect(() => {
-    ensureAwakeOrRedirect().then((awake) => { if (awake) startActivityTracking() })
+    ensureAwakeOrRedirect().then((ok) => { if (ok) { setAwake(true); startActivityTracking() } })
   }, [])
 
   // A sleep ended the session: show the login screen, do not log in silently.
@@ -83,14 +87,16 @@ export default function App() {
     setPrefillDemo(false)
   }
 
-  // Show nothing while Auth0 is loading (prevents flash of login)
-  if (isLoading) {
+  // Show nothing while Auth0 is loading (prevents flash of login); REQ-GHA-018 fifth amendment:
+  // the same neutral view, with no action, until the wake controller says the app is awake
+  if (isLoading || !awake) {
     return (
       <div className="min-h-screen bg-surface dark:bg-purple-950 flex items-center justify-center">
         <div className="text-gray-500 dark:text-purple-300 text-sm">Loading...</div>
       </div>
     )
   }
+
 
   if (mode === 'demo') {
     return <ErrorBoundary><Dashboard mode="demo" onSwitchToLive={handleSwitchToLive} /></ErrorBoundary>

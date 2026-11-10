@@ -9,7 +9,7 @@
 <!--
   GlassHood waking page (REQ-GHA-018 clause 6). Shown on app.glasshood.ai to a visitor who
   arrives while the app is not awake: the app sends them here with ?next=<path>. The page
-  starts the wake, says it can take up to 3 minutes, and goes to <path> when the app is awake. After
+  starts the wake, says it usually takes 30 to 40 seconds, and goes to <path> when the app is awake. After
   3 minutes it says the wake failed and how to ask for help.
   One self-contained file: inline CSS, JS, fonts and logo; no build step. The only
   third-party requests are Google reCAPTCHA's, made only when the page posts a wake.
@@ -107,13 +107,14 @@ h1{margin:0;max-width:820px;font-size:34px;line-height:1.2;font-weight:700;color
 (function () {
   "use strict";
 
-  // WORDING (REQ-GHA-018 clause 6, amended 2026-11-05): GlassHood is starting, it can take up to
-  // 3 minutes, the visitor is taken in automatically; never why the app was not running.
+  // WORDING (REQ-GHA-018 clause 6, amended 2026-11-05 and 2026-11-10): GlassHood is starting, it
+  // usually takes 30 to 40 seconds, the visitor is taken in automatically; never why the app was not
+  // running. The failure message still comes after 3 minutes.
   // Every visible string is here; {elapsed} is filled in by the page.
   var TEXT = {
     title: "GlassHood is starting",
     wakingTitle: "GlassHood is starting",
-    wakingLead: "This can take up to 3 minutes. You will be taken in automatically when it is ready.",
+    wakingLead: "This usually takes 30 to 40 seconds. You will be taken in automatically when it is ready.",
     starting: "Starting… {elapsed}",
     waking: "Starting… {elapsed}",
     goingToSleep: "Restarting… {elapsed}",
