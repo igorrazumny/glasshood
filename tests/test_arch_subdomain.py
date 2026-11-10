@@ -46,7 +46,15 @@ def _scope(host, path):
 def _run(app, host, path):
     messages = []
 
+    sent = []
+
     async def receive():
+        # After the body a real server blocks until the client disconnects. Starlette's
+        # FileResponse keeps calling receive() meanwhile, so a stub that returns at once spins
+        # a CPU core forever; block instead, and FileResponse cancels this wait once sent.
+        if sent:
+            await asyncio.Event().wait()
+        sent.append(1)
         return {"type": "http.request", "body": b"", "more_body": False}
 
     async def send(message):
@@ -106,7 +114,15 @@ def test_architecture_root_is_no_cache(tmp_path):
     idx.write_text("<title>ARCH PAGE</title>")
     messages = []
 
+    sent = []
+
     async def receive():
+        # After the body a real server blocks until the client disconnects. Starlette's
+        # FileResponse keeps calling receive() meanwhile, so a stub that returns at once spins
+        # a CPU core forever; block instead, and FileResponse cancels this wait once sent.
+        if sent:
+            await asyncio.Event().wait()
+        sent.append(1)
         return {"type": "http.request", "body": b"", "more_body": False}
 
     async def send(message):
