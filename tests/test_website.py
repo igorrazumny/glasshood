@@ -620,7 +620,7 @@ _APP_HREF = re.compile(r'^https://(app\.glasshood\.ai|glasshood\.ai/(demo|view))
 
 @pytest.mark.parametrize("page", _ALL_PAGES, ids=lambda p: f"{p.parent.name}/{p.name}")
 def test_app_links_open_a_new_tab_and_site_links_do_not(page):
-    """REQ-GHA-018, fifth amendment of 2026-11-10: the app opens in a new tab, no opener."""
+    """REQ-GHA-018, sixth amendment of 2026-11-10: the app opens in a new tab, no opener."""
     seen = 0
     for tag in re.findall(r"<a [^>]*>", _read(page)):
         href = re.search(r'href="([^"]*)"', tag).group(1)
