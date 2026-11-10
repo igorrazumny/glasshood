@@ -911,3 +911,9 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Testable:** Yes (measured wakes)
 - **Who builds:** Neo.
 - **Status:** confirmed by the owner 2026-11-10 (full text).
+- **Amendment 1 (owner "ok" 2026-11-10; measured: the new replica waits ~10 s for the ingress update before its image pull; owner: keep it on Azure, do the reasonable optimizations, do not push too hard):**
+  1. The controller no longer restricts ingress for sleep. Waking is the queue message only. While asleep a stray request gets Azure's own error, not a clean refusal. This replaces REQ-GHA-018's "asleep, refuse all outside traffic".
+  2. An explicit startup/readiness probe: checked every second, with a timeout long enough that the first check does not fail.
+  3. A smaller image: drop what the running app does not need (pytest first) and check whether any Google library is unused.
+  4. Not done: an always-ready controller instance (monthly cost), startup CPU boost (GlassHood's own startup is 2.5 s), moving to GCP.
+  5. Measure three real wakes before and after; if clearly under 30 s, the waking page text changes to match.
