@@ -10,7 +10,7 @@ import json
 import secrets
 from dataclasses import dataclass, field, replace
 
-IDLE_SECONDS = 2 * 3600          # clause 7: 2 hours without use
+IDLE_SECONDS = 15 * 60           # clause 7 (amended 2026-11-10): 15 minutes without use
 WAKE_DEADLINE_SECONDS = 180      # clause 6: in the app within 3 minutes, else failure
 DRAIN_SECONDS = 160              # cooldown 30 s + grace 120 s + 10 s margin (design v6)
 SCAN_VISIBILITY = 30             # a scanned message is invisible this long (design v6)
@@ -150,7 +150,7 @@ def hold(intent: Intent, now: float, seconds: int) -> Intent:
 
 
 def idle_due(intent: Intent, now: float) -> bool:
-    """Clause 7: 2 hours without use and no hold."""
+    """Clause 7: 15 minutes without use and no hold."""
     return (intent.desired == "awake" and not intent.pinned and now - intent.last_use >= IDLE_SECONDS
             and now >= intent.hold_until)
 
