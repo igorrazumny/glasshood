@@ -1,5 +1,5 @@
 # Backend activation is explicit; these targets never run on commit or merge.
-.PHONY: image deploy-image upload-landscape deploy-controller
+.PHONY: image deploy-image upload-landscape deploy-controller wake-scale
 REVISION ?= HEAD
 
 image:
@@ -25,3 +25,7 @@ deploy-controller:
 	git archive --format=zip -o "$$zipfile" "$(REVISION):controller" function_app.py host.json requirements.txt wake; \
 	az functionapp deployment source config-zip -g rg-glasshood-azure -n func-glasshood-wake \
 		--src "$$zipfile" --build-remote true -o none </dev/null
+
+# REQ-GHA-018 third amendment: the app's wake check interval and cooldown
+wake-scale:
+	bash controller/deploy/cutover.sh scale
