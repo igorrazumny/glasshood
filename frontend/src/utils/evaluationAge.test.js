@@ -16,9 +16,10 @@ test('clause 1: time alone today, yesterday, then a date', () => {
   assert.equal(evaluatedWhen(Date.parse('2026-03-28T22:00:00Z'), Date.parse('2026-03-29T22:30:00Z'), tz), '28 Mar, 23:00 CET')
 })
 
-test('clause 2: current up to 3 hours, out of date after', () => {
-  assert.equal(outOfDate(now - 3 * 3600e3, now, 'waiting'), null)
-  assert.equal(outOfDate(now - 4 * 3600e3, now, 'waiting').mark, 'Out of date · 4 hours old')
+test('clause 2: current up to 4 hours, out of date after', () => {
+  assert.equal(outOfDate(now - 3.5 * 3600e3, now, 'waiting'), null)
+  assert.equal(outOfDate(now - 4 * 3600e3, now, 'waiting'), null)
+  assert.equal(outOfDate(now - 5 * 3600e3, now, 'waiting').mark, 'Out of date · 5 hours old')
   assert.equal(outOfDate(now - 2 * 86400e3, now, 'waiting').mark, 'Out of date · 2 days old')
 })
 

@@ -3,8 +3,8 @@
 
 import { clock } from './time.js'
 
-// Clause 2: GlassHood re-evaluates every 3 hours, so a current evaluation is never older
-export const OUT_OF_DATE_MS = 3 * 3600e3
+// Clause 2 (amended): rounds start 3 hours after the previous one ends; the extra hour keeps a normal cycle unmarked
+export const OUT_OF_DATE_MS = 4 * 3600e3
 
 const dayKey = (ms, timeZone) => new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ms))
 
