@@ -46,20 +46,19 @@ wake_scale() {
     fence wait >/dev/null
   fi
   id=$(az containerapp show -g "$RG" -n "$APP" --query id -o tsv </dev/null)
-  body=$(az containerapp show -g "$RG" -n "$APP" --query properties.template -o json </dev/null | "$PY" -c '
+  local url="https://management.azure.com${id}?api-version=2025-01-01" ok=
+  # read the template with the same api-version the PATCH uses: az containerapp show uses a
+  # newer one whose extra fields (imageType, customMetricsSettings, ...) the PATCH refuses
+  body=$(az rest --method get --url "$url" -o json </dev/null | "$PY" -c '
 import json, sys
-t = json.load(sys.stdin)
+t = json.load(sys.stdin)["properties"]["template"]
 t.pop("revisionSuffix", None)
-# az containerapp show adds imageType to each container; api-version 2025-01-01 refuses it
-for c in t.get("containers") or []:
-    c.pop("imageType", None)
 t["scale"]["pollingInterval"] = 1
 t["scale"]["cooldownPeriod"] = 30
 sys.path.insert(0, sys.argv[1])
 from scale_check import PROBES
 t["containers"][0]["probes"] = PROBES
 print(json.dumps({"properties": {"template": t}}))' "$here")
-  local url="https://management.azure.com${id}?api-version=2025-01-01" ok=
   az rest --method patch --url "$url" --body "$body" -o none </dev/null
   for _ in $(seq 1 60); do
     az rest --method get --url "$url" -o json </dev/null | "$PY" "$here/scale_check.py" ready && { ok=1; break; }
