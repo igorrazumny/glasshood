@@ -1,5 +1,5 @@
 # Backend activation is explicit; these targets never run on commit or merge.
-.PHONY: image deploy-image upload-landscape
+.PHONY: image deploy-image upload-landscape deploy-controller
 REVISION ?= HEAD
 
 image:
@@ -18,3 +18,10 @@ upload-landscape:
 	{ echo 'Set LANDSCAPE, STORAGE_ACCOUNT, SHARE and REMOTE_PATH'; exit 1; }
 	az storage file upload --account-name "$(STORAGE_ACCOUNT)" --share-name "$(SHARE)" \
 		--source "$(LANDSCAPE)" --path "$(REMOTE_PATH)" --auth-mode login --enable-file-backup-request-intent --output none
+
+# REQ-GHA-018: publish the wake controller's reviewed code (function_app.py, host.json, requirements.txt, wake/)
+deploy-controller:
+	@set -eu; zipfile=$$(mktemp -t controller).zip; \
+	git archive --format=zip -o "$$zipfile" "$(REVISION):controller" function_app.py host.json requirements.txt wake; \
+	az functionapp deployment source config-zip -g rg-glasshood-azure -n func-glasshood-wake \
+		--src "$$zipfile" --build-remote true -o none </dev/null

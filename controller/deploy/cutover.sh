@@ -72,7 +72,7 @@ case "${1:-}" in
       --scale-rule-identity system -o none </dev/null
     az resource update -g "$RG" -n "$APP" --resource-type Microsoft.App/containerApps \
       --set properties.template.scale.cooldownPeriod=30 -o none </dev/null
-    say "unpinned: from now on the app sleeps after 2 hours without use"
+    say "unpinned: from now on the app sleeps after 15 minutes without use"
     fence unpin
     "$here/ops.sh" status
     ;;
