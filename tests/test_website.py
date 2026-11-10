@@ -452,8 +452,8 @@ def test_the_app_entry_is_labelled_log_in_on_every_page():
     for page in _NAV_PAGES + (_ARCH / "index.html",):
         html = _read(page)
         footer = html.split('<footer class="footer">', 1)[1].split("</footer>", 1)[0]
-        assert '<a class="nav-open" href="https://app.glasshood.ai">Log in</a>' in _nav(html), page.name
-        assert '<a href="https://app.glasshood.ai" class="site-footer-link">Log in</a>' in footer, page.name
+        assert '<a class="nav-open" href="https://app.glasshood.ai" target="_blank" rel="noopener noreferrer">Log in</a>' in _nav(html), page.name
+        assert '<a href="https://app.glasshood.ai" class="site-footer-link" target="_blank" rel="noopener noreferrer">Log in</a>' in footer, page.name
         assert "Open app" not in html, page.name
 
 
@@ -592,7 +592,7 @@ def test_home_shows_where_we_are_above_the_cards():
     home = _read(_PUB / "index.html")
     section = re.search(r'<section class="wrap home-detail" id="where-we-are">(.*?)</section>', home, re.S).group(1)
     assert "<h2>Where we are</h2>" in section and _STATUS in _text(section)
-    assert '<a href="https://glasshood.ai/demo">glasshood.ai/demo</a>' in section
+    assert '<a href="https://glasshood.ai/demo" target="_blank" rel="noopener noreferrer">glasshood.ai/demo</a>' in section
     assert home.index('id="where-we-are"') < home.index('<section class="wrap features"')
     assert home.index('id="where-we-are"') < home.index("pd-hidden-until-reveal")
 
@@ -612,3 +612,22 @@ def test_no_page_limits_glasshood_to_one_cloud_or_stack(page):
     text = _text(_read(page))
     for limit in _ONE_STACK_LIMITS:
         assert limit not in text, limit
+
+
+_ALL_PAGES = (*_NAV_PAGES, _ARCH / "index.html")
+_APP_HREF = re.compile(r'^https://(app\.glasshood\.ai|glasshood\.ai/(demo|view))')
+
+
+@pytest.mark.parametrize("page", _ALL_PAGES, ids=lambda p: f"{p.parent.name}/{p.name}")
+def test_app_links_open_a_new_tab_and_site_links_do_not(page):
+    """REQ-GHA-018, sixth amendment of 2026-11-10: the app opens in a new tab, no opener."""
+    seen = 0
+    for tag in re.findall(r"<a [^>]*>", _read(page)):
+        href = re.search(r'href="([^"]*)"', tag).group(1)
+        if _APP_HREF.match(href):
+            seen += 1
+            assert 'target="_blank"' in tag, tag
+            assert 'rel="noopener noreferrer"' in tag, tag
+        elif href.startswith(("/", "#", "https://glasshood.ai/", "https://architecture.glasshood.ai")):
+            assert " target=" not in tag, tag
+    assert seen >= 2
