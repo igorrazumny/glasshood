@@ -94,7 +94,7 @@ def test_sitemap_lists_the_indexable_pages_and_robots_names_it():
     sm = _read(_PUB / "sitemap.xml")
     for path in _PAGES:
         assert f"<loc>https://glasshood.ai{path}</loc>" in sm
-    # REQ-GHA-018, sixth amendment of 2026-11-10: the architecture page is indexable and in the sitemap.
+    # REQ-GHA-018, seventh amendment of 2026-11-10: the architecture page is indexable and in the sitemap.
     assert "noindex" not in _read(_ARCH / "index.html")
     assert "<loc>https://glasshood.ai/architecture/</loc>" in sm
     assert "Sitemap: https://glasshood.ai/sitemap.xml" in _read(_PUB / "robots.txt")
@@ -620,7 +620,7 @@ _APP_HREF = re.compile(r'^https://(app\.glasshood\.ai|glasshood\.ai/(demo|view))
 
 @pytest.mark.parametrize("page", _ALL_PAGES, ids=lambda p: f"{p.parent.name}/{p.name}")
 def test_app_links_open_a_new_tab_and_site_links_do_not(page):
-    """REQ-GHA-018, fifth amendment of 2026-11-10: the app opens in a new tab, no opener."""
+    """REQ-GHA-018, sixth amendment of 2026-11-10: the app opens in a new tab, no opener."""
     seen = 0
     for tag in re.findall(r"<a [^>]*>", _read(page)):
         href = re.search(r'href="([^"]*)"', tag).group(1)
@@ -635,7 +635,7 @@ def test_app_links_open_a_new_tab_and_site_links_do_not(page):
 
 
 def test_search_findability():
-    """REQ-GHA-018, sixth amendment of 2026-11-10."""
+    """REQ-GHA-018, seventh amendment of 2026-11-10."""
     for page in _ALL_PAGES:
         footer = _read(page).split('<footer class="footer">', 1)[1]
         assert '<a href="https://9robots.ai/" class="site-footer-link">by 9robots</a>' in footer, page
