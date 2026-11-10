@@ -6,7 +6,8 @@
       "batchSize": 1,
       "newBatchThreshold": 0,
       "maxPollingInterval": "00:00:02",
-      "maxDequeueCount": 3
+      "maxDequeueCount": 3,
+      "messageEncoding": "none"
     }
   },
   "logging": {
