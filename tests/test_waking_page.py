@@ -113,5 +113,5 @@ def test_the_app_offers_nothing_until_the_controller_says_awake():
     # REQ-GHA-018 fifth amendment 2026-11-10: no Log in or Live demo can reach a sleeping app
     from pathlib import Path
     app = (Path(__file__).parents[1] / "frontend/src/App.jsx").read_text()
-    assert "useState(!WAKE.controller)" in app and "if (!awake) return null" in app
-    assert app.index("if (!awake) return null") < app.index("<LoginScreen")
+    assert "useState(!WAKE.controller)" in app and "if (isLoading || !awake) {" in app
+    assert app.index("if (isLoading || !awake) {") < app.index("<LoginScreen")

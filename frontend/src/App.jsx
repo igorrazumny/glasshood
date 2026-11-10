@@ -87,8 +87,9 @@ export default function App() {
     setPrefillDemo(false)
   }
 
-  // Show nothing while Auth0 is loading (prevents flash of login)
-  if (isLoading) {
+  // Show nothing while Auth0 is loading (prevents flash of login); REQ-GHA-018 fifth amendment:
+  // the same neutral view, with no action, until the wake controller says the app is awake
+  if (isLoading || !awake) {
     return (
       <div className="min-h-screen bg-surface dark:bg-purple-950 flex items-center justify-center">
         <div className="text-gray-500 dark:text-purple-300 text-sm">Loading...</div>
@@ -96,7 +97,6 @@ export default function App() {
     )
   }
 
-  if (!awake) return null
 
   if (mode === 'demo') {
     return <ErrorBoundary><Dashboard mode="demo" onSwitchToLive={handleSwitchToLive} /></ErrorBoundary>
