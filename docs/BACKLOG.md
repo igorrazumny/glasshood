@@ -894,3 +894,26 @@ Parked deliberately as an IDEA (Igor 2026-06-25), to investigate ONLY if/when we
 - **Testable:** Yes (UI)
 - **Who builds:** Neo.
 - **Status:** confirmed by the owner 2026-11-10 (full text).
+
+## REQ-GHA-051: Shorter wake-up
+
+- **Goal:** The time from a wake request to the app answering drops from about 33 seconds today; target under 20 seconds.
+- **Why:** Owner, 2026-11-10: "if we can reduce wake up time further that would be good." Sati cut BatchGuard's cold start from 13.7 s to 6.8 s by moving network work behind the open port and using startup CPU boost.
+- **Target state:**
+  1. Measure first: split today's wake into the controller noticing the request, Azure starting the container (including the image pull), GlassHood's own startup until it answers, and the first page load. The numbers are shown to the owner before anything changes.
+  2. Then shorten the parts that are ours: work GlassHood does before it answers (reading saved evaluations, provider connections, AI setup) moves behind the start. Pages that need that data say they are loading until it is ready, never empty or wrong data.
+  3. A smaller image, so it pulls and starts faster.
+  4. Azure options for a faster start (more CPU while starting, or similar) are used only if they cost nothing or close to it; anything with a real cost goes to the owner first.
+  5. Unchanged: sleep after 15 minutes, saved evaluations with their age, the waking page and its "30 to 40 seconds" text (lowered only after the new time is measured several times).
+  6. A deploy still waits until the new version answers, so a version that does not start never replaces a working one.
+  7. Report: before and after times from at least three real wakes.
+- **Priority:** P2
+- **Testable:** Yes (measured wakes)
+- **Who builds:** Neo.
+- **Status:** confirmed by the owner 2026-11-10 (full text).
+- **Amendment 1 (owner "ok" 2026-11-10; measured: the new replica waits ~10 s for the ingress update before its image pull; owner: keep it on Azure, do the reasonable optimizations, do not push too hard):**
+  1. The controller no longer restricts ingress for sleep. Waking is the queue message only. While asleep a stray request gets Azure's own error, not a clean refusal. This replaces REQ-GHA-018's "asleep, refuse all outside traffic".
+  2. An explicit startup/readiness probe: checked every second, with a timeout long enough that the first check does not fail.
+  3. A smaller image: drop what the running app does not need (pytest first) and check whether any Google library is unused.
+  4. Not done: an always-ready controller instance (monthly cost), startup CPU boost (GlassHood's own startup is 2.5 s), moving to GCP.
+  5. Measure three real wakes before and after; if clearly under 30 s, the waking page text changes to match.
