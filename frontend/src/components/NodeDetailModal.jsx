@@ -2,7 +2,7 @@
 // Purpose: Modal popup for detailed node inspection — metrics + diagnostics + AI analysis
 
 import { useEffect, useState, useCallback } from 'react'
-import { X, FileText, Brain, AlertTriangle, CheckCircle, RefreshCw, Clock, Cpu } from 'lucide-react'
+import { X, FileText, AlertTriangle, CheckCircle, RefreshCw, Clock, Cpu } from 'lucide-react'
 import { apiFetch } from '../utils/api'
 import { canRecheck, describeRecheck, recheckError, PARTNER_NOTE, WAKE_NOTE } from '../utils/mcpRecheck'
 import { overviewStamp, isStale } from '../utils/overview.js'
@@ -269,7 +269,6 @@ export default function NodeDetailModal({ node, onClose, isDemo, hideCosts }) {
           <div className="mt-4">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <Brain size={14} className="text-accent-500 dark:text-accent-300" />
                 <h3 className="text-xs font-semibold text-gray-500 dark:text-purple-300 uppercase tracking-wider">AI Analysis</h3>
                 {analysisAge && (
                   <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-purple-300">

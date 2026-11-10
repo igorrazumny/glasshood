@@ -28,6 +28,7 @@ def _forget():
 @pytest.fixture(autouse=True)
 def world(tmp_path, monkeypatch):
     monkeypatch.setattr(ov, "PROVIDER", "openai")
+    monkeypatch.setattr(ov, "_records_loaded", [None])  # each test is a fresh start
     monkeypatch.setenv("AI_STATE_DIR", str(tmp_path))
     monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
     _forget()

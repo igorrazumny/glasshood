@@ -313,3 +313,17 @@ def test_every_overview_helper_a_component_uses_is_imported():
         for h in helpers:
             if re.search(rf"\b{h}\(", src):
                 assert h in imported, f"{jsx.name} calls {h} without importing it"
+
+
+def test_saved_records_are_read_before_the_first_read_after_a_restart(tmp_path, monkeypatch):
+    # REQ-GHA-046 clause 20: no system reads as unassessed while its saved record is unread
+    import json
+    from src.analysis import vertex_overview as ov
+    path = tmp_path / "records.json"
+    path.write_text(json.dumps({"own": {"coldvault": {"summary": "fine", "analyzed_at": 100.0}}, "last_round": 100.0}))
+    monkeypatch.setattr(ov, "_records_file", lambda: str(path))
+    monkeypatch.setattr(ov, "_records_loaded", [None])
+    monkeypatch.setattr(ov, "_own", {})
+    assert ov.system_cards()["coldvault"]["summary"] == "fine"
+    path.write_text("{}")
+    assert ov._ensure_records() == 100.0   # read once only

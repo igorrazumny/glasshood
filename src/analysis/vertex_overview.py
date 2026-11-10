@@ -805,6 +805,19 @@ def _checkpoint() -> None:
         _save_records()
 
 
+_records_once = threading.Lock()
+_records_loaded = [None]  # None until the saved records were read once; then the schedule's start time
+
+
+def _ensure_records() -> float:
+    """REQ-GHA-046 clause 20: the saved records are read before anything is shown from them, so a
+    restart never shows a system as not yet assessed while its saved evaluation is still unread."""
+    with _records_once:
+        if _records_loaded[0] is None:
+            _records_loaded[0] = _load_records()
+        return _records_loaded[0]
+
+
 def _load_records() -> float:
     """Bring back what was evaluated before a restart. Returns the time the schedule counts from: the
     last finished round, or the newest evaluation if no round finished yet (0 if nothing was evaluated)."""
@@ -993,6 +1006,7 @@ def get_own(product: str):
 
 def system_cards() -> dict:
     """{product: short overview} for every system that has one, for the home view's cards."""
+    _ensure_records()
     with _lock:
         both = {**{k: dict(v) for k, v in _own.items()}, **{k: dict(v) for k, v in _outside.items()}}
         jobs = {k: dict(v) for k, v in _own_jobs.items()}
@@ -1065,6 +1079,7 @@ def _with_staleness(entry: dict) -> dict:
 
 
 def get_system() -> dict:
+    _ensure_records()
     with _lock:
         return _with_staleness(_system)
 
@@ -1182,6 +1197,7 @@ def run_outside(parts: bool = True, topology: dict = None, only: set = None, ove
 
 
 def get_part(part_id: str):
+    _ensure_records()
     with _lock:
         entry = _parts.get(part_id)
     return _with_staleness(entry) if entry else None
@@ -1290,11 +1306,12 @@ def _pending_loop(get_topology_fn, stop) -> None:
 def overview_loop(get_topology_fn, ready_fn=None):
     """Clause 4: first overviews as soon as the parts are known, then every INTERVAL_S."""
     stop = threading.Event()
+    _ensure_records()   # clause 20: before the first poll, so the screen never waits on it
     for _ in range(60):  # wait for the first poll of the parts, at most ~5 minutes
         if ready_fn is None or ready_fn():
             break
         stop.wait(5)
-    last_round = _load_records()
+    last_round = _ensure_records()
     threading.Thread(target=_pending_loop, args=(get_topology_fn, stop), daemon=True,
                      name="assessment-scan").start()
     if last_round:      # REQ-GHA-042 clause 10: a restart does not start a new round
