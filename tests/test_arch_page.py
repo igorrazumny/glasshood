@@ -172,7 +172,7 @@ def test_the_page_shows_how_glasshood_is_reached_today():
 
 
 def test_indexable_and_title():
-    # REQ-GHA-018, fifth amendment of 2026-11-10: the page is indexable, with its canonical address.
+    # REQ-GHA-018, sixth amendment of 2026-11-10: the page is indexable, with its canonical address.
     assert "noindex" not in _HTML
     assert '<link rel="canonical" href="https://glasshood.ai/architecture/">' in _HTML
     assert "<title>Architecture - GlassHood</title>" in _HTML
