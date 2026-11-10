@@ -317,9 +317,7 @@ export function countsLine(cards) {
   return [opening, ...rest.map(s => `${numberWord(s.n)} ${verb(s)}`)].join('; ') + '.'
 }
 
-// REQ-GHA-046 clause 7: a review written before the newest evaluations says so
+// REQ-GHA-046 clause 21: only a real failed update is flagged; a newer evaluation alone is not
 export function selectionNotice(review) {
-  if (!review || review.current !== false) return review?.update_failed ? 'The latest update of this review could not be written.' : null
-  const older = review.summary ? ' This text is from before the newest evaluations.' : ''
-  return (review.update_failed ? 'The latest update of this review could not be written.' : 'A newer review is being written.') + older
+  return review?.update_failed ? 'The latest update of this review could not be written.' : null
 }

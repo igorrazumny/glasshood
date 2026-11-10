@@ -313,3 +313,38 @@ def test_every_overview_helper_a_component_uses_is_imported():
         for h in helpers:
             if re.search(rf"\b{h}\(", src):
                 assert h in imported, f"{jsx.name} calls {h} without importing it"
+
+
+def test_saved_records_are_read_before_the_first_read_after_a_restart(tmp_path, monkeypatch):
+    # REQ-GHA-046 clause 20: no system reads as unassessed while its saved record is unread
+    import json
+    from src.analysis import vertex_overview as ov
+    path = tmp_path / "records.json"
+    path.write_text(json.dumps({"own": {"coldvault": {"summary": "fine", "analyzed_at": 100.0}}, "last_round": 100.0}))
+    monkeypatch.setattr(ov, "_records_file", lambda: str(path))
+    monkeypatch.setattr(ov, "_records_loaded", [None])
+    monkeypatch.setattr(ov, "_own", {})
+    assert ov.system_cards()["coldvault"]["summary"] == "fine"
+    path.write_text("{}")
+    assert ov._ensure_records() == 100.0   # read once only
+
+
+def test_a_failed_read_of_saved_records_is_retried_not_taken_for_empty(tmp_path, monkeypatch):
+    # REQ-GHA-046 clause 20 (review): a transient read failure never makes saved systems read as unassessed
+    import json
+    import pytest
+    from src.analysis import vertex_overview as ov
+    path = tmp_path / "records.json"
+    path.write_text(json.dumps({"own": {"coldvault": {"summary": "fine", "analyzed_at": 100.0}}, "last_round": 100.0}))
+    monkeypatch.setattr(ov, "_records_loaded", [None])
+    monkeypatch.setattr(ov, "_own", {})
+    monkeypatch.setattr(ov, "_records_file", lambda: str(tmp_path / "missing-dir" / "x"))
+    real_exists = ov.os.path.exists
+    monkeypatch.setattr(ov.os.path, "exists", lambda p: True if "missing-dir" in str(p) else real_exists(p))
+    with pytest.raises(RuntimeError):
+        ov.system_cards()
+    with pytest.raises(RuntimeError):
+        ov.get_own("coldvault")
+    monkeypatch.setattr(ov, "_records_file", lambda: str(path))
+    assert ov.system_cards()["coldvault"]["summary"] == "fine"
+    assert ov.get_own("coldvault")["summary"] == "fine"
