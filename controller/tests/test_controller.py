@@ -108,8 +108,8 @@ def test_idle_sleep_after_two_hours_and_an_idle_tab_does_not_prevent_it():
     while not intent(store).asleep_done or intent(store).desired == "awake":
         clock.sleep(60)                 # the 1-minute timer, with nobody using the app
         reconcile()
-    restricted_at = [t for t, what in az.history if what == "restricted"][-1]
-    assert threshold <= restricted_at <= threshold + 120     # going to sleep: nobody new gets in
+    # REQ-GHA-051 amendment 1: sleep never restricts ingress again
+    assert "restricted" not in [what for _, what in az.history]
     assert az.replicas == 0 and api.status().body["state"] == "asleep"
     assert clock() - threshold <= 600
 
@@ -178,7 +178,7 @@ def test_failed_wake_reports_and_returns_to_asleep_within_ten_minutes():
         reconcile()
         clock.sleep(60)
     assert "wake_failed" in store.kinds()
-    assert az.restricted and az.replicas == 0
+    assert not az.restricted and az.replicas == 0
     assert clock() - t0 <= 600
 
 
@@ -436,14 +436,17 @@ def test_stale_deactivate_while_awake_is_repaired():
     assert clock() - start <= 300
 
 
-def test_stale_open_while_asleep_is_repaired():
+def test_sleep_leaves_ingress_open_and_a_wake_needs_no_app_update():
+    """REQ-GHA-051 amendment 1: the wake is the queue message only."""
     clock, store, az, api, reconcile = rig()
-    wake_and_settle(clock, store, az, api, reconcile)
+    wake_and_settle(clock, store, az, api, reconcile)       # lifts the restriction left from before
     api.sleep()
-    reconcile()
-    az.restricted = False
-    assert reconcile() == "done"
-    assert az.restricted and "divergence" in store.kinds()
+    while not intent(store).asleep_done:
+        reconcile(); clock.sleep(60)
+    assert not az.restricted and az.replicas == 0
+    calls = list(az.arm_calls)
+    wake_and_settle(clock, store, az, api, reconcile)
+    assert "open" not in az.arm_calls[len(calls):] and "restrict" not in az.arm_calls
 
 
 def test_status_contract_states():
@@ -465,23 +468,26 @@ def test_before_the_cutover_status_says_awake_and_nothing_is_changed():
 
 def test_halt_stops_a_reconciler_during_a_pending_change():
     from wake import fence
-    clock, store, az, api, reconcile = rig()
+    clock, store, az, api, reconcile = rig(drain_seconds=100_000)   # a replica that never exits, so the deactivation runs
     wake_and_settle(clock, store, az, api, reconcile)
     api.sleep()
     halted = {"done": False}
 
     def halt_when_deactivating(now):                       # the operator's rollback starts
-        if "restrict" in az.arm_calls and not halted["done"]:
+        if "deactivate" in az.arm_calls and not halted["done"]:
             halted["done"] = True
             fence.halt(store)
     clock.hooks.append(halt_when_deactivating)
-    assert reconcile() == "lease_lost"                     # stopped at its next check
+    results = []
+    while not halted["done"] and len(results) < 30:          # the drain, then the deactivation
+        results.append(reconcile()); clock.sleep(60)
+    assert results[-1] == "lease_lost"                     # stopped at its next check
     clock.hooks.remove(halt_when_deactivating)
     waited = fence.wait_pending(store, az, clock=clock, sleep=clock.sleep)
-    assert waited["kind"] == "restrict_ingress" and waited["final"] == "Succeeded"
-    assert az.restricted                                   # the late change has landed
+    assert waited["kind"] == "deactivate" and waited["final"] == "Succeeded"
+    assert not az.active                                   # the late change has landed
     calls = list(az.arm_calls)
-    az.restricted, az.active = False, True                 # rollback: open, active, min 1
+    az.active = True                                       # rollback: active, min 1
     for _ in range(10):
         clock.sleep(60)
         assert reconcile() == "halted"
@@ -517,7 +523,7 @@ def _sleep_with(fail, end="Failed", app_exits_after=150, **rig_args):
 
 
 @pytest.mark.parametrize("end", ["Failed", "Canceled"])
-@pytest.mark.parametrize("fail", [["restrict"], ["deactivate"], ["restrict", "deactivate"]])
+@pytest.mark.parametrize("fail", [["deactivate"]])
 @pytest.mark.parametrize("app_exits_after", [35, 150, 100_000])   # responsive / killed after grace / never
 def test_a_refused_sleep_step_does_not_stop_the_sleep(fail, end, app_exits_after):
     if "deactivate" in fail and app_exits_after > core.DRAIN_SECONDS:
@@ -526,9 +532,9 @@ def test_a_refused_sleep_step_does_not_stop_the_sleep(fail, end, app_exits_after
     assert intent(store).asleep_done and api.status().body["state"] == "asleep"
     assert az.replicas == 0 and az.queue == []
     assert clock() - t0 <= 600                             # asleep within 10 minutes
-    if "restrict" in fail or app_exits_after > core.DRAIN_SECONDS:
+    if app_exits_after > core.DRAIN_SECONDS:
         assert "operation_failed" in store.kinds()
-    assert az.arm_calls.count("restrict") <= 2             # not retried in a loop
+    assert "restrict" not in az.arm_calls
 
 
 def test_a_refused_deactivate_with_a_replica_that_never_exits_is_reported_and_retried_slowly():
@@ -553,29 +559,22 @@ def test_a_refused_deactivate_with_a_replica_that_never_exits_is_reported_and_re
     assert az.replicas == 0 and intent(store).asleep_done
 
 
-def test_a_refused_restriction_is_tried_again_later_and_repaired():
-    clock, store, az, api, reconcile, t0 = _sleep_with(["restrict"])
-    assert not az.restricted
-    del az.fail["restrict"]
-    for _ in range(12):
-        clock.sleep(60)
-        reconcile()
-    assert az.restricted and intent(store).asleep_done
-
-
 def test_a_wake_during_sleep_recovery_wins():
-    clock, store, az, api, reconcile = rig()
+    clock, store, az, api, reconcile = rig(drain_seconds=100_000)   # a replica that never exits, so the deactivation runs
     body = wake_and_settle(clock, store, az, api, reconcile)
-    az.fail["restrict"] = "Failed"
+    az.fail["deactivate"] = "Failed"
     api.sleep()
     used = {}
 
     def use_once_refused(now):                             # a person acts during recovery
         if "operation_failed" in store.kinds() and not used:
             used["status"] = api.use({"use_token": body["use_token"]}, ORIGIN).status
-            del az.fail["restrict"]
+            del az.fail["deactivate"]
     clock.hooks.append(use_once_refused)
-    reconcile()
+    for _ in range(30):                                    # the drain, then the refused deactivation
+        reconcile(); clock.sleep(60)
+        if used:
+            break
     clock.hooks.remove(use_once_refused)
     assert used["status"] == 204
     i = intent(store)

@@ -1,5 +1,6 @@
 import pytest
 
+from deploy import scale_check
 from deploy.scale_check import ready, scale
 
 
@@ -27,3 +28,12 @@ def test_the_control_queue_reads_plain_text_messages():
     from pathlib import Path
     host = json.loads((Path(__file__).parents[1] / "host.json").read_text())
     assert host["extensions"]["queues"]["messageEncoding"] == "none"
+
+
+def test_probes_need_exactly_the_reviewed_checks():
+    """REQ-GHA-051 amendment 1."""
+    app = lambda probes: {"properties": {"template": {"containers": [{"probes": probes}]}}}
+    assert scale_check.probes(app([dict(p) for p in scale_check.PROBES]))
+    assert not scale_check.probes(app([]))
+    slow = [dict(p) for p in scale_check.PROBES]; slow[0]["timeoutSeconds"] = 1
+    assert not scale_check.probes(app(slow))

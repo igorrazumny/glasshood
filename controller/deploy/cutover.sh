@@ -35,7 +35,7 @@ export CONTAINER_APP_FQDN=$(az containerapp show -g "$RG" -n "$APP" --query prop
 # pinned awake (safe) and the script says so. Inside `enable` the caller already holds the pin.
 wake_scale() {
   local inside=${1:-} was_pinned id body intent
-  say "wake check every 1 s, cooldown 30 s"
+  say "wake check every 1 s, cooldown 30 s, start checked every second (REQ-GHA-051)"
   if [ -z "$inside" ]; then
     intent=$(fence intent)
     # only on an awake app: pinning an asleep one would wake it and leave it awake
@@ -52,7 +52,10 @@ t = json.load(sys.stdin)
 t.pop("revisionSuffix", None)
 t["scale"]["pollingInterval"] = 1
 t["scale"]["cooldownPeriod"] = 30
-print(json.dumps({"properties": {"template": t}}))')
+sys.path.insert(0, sys.argv[1])
+from scale_check import PROBES
+t["containers"][0]["probes"] = PROBES
+print(json.dumps({"properties": {"template": t}}))' "$here")
   local url="https://management.azure.com${id}?api-version=2025-01-01" ok=
   az rest --method patch --url "$url" --body "$body" -o none </dev/null
   for _ in $(seq 1 60); do
@@ -62,7 +65,9 @@ print(json.dumps({"properties": {"template": t}}))')
   [ -n "$ok" ] || die "the scale change did not finish within 10 minutes; the app stays pinned awake"
   az rest --method get --url "$url" -o json </dev/null | "$PY" "$here/scale_check.py" scale \
     || die "Azure does not hold pollingInterval 1 / cooldownPeriod 30; the app stays pinned awake"
-  say "scale verified: check every 1 s, cooldown 30 s, the new revision is ready"
+  az rest --method get --url "$url" -o json </dev/null | "$PY" "$here/scale_check.py" probes \
+    || die "Azure does not hold the start and readiness checks; the app stays pinned awake"
+  say "verified: check every 1 s, cooldown 30 s, start and readiness checks, the new revision is ready"
   if [ -z "$inside" ] && [ "$was_pinned" != True ]; then fence unpin; fi
 }
 
