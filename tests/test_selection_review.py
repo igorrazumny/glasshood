@@ -17,7 +17,7 @@ def _rec(cond="normal", at=1.0, alerts=()):
 @pytest.fixture(autouse=True)
 def clean(tmp_path, monkeypatch):
     monkeypatch.setenv("AI_STATE_DIR", str(tmp_path))
-    sr._reviews.clear(); sr._seen.clear(); sr._failed_at.clear(); sr._loaded[0] = False; sr._unsaved[0] = False; sr.problem[0] = None
+    sr._reviews.clear(); sr._seen.clear(); sr._failed_at.clear(); sr._running.clear(); sr._loaded[0] = False; sr._unsaved[0] = False; sr.problem[0] = None
     monkeypatch.setattr(ov, "ai_offline", lambda: None)
     monkeypatch.setattr(ov, "_outside_products", lambda: {"gh"})
     monkeypatch.setattr(sr, "_names", lambda: {"a": "Alpha", "gh": "GitHub"})
@@ -442,3 +442,21 @@ def test_every_spelling_of_the_demo_login_is_refused(login):
     r = c.put("/api/preferences/right-panel", json={"split": 0.3}, headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 403
     assert not (__import__("pathlib").Path(__import__("os").environ["AI_STATE_DIR"]) / "ui_prefs.json").exists()
+
+
+def test_a_review_being_written_says_running_even_after_a_failure():
+    """REQ-GHA-050 clause 4: the panel reads the true state while the call is in flight, retries included."""
+    cards = {"a": _rec()}
+    with patch.object(ov, "system_cards", return_value=cards), \
+         patch.object(ov, "call_model", return_value=('{"summary": ["bad"]}', {})):
+        sr.refresh_due(0); sr.refresh_due(100)
+    seen = []
+
+    def in_flight(*a, **k):
+        seen.append(sr.get_reviews()["all"])
+        return json.dumps(_answer("Fine.")), {}
+    with patch.object(ov, "system_cards", return_value=cards), patch.object(ov, "call_model", side_effect=in_flight):
+        sr.refresh_due(800)
+        after = sr.get_reviews()["all"]
+    assert seen[0]["job"] == {"status": "running"} and seen[0]["update_failed"] is True
+    assert after["job"] is None and after["update_failed"] is False

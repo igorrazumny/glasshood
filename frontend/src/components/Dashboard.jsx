@@ -320,7 +320,7 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
         {!isDemo && !topology.data && !topology.error ? (
           <Waiting text="Loading your systems…" />
         ) : showHome ? (
-          <SystemsHome title={groupSelected ? (GROUPS.find(g => g.id === activeProject)?.label || 'All systems') : 'All systems'} cards={homeCards} line={portfolioLine(homeCards)} onOpen={setActiveProject} onOpenAlert={openAlert}
+          <SystemsHome title={groupSelected ? (GROUPS.find(g => g.id === activeProject)?.label || 'All systems') : 'All systems'} cards={homeCards} line={portfolioLine(homeCards)} measuring={!isDemo && topology?.data?.measuring === true} onOpen={setActiveProject} onOpenAlert={openAlert}
             descriptions={systemDescriptions.data || {}} loading={!topology.data}
             loadError={topology.data ? null : topology.error}
             descriptionsError={systemDescriptions.error} />

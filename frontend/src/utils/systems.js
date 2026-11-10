@@ -2,6 +2,7 @@
 // Purpose: REQ-GHA-035 — several monitored systems side by side. Each landscape file is one
 // system; a box belongs to the system its landscape file (or its parent box) names.
 
+import { evaluatedWhen, outOfDate, nextState } from './evaluationAge.js'
 import { worstStatus } from './canvasParts.js'
 import { alarmLevel } from './alarms.js'
 import { clock, dateTime } from './time.js'
@@ -165,12 +166,13 @@ export function portfolioLine(cards) {
 
 // REQ-GHA-037 with REQ-GHA-024 clause 7 (amended 2026-11-08): an assessment says when it was
 // written and keeps the last real text whatever its age; what is happening now is said apart
-export function assessmentLine(about, nowMs) {
-  if (!about) return { when: null, text: 'AI evaluation has not started yet.', problem: null, busy: false, job: null }
+export function assessmentLine(about, nowMs, measuring = false) {
+  if (!about) return { when: null, text: 'AI evaluation has not started yet.', problem: null, busy: false, job: null, stale: null, next: null }
   const at = about.analyzed_at ? about.analyzed_at * 1000 : null
-  const sameDay = at && new Date(at).toDateString() === new Date(nowMs).toDateString()
-  // REQ-GHA-030: every time carries its zone
-  const when = at ? (sameDay ? `evaluated ${clock(at)}` : `evaluated ${dateTime(at)}`) : null
+  // REQ-GHA-030: every time carries its zone; REQ-GHA-050 clause 1: a date when not today
+  const when = at ? `evaluated ${evaluatedWhen(at, nowMs)}` : null
+  // REQ-GHA-050 clauses 2-4: an evaluation older than 3 hours is marked, with what comes next
+  const stale = about.summary ? outOfDate(at, nowMs, nextState(about, measuring)) : null
   const problem = about.error ? `Latest update failed: ${about.error}` : null
   const state = about.job?.status
   const tries = about.job?.attempts
@@ -183,7 +185,7 @@ export function assessmentLine(about, nowMs) {
   const job = !about.summary ? null : state === 'running' ? 'A new AI evaluation is in progress.'
     : state === 'retrying' ? 'Another attempt at updating this is scheduled.'
       : state === 'failed' ? 'It will be tried again at the next scheduled round.' : null
-  return { when, text: about.summary || pending, problem, busy, job }
+  return { when, text: about.summary || pending, problem, busy, job, stale: stale?.mark || null, next: stale?.next || null }
 }
 
 // REQ-GHA-037 clause 6: a read that failed is said in plain words, never shown as loading

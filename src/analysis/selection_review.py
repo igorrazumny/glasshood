@@ -65,6 +65,7 @@ _SYSTEM_COUNT = re.compile(rf"(?i)\b{_NUM}( of (the )?(\d+|\w+))? (selected |mon
 _BARE_COUNT = re.compile(rf"(?i)\b{_NUM} (is|are|need|needs|remain|remains|operate|operates|run|runs|report|reports|show|shows|has|have)\b")
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
 _lock = threading.Lock()
+_running: set = set()   # REQ-GHA-050 clause 4: scopes whose review is being written right now
 _reviews: dict = {}     # scope -> {summary, analyzed_at, sig}
 _seen: dict = {}        # scope -> (sig, since when)
 _failed_at: dict = {}   # scope -> (sig, when)
@@ -311,12 +312,17 @@ def refresh_due(now: float = None) -> None:
         failed = _failed_at.get(scope)
         if now - _seen[scope][1] < SETTLE_S or (failed and failed[0] == sig and now - failed[1] < RETRY_S):
             continue
+        with _lock:
+            _running.add(scope)
         try:
             written = _write(records)
         except Exception as e:
             _failed_at[scope] = (sig, now)
             logger.warning(f"selection review {scope} failed: {type(e).__name__}: {str(e)[:200]}")
             continue
+        finally:
+            with _lock:
+                _running.discard(scope)
         with _lock:
             _reviews[scope] = {**written, "analyzed_at": now, "sig": sig}
         _failed_at.pop(scope, None)   # a success supersedes an earlier failed attempt
@@ -333,11 +339,14 @@ def get_reviews() -> dict:
     for scope, records in _by_scope().items():
         with _lock:
             v = dict(_reviews.get(scope) or {})
+            running = scope in _running
         if not records and not v:
             continue
         sig = _signature(records)
         out[scope] = {"summary": v.get("summary"), "score": v.get("score"), "issues": v.get("issues") or [],
                       "recommendations": v.get("recommendations") or [],
                       "analyzed_at": v.get("analyzed_at"), "current": v.get("sig") == sig,
-                      "update_failed": (_failed_at.get(scope) or (None,))[0] == sig}
+                      "update_failed": (_failed_at.get(scope) or (None,))[0] == sig,
+                      # REQ-GHA-050 clause 4: a write in progress, so the panel never says waiting or failed then
+                      "job": {"status": "running"} if running else None}
     return out

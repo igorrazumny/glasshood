@@ -25,7 +25,7 @@ function StatusChip({ card }) {
   )
 }
 
-export default function SystemsHome({ title = 'All systems', cards, line, onOpen, onOpenAlert, descriptions = {}, loading = false, loadError = null, descriptionsError = null }) {
+export default function SystemsHome({ title = 'All systems', cards, line, onOpen, onOpenAlert, descriptions = {}, loading = false, loadError = null, descriptionsError = null, measuring = false }) {
   // REQ-GHA-035 clause 9: Proprietary systems and External systems, each with its own line
   // REQ-GHA-037 clause 6: while the systems load, say so
   if (!cards.length && loadError) return <Failed text={loadFailed('Your systems', loadError)} />
@@ -47,7 +47,7 @@ export default function SystemsHome({ title = 'All systems', cards, line, onOpen
               <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-600 dark:text-purple-200">{group.label}</h3>
               {off ? <AiOfflineLine offline={off.offline} onOpenAlert={onOpenAlert} /> : <span className="text-xs text-gray-500 dark:text-purple-300">{portfolioLine(groupCards)}</span>}
             </div>
-            {groupCards.map(c => <SystemCard key={c.id} card={c} about={descriptions[c.product]} loadError={descriptionsError} onOpen={onOpen} onOpenAlert={onOpenAlert} />)}
+            {groupCards.map(c => <SystemCard key={c.id} card={c} about={descriptions[c.product]} loadError={descriptionsError} measuring={measuring} onOpen={onOpen} onOpenAlert={onOpenAlert} />)}
           </Fragment>
         ))}
       </div>
@@ -58,11 +58,14 @@ export default function SystemsHome({ title = 'All systems', cards, line, onOpen
 // REQ-GHA-037: what a business owner needs — state in one line, open alarms, the AI's view of
 // the whole system, when it was checked — and a clear way in
 // REQ-GHA-047 clause 2: every line of the card has a fixed height, so every card is the same size
-function SystemCard({ card: c, about, loadError, onOpen, onOpenAlert }) {
-  const a = assessmentLine(about, Date.now())
+function SystemCard({ card: c, about, loadError, measuring, onOpen, onOpenAlert }) {
+  const a = assessmentLine(about, Date.now(), measuring)
   if (!about && loadError) a.text = loadFailed('The assessment', loadError)
   else if (loadError && !a.problem) a.problem = loadFailed('A newer assessment', loadError)
-  const note = [a.problem, a.job].filter(Boolean).join(' · ')
+  // REQ-GHA-050 clause 4: on an out-of-date card the next-evaluation line replaces the update's own
+  // failure text and job line; a failed read of the records is still said (REQ-GHA-037 clause 6)
+  const updateFailed = a.stale && !loadError
+  const note = a.stale ? [updateFailed ? null : a.problem, a.next].filter(Boolean).join(' · ') : [a.problem, a.job].filter(Boolean).join(' · ')
   return (
     // a div, not a button: it holds the alert's link and the closed last evaluation
     <div role="button" tabIndex={0} onClick={() => onOpen(c.id)}
@@ -98,18 +101,22 @@ function SystemCard({ card: c, about, loadError, onOpen, onOpenAlert }) {
         {/* the offline card has the same slots as a normal one, so closed cards stay equal in height */}
         {c.offline ? (
           <>
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-purple-300 mb-1 truncate">
-              {a.when && about?.summary ? `Last evaluation · ${a.when}` : 'Not evaluated yet'}
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-purple-300 mb-1 flex min-w-0">
+              <span className="truncate" title={a.when || undefined}>{a.when && about?.summary ? (a.stale ? a.when.replace(/^evaluated /, '') : `Last evaluation · ${a.when}`) : 'Not evaluated yet'}</span>
+              <StaleMark mark={a.stale} />
             </div>
-            <div className="text-xs h-4" />
+            {/* REQ-GHA-050 clause 4: AI evaluation is offline, so no new one is running */}
+            <div className="text-xs h-4 truncate text-gray-500 dark:text-purple-300">{a.stale ? 'Waiting for a new evaluation.' : ''}</div>
             <Assessment text={about?.summary || ''} busy={false} />
           </>
         ) : (
           <>
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-purple-300 mb-1 truncate">
-              AI assessment{a.when ? ` · ${a.when}` : ''}
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-purple-300 mb-1 flex min-w-0">
+              {/* REQ-GHA-050 clauses 1 and 3: beside the mark only the date and time, so both stay readable */}
+              <span className="truncate" title={a.when || undefined}>{a.stale ? a.when.replace(/^evaluated /, '') : `AI assessment${a.when ? ` · ${a.when}` : ''}`}</span>
+              <StaleMark mark={a.stale} />
             </div>
-            <div className={`text-xs h-4 truncate ${a.problem ? 'text-red-700 dark:text-red-400' : 'text-gray-500 dark:text-purple-300'}`} title={note || undefined}>{note}</div>
+            <div className={`text-xs h-4 truncate ${a.problem && !updateFailed ? 'text-red-700 dark:text-red-400' : 'text-gray-500 dark:text-purple-300'}`} title={note || undefined}>{note}</div>
             <Assessment text={a.text} busy={a.busy && !a.job && !loadError} />
           </>
         )}
@@ -119,6 +126,11 @@ function SystemCard({ card: c, about, loadError, onOpen, onOpenAlert }) {
       </div>
     </div>
   )
+}
+
+// REQ-GHA-050 clause 3: the amber mark beside the evaluation line; it never shrinks, the time is clipped first
+function StaleMark({ mark }) {
+  return mark ? <span title={mark} className="ml-1.5 flex-shrink-0 normal-case tracking-normal text-amber-700 dark:text-amber-300">· {mark}</span> : null
 }
 
 // REQ-GHA-045 clause 4: one line until the reader asks for the whole assessment
