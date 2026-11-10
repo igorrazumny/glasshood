@@ -6,6 +6,7 @@
 #   cutover.sh enable            step (e): record an awake intent, switch the reconciler
 #                                on, wait until it holds the wake message, then let the
 #                                app scale to zero on the queue rule (min 0 / max 1).
+#   cutover.sh scale             the wake rule's check interval (1 s) and cooldown (30 s) only.
 #   cutover.sh rollback          back to always on: the controller is pinned (keeps the
 #                                app awake and open, never puts it to sleep, and repairs
 #                                any late change), any operation it left with Azure is
@@ -26,6 +27,21 @@ PY=${PY:-python3}
 SUB=$(az account show --query id -o tsv </dev/null)
 export SA CONTAINER_APP_ID="/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.App/containerApps/$APP"
 export CONTAINER_APP_FQDN=$(az containerapp show -g "$RG" -n "$APP" --query properties.configuration.ingress.fqdn -o tsv </dev/null)
+
+# REQ-GHA-018 third amendment 2026-11-10: the wake rule checks the queue every second; cooldown 30 s.
+# A partial PATCH of the template only: a full PUT is refused over the Key Vault secret references.
+wake_scale() {
+  say "wake check every 1 s, cooldown 30 s"
+  local id body
+  id=$(az containerapp show -g "$RG" -n "$APP" --query id -o tsv </dev/null)
+  body=$(az containerapp show -g "$RG" -n "$APP" --query properties.template -o json </dev/null | "$PY" -c '
+import json, sys
+t = json.load(sys.stdin)
+t["scale"]["pollingInterval"] = 1
+t["scale"]["cooldownPeriod"] = 30
+print(json.dumps({"properties": {"template": t}}))')
+  az rest --method patch --url "https://management.azure.com${id}?api-version=2024-03-01" --body "$body" -o none </dev/null
+}
 
 say() { printf '== %s\n' "$*"; }
 die() { echo "cutover.sh: $*" >&2; exit 1; }
@@ -70,8 +86,7 @@ case "${1:-}" in
       --scale-rule-name wake --scale-rule-type azure-queue \
       --scale-rule-metadata queueName=glasshood-wake queueLength=1 accountName="$SA" \
       --scale-rule-identity system -o none </dev/null
-    az resource update -g "$RG" -n "$APP" --resource-type Microsoft.App/containerApps \
-      --set properties.template.scale.cooldownPeriod=30 -o none </dev/null
+    wake_scale
     say "unpinned: from now on the app sleeps after 15 minutes without use"
     fence unpin
     "$here/ops.sh" status
@@ -112,5 +127,6 @@ print("ok" if not r and s.get("minReplicas") == 1 and not s.get("rules") else "p
     say "rolled back: open, active, min 1, no queue rule, health 200, and it stayed so"
     ;;
 
-  *) echo "usage: cutover.sh prepare <image> | enable | rollback" >&2; exit 2 ;;
+  scale) wake_scale ;;
+  *) echo "usage: cutover.sh prepare <image> | enable | scale | rollback" >&2; exit 2 ;;
 esac
