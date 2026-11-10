@@ -10,6 +10,7 @@ import { statsSummary } from '../utils/canvasParts.js'
 import { overviewStamp, spendLine } from '../utils/overview.js'
 import { clock } from '../utils/time'
 import AiOfflineLine from './AiOfflineLine'
+import { outOfDate, nextState } from '../utils/evaluationAge.js'
 import { assessmentLine, changeLines, countsLine, loadFailed, selectionNotice } from '../utils/systems.js'
 
 function ScoreBadge({ score }) {
@@ -81,7 +82,7 @@ function Changes({ diff }) {
   )
 }
 
-function SystemsList({ onOpenAlert, cards, review, loadError, systemsError, recordsError, diff }) {
+function SystemsList({ onOpenAlert, cards, review, loadError, systemsError, recordsError, diff, measuring = false }) {
   if (!cards.length && systemsError) {
     return <p className="text-sm text-yellow-700 dark:text-yellow-300">{loadFailed('Your systems', systemsError)}</p>
   }
@@ -109,6 +110,9 @@ function SystemsList({ onOpenAlert, cards, review, loadError, systemsError, reco
       {review?.summary
         ? <>
             <p className="text-xs text-gray-500 dark:text-purple-300 mb-1">{overviewStamp(review)}</p>
+            {/* REQ-GHA-050 clause 6: the selection review is marked like a card */}
+            {(() => { const o = outOfDate(review.analyzed_at * 1000, Date.now(), nextState(review, measuring)); return o && (
+              <p className="text-xs mb-1"><span className="font-semibold text-amber-700 dark:text-amber-300">{o.mark}</span> <span className="text-gray-500 dark:text-purple-300">{o.next}</span></p>) })()}
             {/* REQ-GHA-046 clauses 2, 6 and 7: the single-system shape for the whole selection;
                 clause 3 (amended): GlassHood's own count of the systems by state opens the summary */}
             <div className="flex items-start gap-3">
@@ -206,7 +210,7 @@ export default function AnalysisPanel({ data, topology, canvas, scopeLabel = 'Al
       {measuring && <p className="text-xs text-gray-500 dark:text-purple-300">{FRESH_CHECK}</p>}
 
       {listCards ? (
-        <SystemsList onOpenAlert={onOpenAlert} cards={listCards} review={review} loadError={reviewError} systemsError={systemsError} recordsError={descriptionsError} diff={diff} />
+        <SystemsList onOpenAlert={onOpenAlert} cards={listCards} review={review} loadError={reviewError} systemsError={systemsError} recordsError={descriptionsError} diff={diff} measuring={measuring} />
       ) : analysis.ai_offline ? (
         <div className="flex flex-col gap-2">
           <AiOfflineLine offline={analysis.ai_offline} onOpenAlert={onOpenAlert} />

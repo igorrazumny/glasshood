@@ -91,16 +91,17 @@ test('a group with no systems is not shown', () => {
   assert.deepEqual(groups.map(g => g.group.label), ['Proprietary systems'])
 })
 
-test('an old assessment keeps its text without an age warning; a failed refresh is said', () => {
+test('an old assessment keeps its text, is marked out of date (REQ-GHA-050); a failed refresh is said', () => {
   const now = Date.UTC(2026, 10, 8, 1, 37)
   const a = assessmentLine({ summary: 'ColdVault is running normally.', analyzed_at: (now - 24 * 3600e3) / 1000,
     stale: true, error: 'daily cap reached' }, now)
   assert.equal(a.text, 'ColdVault is running normally.')
-  assert.match(a.when, /^evaluated 7 Nov/)
-  assert.equal(a.old, undefined)
+  assert.match(a.when, /^evaluated yesterday \d\d:\d\d/)
+  assert.equal(a.stale, 'Out of date · 24 hours old'.replace('24 hours', '1 day'))
+  assert.equal(a.job, 'The new evaluation failed; it will be tried again.')
   assert.equal(a.problem, 'Latest update failed: daily cap reached')
   const fresh = assessmentLine({ summary: 'ok', analyzed_at: (now - 600e3) / 1000, stale: false }, now)
-  assert.equal(fresh.problem, null); assert.match(fresh.when, /^evaluated \d\d:\d\d \S+$/)
+  assert.equal(fresh.problem, null); assert.equal(fresh.stale, null); assert.match(fresh.when, /^evaluated \d\d:\d\d \S+$/)
   assert.equal(assessmentLine(null, now).text, 'AI evaluation has not started yet.')
   assert.equal(assessmentLine(null, now).busy, false)
   assert.equal(assessmentLine({ job: { status: 'running' } }, now).text, 'AI evaluation in progress.')
