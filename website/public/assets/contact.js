@@ -1,5 +1,5 @@
 // The contact form (REQ-GHA-018 clause 3). A message goes to the same mail function the
-// 9robots.ai and testrobin.ai forms use, tagged as coming from glasshood.ai; the function
+// testrobin.ai form uses, tagged as coming from glasshood.ai; the function
 // checks the sending site and the reCAPTCHA token. No email address appears on the site.
 // reCAPTCHA site keys are public by design.
 (function () {

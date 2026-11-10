@@ -196,8 +196,8 @@ footer{margin:48px 0 36px;padding-top:20px;border-top:1px solid var(--border);fo
 .nav-in{max-width:var(--site-max);margin:0 auto;padding:0 24px;height:var(--masthead-h);
   display:flex;align-items:center}
 .nav-logo{display:block;flex-shrink:0}
-/* The logo is as tall as 9robots.ai's: 43 px, and 39 px below 768 px. Its image is cut so the
-   icon and the word have 9robots.ai's proportions and fill the same share of the height. It is
+/* The logo is 43 px tall, and 39 px below 768 px. Its image is cut so the
+   icon and the word keep the logo's proportions and fill the same share of the height. It is
    always shown at full strength, here and in the footer: never faded, not changed when pointed at. */
 .nav-logo img{display:block;height:43px;width:auto}
 @media (max-width:767px){.nav-logo img{height:39px}}
@@ -236,7 +236,7 @@ footer{margin:48px 0 36px;padding-top:20px;border-top:1px solid var(--border);fo
   .site-footer-row{flex-direction:column;align-items:flex-start}
 }
 /* On phones up to 480 px Log in is a little smaller and keeps at least 12 px from the logo, so
-   the logo, as tall as 9robots.ai's, and Log in share the first row from 348 px up; narrower
+   the logo, at full height, and Log in share the first row from 348 px up; narrower
    phones give Log in a row of its own. */
 @media (max-width:480px){
   .nav-logo{margin-right:12px}
