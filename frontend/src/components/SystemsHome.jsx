@@ -98,18 +98,19 @@ function SystemCard({ card: c, about, loadError, measuring, onOpen, onOpenAlert 
         {/* the offline card has the same slots as a normal one, so closed cards stay equal in height */}
         {c.offline ? (
           <>
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-purple-300 mb-1 truncate">
-              {a.when && about?.summary ? `Last evaluation · ${a.when}` : 'Not evaluated yet'}
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-purple-300 mb-1 flex min-w-0">
+              <span className="truncate">{a.when && about?.summary ? `Last evaluation · ${a.when}` : 'Not evaluated yet'}</span>
+              <StaleMark mark={a.stale} />
             </div>
-            <div className="text-xs h-4" />
+            {/* REQ-GHA-050 clause 4: AI evaluation is offline, so no new one is running */}
+            <div className="text-xs h-4 truncate text-gray-500 dark:text-purple-300">{a.stale ? 'Waiting for a new evaluation.' : ''}</div>
             <Assessment text={about?.summary || ''} busy={false} />
           </>
         ) : (
           <>
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-purple-300 mb-1 truncate">
-              AI assessment{a.when ? ` · ${a.when}` : ''}
-              {/* REQ-GHA-050 clause 3: the amber mark beside the evaluation line */}
-              {a.stale && <span className="ml-1.5 normal-case tracking-normal text-amber-700 dark:text-amber-300">· {a.stale}</span>}
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-purple-300 mb-1 flex min-w-0">
+              <span className="truncate">AI assessment{a.when ? ` · ${a.when}` : ''}</span>
+              <StaleMark mark={a.stale} />
             </div>
             <div className={`text-xs h-4 truncate ${a.problem && !a.stale ? 'text-red-700 dark:text-red-400' : 'text-gray-500 dark:text-purple-300'}`} title={note || undefined}>{note}</div>
             <Assessment text={a.text} busy={a.busy && !a.job && !loadError} />
@@ -121,6 +122,11 @@ function SystemCard({ card: c, about, loadError, measuring, onOpen, onOpenAlert 
       </div>
     </div>
   )
+}
+
+// REQ-GHA-050 clause 3: the amber mark beside the evaluation line; it never shrinks, the time is clipped first
+function StaleMark({ mark }) {
+  return mark ? <span title={mark} className="ml-1.5 flex-shrink-0 normal-case tracking-normal text-amber-700 dark:text-amber-300">· {mark}</span> : null
 }
 
 // REQ-GHA-045 clause 4: one line until the reader asks for the whole assessment
