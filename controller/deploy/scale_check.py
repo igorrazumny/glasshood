@@ -19,12 +19,13 @@ def scale(app: dict) -> bool:
 
 
 # REQ-GHA-051 amendment 1: the start is checked every second, with a timeout long enough that
-# the first check does not fail; up to 4 minutes to start. Readiness keeps checking after that.
+# the first check does not fail; up to 4 minutes to start. Readiness, which sends the traffic, is
+# also checked every second (10 misses before a replica stops receiving traffic).
 PROBES = [
     {"type": "Startup", "tcpSocket": {"port": 8080}, "initialDelaySeconds": 1, "periodSeconds": 1,
      "timeoutSeconds": 3, "failureThreshold": 240},
-    {"type": "Readiness", "tcpSocket": {"port": 8080}, "periodSeconds": 5, "timeoutSeconds": 3,
-     "failureThreshold": 3},
+    {"type": "Readiness", "tcpSocket": {"port": 8080}, "periodSeconds": 1, "timeoutSeconds": 3,
+     "failureThreshold": 10},
 ]
 
 

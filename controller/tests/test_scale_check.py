@@ -37,3 +37,10 @@ def test_probes_need_exactly_the_reviewed_checks():
     assert not scale_check.probes(app([]))
     slow = [dict(p) for p in scale_check.PROBES]; slow[0]["timeoutSeconds"] = 1
     assert not scale_check.probes(app(slow))
+
+
+def test_both_checks_run_every_second_with_a_timeout_above_one():
+    """REQ-GHA-051 amendment 1 clause 2, independent of the PROBES constant's other values."""
+    by = {p["type"]: p for p in scale_check.PROBES}
+    assert set(by) == {"Startup", "Readiness"}
+    assert all(p["periodSeconds"] == 1 and p["timeoutSeconds"] > 1 for p in by.values())
