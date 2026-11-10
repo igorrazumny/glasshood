@@ -280,6 +280,7 @@ export default function Dashboard({ onLogout, onSwitchToLive, mode = 'live' }) {
         <div ref={splitBox} className="flex-1 min-h-0 flex flex-col">
         <div className="min-h-0 overflow-y-auto" style={alertsOpen ? { flex: `0 0 ${split * 100}%` } : { flex: '1 1 0' }}>
           <AnalysisPanel data={analysis.data} topology={mapData} canvas={canvas} isDemo={isDemo}
+            measuring={!isDemo && topology?.data?.measuring === true}
             loading={!analysis.data}
             scopeLabel={selectedCard ? selectedCard.label : groupSelected ? (GROUPS.find(g => g.id === activeProject)?.label || 'All systems') : 'All systems'}
             onOpenAlert={openAlert}

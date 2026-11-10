@@ -398,6 +398,8 @@ def _build_topology() -> dict:
     result["security"] = security
     result["user_stats"] = user_stats
     result["coldvault_metrics"] = coldvault.get_metrics_status()
+    # REQ-GHA-018 amendment 2026-11-10: the first check after a start or wake has not finished yet
+    result["measuring"] = not manifest_metrics.polled_once()
     result["alerts"] = [a.to_dict() for a in all_alerts]
     result["resolved_alerts"] = get_resolved()
     result["alarm_rules"] = get_rule_status()

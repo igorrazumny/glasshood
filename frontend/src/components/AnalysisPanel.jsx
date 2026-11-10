@@ -140,9 +140,11 @@ function SystemsList({ onOpenAlert, cards, review, loadError, systemsError, reco
   )
 }
 
+export const FRESH_CHECK = 'A fresh check of the systems is running. The evaluations shown are the last saved ones, with the time they were made.'
+
 export default function AnalysisPanel({ data, topology, canvas, scopeLabel = 'All systems', listCards = null,
                                         descriptions = null, showStats = true, loading = false, onOpenAlert = null,
-                                        fetchError = null, descriptionsError = null, systemsError = null, diff = null, review = null, reviewError = null, corrections = [] }) {
+                                        fetchError = null, descriptionsError = null, systemsError = null, diff = null, review = null, reviewError = null, corrections = [], measuring = false }) {
   const [refreshing, setRefreshing] = useState(false)
   const [refreshNote, setRefreshNote] = useState('')
   const [open, setOpen] = useState(true)   // REQ-GHA-045 clause 7: the reader can fold it away
@@ -199,6 +201,9 @@ export default function AnalysisPanel({ data, topology, canvas, scopeLabel = 'Al
         </p>
       )}
       {refreshNote && <p className="text-xs text-gray-500 dark:text-purple-300">{refreshNote}</p>}
+      {/* REQ-GHA-018 amendment 2026-11-10: after a wake the saved evaluations show with their time
+          while the first fresh check runs */}
+      {measuring && <p className="text-xs text-gray-500 dark:text-purple-300">{FRESH_CHECK}</p>}
 
       {listCards ? (
         <SystemsList onOpenAlert={onOpenAlert} cards={listCards} review={review} loadError={reviewError} systemsError={systemsError} recordsError={descriptionsError} diff={diff} />
