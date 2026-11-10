@@ -638,12 +638,12 @@ def test_search_findability():
     """REQ-GHA-018, seventh amendment of 2026-11-10."""
     for page in _ALL_PAGES:
         footer = _read(page).split('<footer class="footer">', 1)[1]
-        assert '<a href="https://9robots.ai/" class="site-footer-link">by 9robots</a>' in footer, page
+        assert "9robots" not in footer.lower(), page  # eighth amendment: the site stands alone
     home = _read(_PUB / "index.html")
     raw = re.search(r'<script type="application/ld\+json">(.*?)</script>', home).group(1)
     data = json.loads(raw)
     assert data["@type"] == "SoftwareApplication" and data["name"] == "GlassHood"
-    assert data["creator"] == {"@type": "Organization", "name": "9robots", "url": "https://9robots.ai"}
+    assert "creator" not in data and "publisher" not in data
     assert data["description"] in home.replace(raw, "")
     arch = _read(_ARCH / "index.html")
     assert '<link rel="canonical" href="https://glasshood.ai/architecture/">' in arch
@@ -652,3 +652,11 @@ def test_search_findability():
     bad = re.compile(r"\bvalidated\b|\bcompliant\b|FDA[- ]approved", re.I)
     for page in _ALL_PAGES:
         assert not bad.search(_read(page)), page
+
+
+def test_site_stands_alone():
+    """REQ-GHA-018, eighth amendment of 2026-11-10: no served file names 9robots, comments included."""
+    for root in (_PUB, _ARCH):
+        for p in root.rglob("*"):
+            if p.is_file() and p.suffix in {".html", ".css", ".js", ".txt", ".xml"}:
+                assert "9robots" not in p.read_text(encoding="utf-8").lower(), p
