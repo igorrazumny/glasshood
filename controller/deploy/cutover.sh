@@ -34,10 +34,14 @@ export CONTAINER_APP_FQDN=$(az containerapp show -g "$RG" -n "$APP" --query prop
 # controller recorded; the new revision is waited for and the values read back. On failure the app stays
 # pinned awake (safe) and the script says so. Inside `enable` the caller already holds the pin.
 wake_scale() {
-  local inside=${1:-} was_pinned id body
+  local inside=${1:-} was_pinned id body intent
   say "wake check every 1 s, cooldown 30 s"
   if [ -z "$inside" ]; then
-    was_pinned=$(fence intent | field pinned)
+    intent=$(fence intent)
+    # only on an awake app: pinning an asleep one would wake it and leave it awake
+    [ "$(field desired <<<"$intent")" = awake ] && [ "$(field settled <<<"$intent")" = True ] \
+      || die "the app is not settled awake ($intent); wake it first (ops.sh wake), then run this again"
+    was_pinned=$(field pinned <<<"$intent")
     fence pin
     fence wait >/dev/null
   fi
@@ -49,21 +53,17 @@ t.pop("revisionSuffix", None)
 t["scale"]["pollingInterval"] = 1
 t["scale"]["cooldownPeriod"] = 30
 print(json.dumps({"properties": {"template": t}}))')
-  az rest --method patch --url "https://management.azure.com${id}?api-version=2025-01-01" --body "$body" -o none </dev/null
-  local state= latest= ready= got=
+  local url="https://management.azure.com${id}?api-version=2025-01-01" ok=
+  az rest --method patch --url "$url" --body "$body" -o none </dev/null
   for _ in $(seq 1 60); do
-    read -r state latest ready <<<"$(az containerapp show -g "$RG" -n "$APP" -o tsv </dev/null \
-      --query '[properties.provisioningState, properties.latestRevisionName, properties.latestReadyRevisionName]')"
-    [ "$state" = Succeeded ] && [ -n "$latest" ] && [ "$latest" = "$ready" ] && break
+    az rest --method get --url "$url" -o json </dev/null | "$PY" "$here/scale_check.py" ready && { ok=1; break; }
     sleep 10
   done
-  [ "$state" = Succeeded ] && [ "$latest" = "$ready" ] \
-    || die "the scale change did not finish (state '$state', latest '$latest', ready '$ready'); the app stays pinned awake"
-  got=$(az rest --method get --url "https://management.azure.com${id}?api-version=2025-01-01" -o json </dev/null \
-    | "$PY" -c 'import json,sys; s=json.load(sys.stdin)["properties"]["template"]["scale"]; print(s.get("pollingInterval"), s.get("cooldownPeriod"))')
-  [ "$got" = "1 30" ] || die "Azure holds pollingInterval/cooldownPeriod '$got', not '1 30'; the app stays pinned awake"
-  say "scale verified: check every 1 s, cooldown 30 s, revision $latest ready"
-  if [ -z "$inside" ] && [ "$was_pinned" != True ] && [ "$was_pinned" != true ]; then fence unpin; fi
+  [ -n "$ok" ] || die "the scale change did not finish within 10 minutes; the app stays pinned awake"
+  az rest --method get --url "$url" -o json </dev/null | "$PY" "$here/scale_check.py" scale \
+    || die "Azure does not hold pollingInterval 1 / cooldownPeriod 30; the app stays pinned awake"
+  say "scale verified: check every 1 s, cooldown 30 s, the new revision is ready"
+  if [ -z "$inside" ] && [ "$was_pinned" != True ]; then fence unpin; fi
 }
 
 say() { printf '== %s\n' "$*"; }
