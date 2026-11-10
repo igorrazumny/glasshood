@@ -62,7 +62,10 @@ function SystemCard({ card: c, about, loadError, measuring, onOpen, onOpenAlert 
   const a = assessmentLine(about, Date.now(), measuring)
   if (!about && loadError) a.text = loadFailed('The assessment', loadError)
   else if (loadError && !a.problem) a.problem = loadFailed('A newer assessment', loadError)
-  const note = [a.stale ? null : a.problem, a.job].filter(Boolean).join(' · ')
+  // REQ-GHA-050 clause 4: on an out-of-date card the next-evaluation line replaces the update's own
+  // failure text and job line; a failed read of the records is still said (REQ-GHA-037 clause 6)
+  const updateFailed = a.stale && !loadError
+  const note = a.stale ? [updateFailed ? null : a.problem, a.next].filter(Boolean).join(' · ') : [a.problem, a.job].filter(Boolean).join(' · ')
   return (
     // a div, not a button: it holds the alert's link and the closed last evaluation
     <div role="button" tabIndex={0} onClick={() => onOpen(c.id)}
@@ -99,7 +102,7 @@ function SystemCard({ card: c, about, loadError, measuring, onOpen, onOpenAlert 
         {c.offline ? (
           <>
             <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-purple-300 mb-1 flex min-w-0">
-              <span className="truncate">{a.when && about?.summary ? `Last evaluation · ${a.when}` : 'Not evaluated yet'}</span>
+              <span className="truncate" title={a.when || undefined}>{a.when && about?.summary ? (a.stale ? a.when.replace(/^evaluated /, '') : `Last evaluation · ${a.when}`) : 'Not evaluated yet'}</span>
               <StaleMark mark={a.stale} />
             </div>
             {/* REQ-GHA-050 clause 4: AI evaluation is offline, so no new one is running */}
@@ -109,10 +112,11 @@ function SystemCard({ card: c, about, loadError, measuring, onOpen, onOpenAlert 
         ) : (
           <>
             <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-purple-300 mb-1 flex min-w-0">
-              <span className="truncate">AI assessment{a.when ? ` · ${a.when}` : ''}</span>
+              {/* REQ-GHA-050 clauses 1 and 3: beside the mark only the date and time, so both stay readable */}
+              <span className="truncate" title={a.when || undefined}>{a.stale ? a.when.replace(/^evaluated /, '') : `AI assessment${a.when ? ` · ${a.when}` : ''}`}</span>
               <StaleMark mark={a.stale} />
             </div>
-            <div className={`text-xs h-4 truncate ${a.problem && !a.stale ? 'text-red-700 dark:text-red-400' : 'text-gray-500 dark:text-purple-300'}`} title={note || undefined}>{note}</div>
+            <div className={`text-xs h-4 truncate ${a.problem && !updateFailed ? 'text-red-700 dark:text-red-400' : 'text-gray-500 dark:text-purple-300'}`} title={note || undefined}>{note}</div>
             <Assessment text={a.text} busy={a.busy && !a.job && !loadError} />
           </>
         )}

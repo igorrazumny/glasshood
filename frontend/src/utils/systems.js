@@ -167,7 +167,7 @@ export function portfolioLine(cards) {
 // REQ-GHA-037 with REQ-GHA-024 clause 7 (amended 2026-11-08): an assessment says when it was
 // written and keeps the last real text whatever its age; what is happening now is said apart
 export function assessmentLine(about, nowMs, measuring = false) {
-  if (!about) return { when: null, text: 'AI evaluation has not started yet.', problem: null, busy: false, job: null, stale: null }
+  if (!about) return { when: null, text: 'AI evaluation has not started yet.', problem: null, busy: false, job: null, stale: null, next: null }
   const at = about.analyzed_at ? about.analyzed_at * 1000 : null
   // REQ-GHA-030: every time carries its zone; REQ-GHA-050 clause 1: a date when not today
   const when = at ? `evaluated ${evaluatedWhen(at, nowMs)}` : null
@@ -185,7 +185,7 @@ export function assessmentLine(about, nowMs, measuring = false) {
   const job = !about.summary ? null : state === 'running' ? 'A new AI evaluation is in progress.'
     : state === 'retrying' ? 'Another attempt at updating this is scheduled.'
       : state === 'failed' ? 'It will be tried again at the next scheduled round.' : null
-  return { when, text: about.summary || pending, problem, busy, job: stale ? stale.next : job, stale: stale?.mark || null }
+  return { when, text: about.summary || pending, problem, busy, job, stale: stale?.mark || null, next: stale?.next || null }
 }
 
 // REQ-GHA-037 clause 6: a read that failed is said in plain words, never shown as loading

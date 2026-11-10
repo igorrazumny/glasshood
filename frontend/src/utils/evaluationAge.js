@@ -14,7 +14,11 @@ export function evaluatedWhen(atMs, nowMs, { timeZone } = {}) {
   if (!atMs) return ''
   const t = clock(atMs, { timeZone })
   if (dayKey(atMs, timeZone) === dayKey(nowMs, timeZone)) return t
-  if (dayKey(atMs, timeZone) === dayKey(nowMs - 86400e3, timeZone)) return `yesterday ${t}`
+  // yesterday is the first day met going back from now, so a 23- or 25-hour day still has one
+  const today = dayKey(nowMs, timeZone)
+  let back = nowMs
+  while (dayKey(back, timeZone) === today) back -= 3600e3
+  if (dayKey(atMs, timeZone) === dayKey(back, timeZone)) return `yesterday ${t}`
   const sameYear = new Date(atMs).getFullYear() === new Date(nowMs).getFullYear()
   const date = new Intl.DateTimeFormat('en-GB', { timeZone, day: 'numeric', month: 'short', ...(sameYear ? {} : { year: 'numeric' }) }).format(new Date(atMs))
   return `${date}, ${t}`

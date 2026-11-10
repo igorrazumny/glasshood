@@ -11,6 +11,9 @@ test('clause 1: time alone today, yesterday, then a date', () => {
   assert.equal(evaluatedWhen(Date.parse('2026-11-09T14:35:00Z'), now, tz), 'yesterday 15:35 CET')
   assert.equal(evaluatedWhen(Date.parse('2026-11-03T14:35:00Z'), now, tz), '3 Nov, 15:35 CET')
   assert.equal(evaluatedWhen(Date.parse('2025-11-03T14:35:00Z'), now, tz), '3 Nov 2025, 15:35 CET')
+  // the day after the spring change, 30 Mar 00:30 CEST: 29 Mar is yesterday, 28 Mar is not
+  assert.equal(evaluatedWhen(Date.parse('2026-03-29T08:00:00Z'), Date.parse('2026-03-29T22:30:00Z'), tz), 'yesterday 10:00 CEST')
+  assert.equal(evaluatedWhen(Date.parse('2026-03-28T22:00:00Z'), Date.parse('2026-03-29T22:30:00Z'), tz), '28 Mar, 23:00 CET')
 })
 
 test('clause 2: current up to 3 hours, out of date after', () => {
