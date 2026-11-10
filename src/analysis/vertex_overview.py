@@ -849,13 +849,21 @@ def _load_records() -> float:
 
 
 def _fill_missing(topology: dict) -> None:
-    """REQ-GHA-042 clause 10: after a restart only what has no saved evaluation is evaluated at once."""
+    """REQ-GHA-042 clause 10: after a restart only what has no saved evaluation is evaluated at once.
+    REQ-GHA-018 amendment 2026-11-10 clause 2: so is anything whose saved evaluation is older than the
+    interval, after a wake from sleep, even when the last round as a whole is recent."""
     from src.api.routes.manifests import _load_manifests
     refresh_durable_spend()
+    cutoff = time.time() - INTERVAL_S
+
+    def fresh(v):
+        return bool(v.get("summary")) and (v.get("analyzed_at") or 0) > cutoff
     with _lock:
-        have_system = bool(_system.get("summary"))
-        known_parts = {k for k, v in _parts.items() if v.get("summary")}
-        known_outside = {k for k, v in _outside.items() if v.get("summary")}
+        have_system = fresh(_system)
+        known_parts = {k for k, v in _parts.items() if fresh(v)}
+        known_outside = {k for k, v in _outside.items() if fresh(v)}
+        own = {m.get("product") for m in _load_manifests() if m.get("kind") != "outside_view"}
+        _changed.update(p for p in own if p in _own and not fresh(_own[p]))   # the scan picks these up
     if not have_system:
         run_system(topology)
     edges = topology.get("edges", [])

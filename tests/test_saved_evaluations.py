@@ -83,8 +83,8 @@ def test_a_restart_starts_no_new_round_and_waits_until_it_is_due():
 
 def test_only_what_has_no_saved_evaluation_is_evaluated():
     with ov._lock:
-        ov._system = {"summary": "x"}
-        ov._parts["have"] = {"summary": "s"}
+        ov._system = {"summary": "x", "analyzed_at": time.time()}
+        ov._parts["have"] = {"summary": "s", "analyzed_at": time.time()}
     walked = [({"id": "have"}, ""), ({"id": "new"}, "")]
     with patch.object(ov, "_walk_parts", return_value=walked), patch.object(ov, "run_system") as sys_, \
          patch.object(ov, "_run_part") as part, patch.object(ov, "run_outside") as out, patch.object(ov, "refresh_durable_spend"):
@@ -220,3 +220,27 @@ def test_the_topology_says_a_fresh_check_runs_until_the_first_poll():
     assert 'result["measuring"] = not manifest_metrics.polled_once()' in inspect.getsource(topo)
     manifest_metrics._polled_once.clear()
     assert not manifest_metrics.polled_once()
+
+
+def test_a_wake_re_evaluates_what_is_older_than_the_interval():
+    # REQ-GHA-018 amendment 2026-11-10 clause 2 (review): per record, not per round
+    old, new = time.time() - ov.INTERVAL_S - 60, time.time() - 60
+    with ov._lock:
+        ov._system = {"summary": "x", "analyzed_at": new}
+        ov._parts.update({"fresh": {"summary": "s", "analyzed_at": new}, "stale": {"summary": "s", "analyzed_at": old}})
+        ov._outside.update({"github": {"summary": "g", "analyzed_at": old, "error": "HTTP 500"},
+                            "cloudflare": {"summary": "c", "analyzed_at": new}})
+        ov._own.update({"coldvault": {"summary": "c", "analyzed_at": old}, "glasshood": {"summary": "g", "analyzed_at": new}})
+        ov._changed.clear()
+    manifests = [{"product": "github", "kind": "outside_view"}, {"product": "cloudflare", "kind": "outside_view"},
+                 {"product": "coldvault"}, {"product": "glasshood"}]
+    walked = [({"id": "fresh"}, ""), ({"id": "stale"}, "")]
+    with patch("src.api.routes.manifests._load_manifests", return_value=manifests), \
+         patch.object(ov, "_walk_parts", return_value=walked), patch.object(ov, "run_system") as sys_, \
+         patch.object(ov, "_run_part") as part, patch.object(ov, "run_outside") as out, patch.object(ov, "refresh_durable_spend"):
+        ov._fill_missing(TOPOLOGY)
+    sys_.assert_not_called()
+    assert [c.args[0]["id"] for c in part.call_args_list] == ["stale"]
+    assert out.call_args.kwargs["overviews"] == {"github"}
+    assert ov._changed == {"coldvault"}
+    ov._changed.clear()
