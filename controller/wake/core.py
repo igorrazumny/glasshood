@@ -178,7 +178,7 @@ def _toward_awake(intent: Intent, a: Actual, now: float) -> Step:
     if q.current == 0:
         # Put only after a complete scan found none; otherwise scan the rest first.
         return Step("put_message", {"generation": g}) if q.clean else Step("scan_queue")
-    if a.ingress_restricted:                  # only a restriction left from before REQ-GHA-051
+    if a.ingress_restricted:
         return Step("open_ingress")
     if q.older or not q.clean:
         return Step("scan_queue")              # the same scan that sees G deletes the older
@@ -221,8 +221,8 @@ def _toward_asleep(intent: Intent, a: Actual, now: float) -> Step:
     # A step Azure refused is not repeated at once: the sleep goes on without it and
     # it is tried again later (clause 11). Zero replicas then come from the emptied
     # queue (the scale rule's scale-in, which ends even a hung replica after its grace).
-    # REQ-GHA-051 amendment 1: sleep no longer restricts ingress; lifting it on every wake
-    # held the new replica ~10 s behind an app update. Zero replicas alone answer nothing.
+    if not a.ingress_restricted and not recently_refused(intent, "restrict_ingress", now):
+        return Step("restrict_ingress")
     q = a.queue
     if not intent.queue_cleared_at:
         if q is None or not q.fresh_for(intent, now) or q.current or q.older or not q.clean:
