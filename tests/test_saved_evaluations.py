@@ -210,3 +210,13 @@ def test_only_one_save_is_scheduled_at_a_time(monkeypatch):
         ov._checkpoint(); ov._checkpoint()
     assert timer.call_count == 1
     ov._flush_timer[0] = None
+
+
+def test_the_topology_says_a_fresh_check_runs_until_the_first_poll():
+    # REQ-GHA-018 amendment 2026-11-10 clause 2: after a wake, saved evaluations show while measuring
+    import inspect
+    import src.api.routes.topology as topo
+    from src.collectors import manifest_metrics
+    assert 'result["measuring"] = not manifest_metrics.polled_once()' in inspect.getsource(topo)
+    manifest_metrics._polled_once.clear()
+    assert not manifest_metrics.polled_once()
