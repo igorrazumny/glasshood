@@ -292,9 +292,13 @@ def refresh_due(now: float = None) -> None:
         _save()
     if ov.ai_offline():
         return
+    try:
+        scopes = _by_scope()
+    except RuntimeError:   # REQ-GHA-046 clause 20: never written from records that could not be read
+        return
     now = time.time() if now is None else now
     changed = False
-    for scope, records in _by_scope().items():
+    for scope, records in scopes.items():
         if not records:
             continue
         sig = _signature(records)

@@ -57,7 +57,11 @@ def _judge(name: str) -> tuple:
         return s, d, {"parts_checked": len(polls)}
     if name == "ai_overview":
         from src.analysis import vertex_overview as ov
-        sysov, spend = ov.get_system(), ov.get_spend()
+        try:
+            sysov = ov.get_system()
+        except RuntimeError as e:
+            return "error", f"The saved AI evaluations could not be read: {e}", {}
+        spend = ov.get_spend()
         figures = {"calls_today": spend.get("calls"), "cost_today_usd": spend.get("cost_usd")}
         if spend.get("capped"):
             return "degraded", f"Daily cap of {spend.get('daily_call_cap')} AI calls reached; overviews wait for tomorrow", figures

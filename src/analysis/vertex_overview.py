@@ -814,7 +814,10 @@ def _ensure_records() -> float:
     restart never shows a system as not yet assessed while its saved evaluation is still unread."""
     with _records_once:
         if _records_loaded[0] is None:
-            _records_loaded[0] = _load_records()
+            start = _load_records()
+            if start is None:   # a failed read is retried on the next use, never taken for an empty store
+                raise RuntimeError(_records_problem[0] or "the saved AI evaluations could not be read")
+            _records_loaded[0] = start
         return _records_loaded[0]
 
 
@@ -842,7 +845,7 @@ def _load_records() -> float:
     except Exception as e:
         _records_problem[0] = f"the saved AI evaluations could not be read ({type(e).__name__})"
         logger.warning(_records_problem[0])
-        return 0.0
+        return None
 
 
 def _fill_missing(topology: dict) -> None:
@@ -996,6 +999,7 @@ def run_own_systems(topology: dict, only_pending: bool = False) -> None:
 
 
 def get_own(product: str):
+    _ensure_records()
     with _lock:
         entry = _own.get(product)
         job = dict(_own_jobs.get(product) or {"status": "not_started"})
@@ -1085,6 +1089,7 @@ def get_system() -> dict:
 
 
 def get_outside(product: str) -> dict:
+    _ensure_records()
     with _lock:
         entry = _outside.get(product)
     return _with_staleness(entry) if entry else None
@@ -1306,7 +1311,12 @@ def _pending_loop(get_topology_fn, stop) -> None:
 def overview_loop(get_topology_fn, ready_fn=None):
     """Clause 4: first overviews as soon as the parts are known, then every INTERVAL_S."""
     stop = threading.Event()
-    _ensure_records()   # clause 20: before the first poll, so the screen never waits on it
+    while True:   # clause 20: before the first poll, so the screen never waits on it; retried until read
+        try:
+            _ensure_records()
+            break
+        except RuntimeError:
+            stop.wait(30)
     for _ in range(60):  # wait for the first poll of the parts, at most ~5 minutes
         if ready_fn is None or ready_fn():
             break
